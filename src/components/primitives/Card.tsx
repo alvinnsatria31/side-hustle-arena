@@ -1,51 +1,45 @@
-import { forwardRef, type HTMLAttributes } from 'react';
+import type { HTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
-type Variant = 'default' | 'soft' | 'bordered' | 'elevated';
-type Padding = 'none' | 'sm' | 'md' | 'lg' | 'xl';
-
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: Variant;
-  padding?: Padding;
-  interactive?: boolean;
-}
-
-const variants: Record<Variant, string> = {
-  default:
-    'bg-[var(--color-surface-card)] border border-[var(--color-border)] shadow-[var(--shadow-card)]',
-  soft:
-    'bg-[var(--color-surface-soft)] border border-transparent',
-  bordered:
-    'bg-[var(--color-surface-card)] border border-[var(--color-border)]',
-  elevated:
-    'bg-[var(--color-surface-card)] border border-[var(--color-border)] shadow-[var(--shadow-card-hover)]',
-};
-
-const paddings: Record<Padding, string> = {
-  none: '',
-  sm: 'p-4',
-  md: 'p-5',
-  lg: 'p-6',
-  xl: 'p-8',
-};
-
-export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
-  { variant = 'default', padding = 'md', interactive, className, children, ...rest },
-  ref,
-) {
+/** Solid white content surface (panels stay solid; glass is for floating widgets only). */
+export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      ref={ref}
+      className={cn('rounded-[var(--radius-sk-2xl)] border border-sk-border bg-white', className)}
+      {...rest}
+    />
+  );
+}
+
+/** Mono micro-heading used inside panels (e.g. "YANG SUDAH KUAT"). */
+export function PanelHeading({
+  children,
+  pin,
+  className,
+}: {
+  children: React.ReactNode;
+  pin?: 'g' | 'a' | 'b';
+  className?: string;
+}) {
+  return (
+    <h4
       className={cn(
-        'rounded-[var(--radius-lg)]',
-        variants[variant],
-        paddings[padding],
-        interactive && 'transition-shadow hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-0.5',
+        'mb-4 flex items-center gap-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted',
         className,
       )}
-      {...rest}
     >
+      {pin && (
+        <span
+          aria-hidden
+          className={cn(
+            'h-2 w-2 rounded-full',
+            pin === 'g' && 'bg-sk-success',
+            pin === 'a' && 'bg-sk-warning',
+            pin === 'b' && 'bg-sk-blue',
+          )}
+        />
+      )}
       {children}
-    </div>
+    </h4>
   );
-});
+}

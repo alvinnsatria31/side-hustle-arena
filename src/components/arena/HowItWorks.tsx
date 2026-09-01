@@ -1,58 +1,50 @@
-import { Search, Hammer, Send, BarChart3, Briefcase } from 'lucide-react';
+import { BarChart3, FileText, Target, Zap } from 'lucide-react';
+import { Reveal, StaggerGroup, StaggerItem } from '@/components/motion/Reveal';
+import { HOW_IT_WORKS, LANDING_JOURNEY } from '@/data/mock/arena';
 
-const steps = [
-  { num: '01', label: 'Pilih Project', Icon: Search, body: 'Pilih 1 project minggu ini yang paling relevan dengan minatmu.' },
-  { num: '02', label: 'Kerjakan', Icon: Hammer, body: 'Kerjakan brief singkat dengan tools yang biasa kamu pakai.' },
-  { num: '03', label: 'Submit Jumat', Icon: Send, body: 'Kumpulkan submission sebelum Jumat 23:59 WIB.' },
-  { num: '04', label: 'Nilai Sabtu', Icon: BarChart3, body: 'Evaluator menilai berdasarkan rubric yang sudah ditentukan.' },
-  { num: '05', label: 'Jadi Portfolio', Icon: Briefcase, body: 'Hasilnya masuk ke Career Report dan bisa kamu jadikan case study.' },
-];
+const JOURNEY_ICONS = [FileText, Zap, BarChart3, Target];
 
-export function HowItWorks() {
+/** Landing journey strip (01 CV Scanner → 04 Jobs). */
+export function JourneyStrip() {
   return (
-    <div>
-      <div className="hidden md:grid grid-cols-5 gap-4">
-        {steps.map((s) => (
-          <div
-            key={s.num}
-            className="relative rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white p-5"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-[var(--color-brand-600)] tracking-wider">
-                {s.num}
-              </span>
-              <div className="h-9 w-9 rounded-[var(--radius-md)] bg-[var(--color-brand-50)] text-[var(--color-brand-600)] flex items-center justify-center">
-                <s.Icon className="h-4 w-4" />
-              </div>
+    <StaggerGroup className="grid grid-cols-2 gap-6 sm:gap-8 lg:grid-cols-4">
+      {LANDING_JOURNEY.map((step, i) => {
+        const Icon = JOURNEY_ICONS[i];
+        return (
+          <StaggerItem key={step.n} className="relative">
+            {i < LANDING_JOURNEY.length - 1 && (
+              <span
+                aria-hidden
+                className="absolute right-[-14px] top-[22px] hidden h-0.5 w-[calc(100%-40px)] bg-gradient-to-r from-sk-blue/40 to-sk-blue/5 lg:block"
+                style={{ transform: 'translateX(50%)' }}
+              />
+            )}
+            <div className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-[var(--radius-sk-md)] border border-sk-blue-tint-border bg-sk-blue-tint text-sk-blue">
+              <Icon size={19} aria-hidden />
             </div>
-            <h4 className="mt-3 text-[15px] font-semibold text-[var(--color-ink-primary)]">{s.label}</h4>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--color-ink-tertiary)]">{s.body}</p>
+            <div className="mb-2 font-mono text-[11px] font-semibold tracking-[0.15em] text-sk-blue">{step.n}</div>
+            <h4 className="mb-1 text-[15px] font-bold text-sk-navy">{step.title}</h4>
+            <p className="text-[12px] leading-relaxed text-sk-muted">{step.desc}</p>
+          </StaggerItem>
+        );
+      })}
+    </StaggerGroup>
+  );
+}
+
+/** Arena "how it works" 5-step strip (glass cards). */
+export function HowItWorks({ className }: { className?: string }) {
+  return (
+    <Reveal className={className}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {HOW_IT_WORKS.map((step) => (
+          <div key={step.n} className="glass-card rounded-[var(--radius-sk-lg)] p-4 md:p-[18px]">
+            <div className="font-mono text-[10px] font-bold tracking-[0.15em] text-sk-blue">{step.n}</div>
+            <div className="mt-2 text-[14px] font-bold text-sk-navy">{step.title}</div>
+            <div className="mt-1 text-[11.5px] leading-snug text-sk-muted">{step.desc}</div>
           </div>
         ))}
       </div>
-
-      {/* Mobile timeline */}
-      <ol className="md:hidden flex flex-col gap-3">
-        {steps.map((s) => (
-          <li
-            key={s.num}
-            className="flex items-start gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white p-4"
-          >
-            <div className="h-9 w-9 shrink-0 rounded-[var(--radius-md)] bg-[var(--color-brand-50)] text-[var(--color-brand-600)] flex items-center justify-center">
-              <s.Icon className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-[var(--color-brand-600)] tracking-wider">
-                  {s.num}
-                </span>
-                <h4 className="text-[14px] font-semibold text-[var(--color-ink-primary)]">{s.label}</h4>
-              </div>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-ink-tertiary)]">{s.body}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </div>
+    </Reveal>
   );
 }

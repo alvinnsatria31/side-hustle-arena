@@ -1,13 +1,10 @@
-import type { User } from '@/types/user';
+import type { DemoUser } from '@/types/user';
 
-export const mockUser: User = {
-  id: 'user-riani',
-  name: 'Riani Putri',
-  initials: 'RP',
-  email: 'riani.putri@email.com',
-  careerInterest: 'Marketing',
-  currentFocus: 'Membangun campaign strategy dan content portfolio.',
-  points: 1240,
-  streakWeeks: 4,
-  joinedAt: '2025-04-12',
+export const DEMO_USER: DemoUser = {
+  name: 'Alvin',
+  displayName: 'Alvin Pratama',
+  email: 'alvin.pratama@sekolahkarir.id',
+  initials: 'A',
 };
+
+export const DEMO_GREETING_TIME = 'Selamat pagi';

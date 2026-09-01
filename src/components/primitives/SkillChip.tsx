@@ -1,21 +1,31 @@
 import { cn } from '@/lib/cn';
 
-interface SkillChipProps {
-  label: string;
-  size?: 'sm' | 'md';
-  className?: string;
-}
-
-export function SkillChip({ label, size = 'md', className }: SkillChipProps) {
+/** Mono skill tag (light and on-dark variants). */
+export function SkillChip({ children, className, dark }: { children: React.ReactNode; className?: string; dark?: boolean }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] text-[var(--color-ink-secondary)] font-medium',
-        size === 'sm' ? 'h-6 px-2.5 text-[11px]' : 'h-7 px-3 text-[12px]',
+        'inline-flex items-center rounded-md px-2 py-1 font-mono text-[11px] leading-none',
+        dark
+          ? 'border border-white/35 text-white'
+          : 'bg-sk-blue-wash text-sk-body',
         className,
       )}
     >
-      {label}
+      {children}
+    </span>
+  );
+}
+
+export function BlueSkillChip({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-md bg-sk-blue-tint px-2 py-1 font-mono text-[11px] font-medium leading-none text-sk-blue',
+        className,
+      )}
+    >
+      {children}
     </span>
   );
 }

@@ -1,28 +1,46 @@
-import type { Metadata } from 'next';
-import { Manrope } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { JetBrains_Mono, Manrope } from 'next/font/google';
+import { DemoProvider } from '@/features/demo/store';
+import { ToastProvider } from '@/features/ui/toast';
 import './globals.css';
 
 const manrope = Manrope({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700', '800'],
   display: 'swap',
   variable: '--font-manrope',
 });
 
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-jetbrains',
+});
+
 export const metadata: Metadata = {
-  title: 'Sekolah Karir — Career Product',
+  title: {
+    default: 'Sekolah Karir — Career Ecosystem',
+    template: '%s · Sekolah Karir',
+  },
   description:
-    'Cek CV kamu, kerjakan project dunia nyata setiap minggu, dan bangun laporan karirmu.',
+    'Scan CV, temukan skill gap, kerjakan project dunia nyata, bangun bukti skill, dan temukan peluang kerja yang lebih relevan.',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const viewport: Viewport = {
+  themeColor: '#F6F8FC',
+  width: 'device-width',
+  initialScale: 1,
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={manrope.variable}>
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="id" className={`${manrope.variable} ${jetbrains.variable}`}>
+      <body className="min-h-screen antialiased">
+        <DemoProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </DemoProvider>
+      </body>
     </html>
   );
 }

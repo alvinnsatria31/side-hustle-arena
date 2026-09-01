@@ -1,28 +1,24 @@
 import { Badge } from './Badge';
-import { cn } from '@/lib/cn';
+import type { ProjectStatus, WorkspaceStep } from '@/types/project';
 
-export type StatusTone = 'neutral' | 'brand' | 'success' | 'warning' | 'danger';
-
-interface StatusBadgeProps {
-  label: string;
-  tone?: StatusTone;
-  dot?: boolean;
-  className?: string;
-}
-
-const dotColors: Record<StatusTone, string> = {
-  neutral: 'bg-[var(--color-ink-tertiary)]',
-  brand: 'bg-[var(--color-brand-500)]',
-  success: 'bg-[var(--color-success)]',
-  warning: 'bg-[var(--color-warning)]',
-  danger: 'bg-[var(--color-danger)]',
+const STATUS_CONFIG: Record<ProjectStatus, { label: string; variant: 'blue' | 'mint' | 'amber' | 'slate' | 'recommended' }> = {
+  none: { label: 'BELUM ADA PROJECT', variant: 'slate' },
+  active: { label: 'IN PROGRESS', variant: 'blue' },
+  submitted: { label: 'MENUNGGU REVIEW', variant: 'amber' },
+  under_review: { label: 'SEDANG DIREVIEW', variant: 'amber' },
+  review_ready: { label: 'FEEDBACK SIAP', variant: 'recommended' },
+  completed: { label: 'COMPLETED', variant: 'mint' },
 };
 
-export function StatusBadge({ label, tone = 'neutral', dot, className }: StatusBadgeProps) {
-  return (
-    <Badge variant={tone} size="sm" className={cn('tracking-normal normal-case', className)}>
-      {dot && <span className={cn('h-1.5 w-1.5 rounded-full', dotColors[tone])} />}
-      <span className="text-[12px] font-semibold">{label}</span>
-    </Badge>
-  );
+export function StatusBadge({ status }: { status: ProjectStatus }) {
+  const config = STATUS_CONFIG[status];
+  return <Badge variant={config.variant}>{config.label}</Badge>;
 }
+
+export const WORKSPACE_STEP_LABELS: Record<WorkspaceStep, string> = {
+  brief: 'Brief',
+  plan: 'Plan Your Work',
+  work: 'Do The Work',
+  review: 'Review Checklist',
+  submit: 'Submit',
+};

@@ -1,25 +1,21 @@
-import { BrandMark } from './BrandMark';
+import Link from 'next/link';
 import { cn } from '@/lib/cn';
 
-interface BrandLogoProps {
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-}
-
-const sizes = {
-  sm: { mark: 22, text: 'text-[14px]' },
-  md: { mark: 26, text: 'text-[15px]' },
-  lg: { mark: 32, text: 'text-[18px]' },
-};
-
-export function BrandLogo({ size = 'md', className }: BrandLogoProps) {
-  const s = sizes[size];
+/** Brand logo: gradient "S" mark + SekolahKarir wordmark. */
+export function BrandLogo({ dark, className, compact }: { dark?: boolean; className?: string; compact?: boolean }) {
   return (
-    <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <BrandMark size={s.mark} />
-      <span className={cn('font-bold tracking-[-0.01em] text-[var(--color-ink-primary)]', s.text)}>
-        Sekolah Karir
+    <Link
+      href="/"
+      aria-label="SekolahKarir — beranda"
+      className={cn('flex items-center gap-2.5 font-extrabold tracking-[-0.01em]', className)}
+    >
+      <span
+        aria-hidden
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sk-blue to-sk-blue-400 text-[14px] text-white"
+      >
+        S
       </span>
-    </span>
+      {!compact && <span className={cn('text-[15px]', dark ? 'text-white' : 'text-sk-navy')}>SekolahKarir</span>}
+    </Link>
   );
 }

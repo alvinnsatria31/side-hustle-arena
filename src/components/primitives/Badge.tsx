@@ -1,47 +1,32 @@
-import { cn } from '@/lib/cn';
 import type { HTMLAttributes } from 'react';
+import { cn } from '@/lib/cn';
 
-type Variant = 'neutral' | 'brand' | 'success' | 'warning' | 'danger' | 'outline' | 'soft';
-type Size = 'sm' | 'md';
+type Variant = 'blue' | 'mint' | 'amber' | 'slate' | 'recommended' | 'dark';
 
-interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: Variant;
-  size?: Size;
 }
 
 const variants: Record<Variant, string> = {
-  neutral: 'bg-[var(--color-surface-soft)] text-[var(--color-ink-secondary)] border border-[var(--color-border)]',
-  brand: 'bg-[var(--color-brand-50)] text-[var(--color-brand-700)] border border-[var(--color-brand-100)]',
-  success: 'bg-[var(--color-success-soft)] text-[var(--color-success)] border border-transparent',
-  warning: 'bg-[var(--color-warning-soft)] text-[var(--color-warning)] border border-transparent',
-  danger: 'bg-[var(--color-danger-soft)] text-[var(--color-danger)] border border-transparent',
-  outline: 'bg-white text-[var(--color-ink-secondary)] border border-[var(--color-border)]',
-  soft: 'bg-white text-[var(--color-ink-primary)] border border-[var(--color-border)]',
+  blue: 'bg-sk-blue-tint text-sk-blue',
+  mint: 'bg-sk-success-tint text-sk-success',
+  amber: 'bg-sk-warning-tint text-sk-warning-ink',
+  slate: 'bg-sk-track text-sk-muted',
+  recommended:
+    'bg-gradient-to-r from-sk-blue to-sk-blue-400 text-white shadow-[0_6px_16px_-6px_rgba(36,107,253,0.6)]',
+  dark: 'bg-white/10 text-white border border-white/15',
 };
 
-const sizes: Record<Size, string> = {
-  sm: 'h-6 px-2 text-[11px]',
-  md: 'h-7 px-2.5 text-[12px]',
-};
-
-export function Badge({
-  variant = 'neutral',
-  size = 'sm',
-  className,
-  children,
-  ...rest
-}: BadgeProps) {
+/** Mono pill — the approved badge style. */
+export function Badge({ variant = 'blue', className, ...rest }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-[var(--radius-pill)] font-semibold tracking-[0.02em] uppercase',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold leading-none',
         variants[variant],
-        sizes[size],
         className,
       )}
       {...rest}
-    >
-      {children}
-    </span>
+    />
   );
 }

@@ -1,64 +1,38 @@
-export type CVMetricKey =
-  | 'ats'
-  | 'content'
-  | 'keywords'
-  | 'readability'
-  | 'recruiter';
+export type CvScanStatus = 'idle' | 'file_selected' | 'analyzing' | 'completed' | 'failed';
 
-export interface CVMetric {
-  key: CVMetricKey;
+export interface CvMetric {
+  key: 'quality' | 'ats' | 'impact' | 'evidence';
   label: string;
   score: number;
-  description: string;
+  weak?: boolean;
 }
 
-export type CVIssuePriority = 'high' | 'medium' | 'low';
+export type EvidenceLevel = 'kuat' | 'cukup' | 'kurang' | 'belum';
 
-export interface CVIssue {
-  id: string;
-  rank: number;
-  title: string;
-  explanation: string;
-  suggestion: string;
-  priority: CVIssuePriority;
+export interface SkillEvidence {
+  skill: string;
+  level: EvidenceLevel;
+  note: string;
 }
 
-export interface CVStrength {
-  id: string;
-  title: string;
-  description?: string;
+export interface CvStrongPoint {
+  text: string;
 }
 
-export interface BeforeAfterExample {
-  id: string;
-  before: string;
-  after: string;
-  rationale: string;
-}
-
-export interface KeywordMatch {
-  found: string[];
-  missing: string[];
+export interface CvResult {
   score: number;
-}
-
-export interface Recommendation {
-  id: string;
-  trigger: string;
-  title: string;
-  description: string;
-  cta: string;
-}
-
-export interface CVAnalysis {
-  score: number;
-  status: 'poor' | 'fair' | 'good' | 'strong';
   statusLabel: string;
-  summary: string;
-  metrics: CVMetric[];
-  priorityIssues: CVIssue[];
-  strengths: CVStrength[];
-  beforeAfter: BeforeAfterExample;
-  keywordMatch?: KeywordMatch;
-  recommendations: Recommendation[];
+  metrics: CvMetric[];
+  strengths: string[];
+  improvements: string[];
+  evidence: SkillEvidence[];
+  fileName: string;
+  analyzedAt: string;
 }
+
+export interface AnalyzeStep {
+  label: string;
+}
+
+/** Result tab keys used by /cv-scanner/result */
+export type CvResultTab = 'overview' | 'quality' | 'ats' | 'impact' | 'evidence';

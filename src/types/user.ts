@@ -1,11 +1,15 @@
-export interface User {
-  id: string;
+export interface DemoUser {
   name: string;
-  initials: string;
+  displayName: string;
   email: string;
-  careerInterest: string;
-  currentFocus: string;
-  points: number;
-  streakWeeks: number;
-  joinedAt: string;
+  initials: string;
+}
+
+export interface CareerSnapshot {
+  cvScore: number | null;
+  projectsCompleted: number;
+  skillsProven: string[];
+  careerPoints: number;
+  careerProgress: number; // 0-100
+  level: string;
 }

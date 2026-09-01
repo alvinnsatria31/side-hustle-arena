@@ -2,39 +2,42 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ScanLine, FolderKanban, FileBarChart, User } from 'lucide-react';
+import { FileText, Home, Target, UserRound, Zap } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-const items = [
-  { href: '/app', label: 'Home', Icon: Home, exact: true },
-  { href: '/app/scanner', label: 'Scanner', Icon: ScanLine },
-  { href: '/app/project', label: 'Project', Icon: FolderKanban },
-  { href: '/app/report', label: 'Report', Icon: FileBarChart },
-  { href: '/app/profile', label: 'Profile', Icon: User },
+const TABS = [
+  { label: 'Home', href: '/app', icon: Home },
+  { label: 'Scan', href: '/app/cv-scanner', icon: FileText },
+  { label: 'Arena', href: '/app/arena', icon: Zap },
+  { label: 'Jobs', href: '/app/jobs', icon: Target },
+  { label: 'Profile', href: '/app/profile', icon: UserRound },
 ];
 
+/** Mobile bottom navigation — 44px+ touch targets. */
 export function MobileBottomNav() {
   const pathname = usePathname();
   return (
     <nav
-      aria-label="Mobile navigation"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass border-t border-[var(--color-border)] safe-bottom"
+      className="glass-nav fixed inset-x-0 bottom-0 z-40 rounded-b-none border-x-0 border-b-0 safe-bottom md:hidden"
+      style={{ background: 'rgba(255,255,255,0.95)' }}
+      aria-label="Navigasi bawah"
     >
-      <ul className="grid grid-cols-5">
-        {items.map(({ href, label, Icon, exact }) => {
-          const active = exact ? pathname === href : pathname?.startsWith(href);
+      <ul className="grid grid-cols-5 px-2 pb-2 pt-2.5">
+        {TABS.map((tab) => {
+          const active = tab.href === '/app' ? pathname === '/app' : pathname.startsWith(tab.href);
+          const Icon = tab.icon;
           return (
-            <li key={href}>
+            <li key={tab.href}>
               <Link
-                href={href}
-                className={cn(
-                  'flex flex-col items-center justify-center gap-1 h-16 text-[11px] font-semibold transition-colors',
-                  active ? 'text-[var(--color-brand-600)]' : 'text-[var(--color-ink-tertiary)]',
-                )}
+                href={tab.href}
                 aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-lg text-[9.5px] font-semibold transition-colors',
+                  active ? 'text-sk-blue' : 'text-sk-muted hover:text-sk-navy',
+                )}
               >
-                <Icon className={cn('h-5 w-5', active && 'scale-110 transition-transform')} strokeWidth={active ? 2.4 : 1.8} />
-                <span>{label}</span>
+                <Icon size={20} aria-hidden />
+                {tab.label}
               </Link>
             </li>
           );
