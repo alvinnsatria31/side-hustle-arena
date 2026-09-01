@@ -1,0 +1,85 @@
+import { boolean, check, index, integer, numeric, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { divisions, weeks } from "./arena-core";
+import { difficultyBand, projectPreviewStatus, projectStatus, submissionRequirementType } from "./enums";
+import { runs } from "./automation";
+import { arena } from "./schemas";
+
+export const projects = arena.table("projects", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  weekId: uuid("week_id").notNull().references(() => weeks.id),
+  divisionId: uuid("division_id").notNull().references(() => divisions.id),
+  slug: text("slug").notNull(),
+  title: text("title").notNull(),
+  shortDescription: text("short_description"),
+  difficulty: difficultyBand("difficulty").default("STANDARD").notNull(),
+  caseBackground: text("case_background"),
+  roleDescription: text("role_description"),
+  mission: text("mission"),
+  objective: text("objective"),
+  estimatedMinutes: integer("estimated_minutes"),
+  status: projectStatus("status").default("DRAFT").notNull(),
+  scheduledPublishAt: timestamp("scheduled_publish_at", { withTimezone: true }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  previewStatus: projectPreviewStatus("preview_status").default("PENDING").notNull(),
+  discordPreviewMessageId: text("discord_preview_message_id"),
+  automationRunId: uuid("automation_run_id").references(() => runs.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("projects_week_id_slug_unique").on(table.weekId, table.slug),
+  check("projects_estimated_minutes_positive_check", sql`${table.estimatedMinutes} IS NULL OR ${table.estimatedMinutes} > 0`),
+  index("projects_week_status_idx").on(table.weekId, table.status),
+  index("projects_division_id_idx").on(table.divisionId),
+]);
+
+export const skills = arena.table("skills", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique("skills_slug_unique"),
+  name: text("name").notNull(),
+  category: text("category"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const projectSkills = arena.table("project_skills", {
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  skillId: uuid("skill_id").notNull().references(() => skills.id),
+  weight: numeric("weight"),
+}, (table) => [
+  unique("project_skills_project_id_skill_id_unique").on(table.projectId, table.skillId),
+  check("project_skills_weight_nonnegative_check", sql`${table.weight} IS NULL OR ${table.weight} >= 0`),
+]);
+
+export const projectRubricCriteria = arena.table("project_rubric_criteria", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  weight: numeric("weight").notNull(),
+  maxScore: numeric("max_score").notNull(),
+  reviewInstruction: text("review_instruction"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("rubric_criteria_positive_values_check", sql`${table.weight} > 0 AND ${table.maxScore} > 0 AND ${table.sortOrder} >= 0`),
+]);
+
+export const projectSubmissionRequirements = arena.table("project_submission_requirements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  type: submissionRequirementType("type").notNull(),
+  required: boolean("required").default(false).notNull(),
+  minItems: integer("min_items").default(0).notNull(),
+  maxItems: integer("max_items").default(1).notNull(),
+  allowedMimeTypes: text("allowed_mime_types").array(),
+  allowedLinkTypes: text("allowed_link_types").array(),
+  instructions: text("instructions"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("submission_requirements_item_bounds_check", sql`${table.minItems} >= 0 AND ${table.maxItems} >= 0 AND ${table.maxItems} >= ${table.minItems} AND ${table.sortOrder} >= 0`),
+]);
