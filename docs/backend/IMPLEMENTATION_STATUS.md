@@ -1,5 +1,11 @@
 # Side Hustle Arena - Backend Implementation Status
 
+> **Current Phase:** Phase 4 - Arena Submission System + Private R2 Storage.
+>
+> **Status:** PARTIAL - implementation, development migration, and non-R2 quality gates are verified; live development R2 provisioning/integration is unavailable and production remains untouched.
+
+> The older Phase 3 header below is retained as historical context and is superseded by this Phase 4 status.
+
 > **Current Phase:** Phase 3 — Arena Core API Implementation.
 >
 > **Status:** COMPLETE — current-week, visible-project, enrollment, workspace, and development seed quality gates passed. The checkpoint remains local; production hardening and deployment remain out of scope.
@@ -11,6 +17,16 @@ PHASE 2E — Development Database Bring-Up + DB-Backed SSO Integration
 ## Status
 
 COMPLETE - isolated development migrations and localhost DB-backed SSO verification passed. Production hardening and deployment remain out of scope.
+
+## Phase 4 - Arena Submission System + Private R2 Storage
+
+- Status: PARTIAL. Authenticated ownership-scoped submission draft, link, upload-intent/finalize, submit, private-download, and draft-item deletion routes are implemented; the approved frontend remains unchanged.
+- Development migration `0002_mysterious_wasp.sql` was generated and applied only to the approved Arena development database. It adds `arena.upload_intents` and a partial unique review-attempt constraint; production migrations remain unapplied.
+- Submission records are lazy one-per-enrollment drafts. Every mutable submission operation locks at the deadline, requirements remain persisted/configurable, and immutable versions snapshot submitted draft content.
+- Private R2 uses server-only configuration, random environment-scoped keys, short-lived presigned PUT/GET URLs, metadata finalization, and no permanent public URL. The R2 client is development-only in this phase.
+- Link checks are SSRF-protected with HTTPS-only validation, DNS resolution/address rejection, connection pinning, redirect revalidation, timeout, and no credential forwarding.
+- Non-R2 tests and the live development schema constraint test are verified. Live R2 direct-upload/finalize/download/delete integration is **NOT VERIFIED** because no approved development R2 credentials or Cloudflare-authenticated provisioning access is available.
+- Contract: `docs/backend/ARENA_SUBMISSIONS_API.md`.
 
 ## Phase 3 - Arena Core API Implementation
 

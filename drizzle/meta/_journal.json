@@ -15,6 +15,13 @@
       "when": 1788321924625,
       "tag": "0001_pink_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788382781206,
+      "tag": "0002_mysterious_wasp",
+      "breakpoints": true
     }
   ]
 }

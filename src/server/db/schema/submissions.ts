@@ -1,4 +1,4 @@
-import { bigint, boolean, check, index, integer, jsonb, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, index, integer, jsonb, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./identity";
 import { projects, projectSubmissionRequirements } from "./projects";
@@ -71,6 +71,25 @@ export const submissionDraftItems = arena.table("submission_draft_items", {
   check("submission_draft_items_size_nonnegative_check", sql`${table.fileSizeBytes} IS NULL OR ${table.fileSizeBytes} >= 0`),
 ]);
 
+export const uploadIntents = arena.table("upload_intents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  enrollmentId: uuid("enrollment_id").notNull().references(() => enrollments.id),
+  submissionId: uuid("submission_id").notNull().references(() => submissions.id),
+  requirementId: uuid("requirement_id").references(() => projectSubmissionRequirements.id, { onDelete: "set null" }),
+  storageKey: text("storage_key").notNull().unique("upload_intents_storage_key_unique"),
+  expectedMimeType: text("expected_mime_type").notNull(),
+  expectedSizeBytes: bigint("expected_size_bytes", { mode: "number" }).notNull(),
+  originalFilename: text("original_filename").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("upload_intents_expected_size_positive_check", sql`${table.expectedSizeBytes} > 0`),
+  index("upload_intents_enrollment_expiry_idx").on(table.enrollmentId, table.expiresAt),
+  index("upload_intents_user_expiry_idx").on(table.userId, table.expiresAt),
+]);
+
 export const submissionVersions = arena.table("submission_versions", {
   id: uuid("id").defaultRandom().primaryKey(),
   submissionId: uuid("submission_id").notNull().references(() => submissions.id),
@@ -85,6 +104,7 @@ export const submissionVersions = arena.table("submission_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("submission_versions_submission_id_version_number_unique").on(table.submissionId, table.versionNumber),
+  uniqueIndex("submission_versions_submission_id_review_attempt_unique").on(table.submissionId, table.reviewAttemptNumber).where(sql`${table.reviewAttemptNumber} IS NOT NULL`),
   check("submission_versions_numbers_positive_check", sql`${table.versionNumber} > 0 AND (${table.reviewAttemptNumber} IS NULL OR ${table.reviewAttemptNumber} > 0)`),
   index("submission_versions_submission_submitted_idx").on(table.submissionId, table.submittedAt),
 ]);

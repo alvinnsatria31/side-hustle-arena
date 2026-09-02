@@ -13,10 +13,13 @@
     "db:check": "node scripts/database-schema-contract.mjs",
     "db:seed:arena": "node scripts/seed-arena-core.mjs",
     "test:arena:core": "node --test scripts/arena-core-api.test.mjs scripts/arena-core-seed.test.mjs scripts/arena-core-live.test.mjs",
+    "test:arena:submissions": "node --test scripts/arena-submission.test.mjs scripts/arena-submission-schema.test.mjs",
     "test:sso:local": "node --test scripts/db-sso-integration.test.mjs",
     "test:db:local": "node --test scripts/db-live-constraints.test.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1125.0",
+    "@aws-sdk/s3-request-presigner": "^3.1125.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "0.469.0",
     "motion": "^13.1.1",

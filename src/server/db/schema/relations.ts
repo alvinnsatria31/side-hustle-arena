@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import { weeks, weekRules } from "./arena-core";
 import { projects, projectRubricCriteria, projectSkills, projectSubmissionRequirements, skills } from "./projects";
-import { enrollments, submissionDraftItems, submissions, submissionVersionItems, submissionVersions, workspaceProgress } from "./submissions";
+import { enrollments, submissionDraftItems, submissions, submissionVersionItems, submissionVersions, uploadIntents, workspaceProgress } from "./submissions";
 import { reviewJobs, reviewOverrides, reviewScores, reviews, skillEvidence } from "./reviews";
 import { weeklyRankings } from "./rankings";
 import { pointAccounts, pointLedger, redemptions, catalog, inventoryPeriods } from "./rewards";
@@ -48,6 +48,7 @@ export const submissionRelations = relations(submissions, ({ many, one }) => ({
   enrollment: one(enrollments, { fields: [submissions.enrollmentId], references: [enrollments.id] }),
   versions: many(submissionVersions),
   draftItems: many(submissionDraftItems),
+  uploadIntents: many(uploadIntents),
 }));
 
 export const submissionVersionRelations = relations(submissionVersions, ({ many, one }) => ({
