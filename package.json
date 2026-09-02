@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:check": "node scripts/database-schema-contract.mjs"
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:check": "node scripts/database-schema-contract.mjs",
+    "test:sso:local": "node --test scripts/db-sso-integration.test.mjs",
+    "test:db:local": "node --test scripts/db-live-constraints.test.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

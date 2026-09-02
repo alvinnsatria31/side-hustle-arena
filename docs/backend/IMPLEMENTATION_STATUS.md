@@ -2,11 +2,29 @@
 
 ## Current Phase
 
-PHASE 2D.1 — Targeted Sol Auth Re-Review
+PHASE 2E — Development Database Bring-Up + DB-Backed SSO Integration
 
 ## Status
 
-COMPLETE - security gate passed with deferred production hardening; ready for isolated Phase 2E development database bring-up.
+COMPLETE - isolated development migrations and localhost DB-backed SSO verification passed. Production hardening and deployment remain out of scope.
+
+## Phase 2E — Development Database Bring-Up + DB-Backed SSO Integration
+
+- Arena migration `0001_pink_khan.sql`: applied only to the approved Arena development database; rerun idempotency and live schema checks passed.
+- Canonical migration `0011_cultured_lilandra.sql`: applied only to the existing local Docker PostgreSQL development database; rerun idempotency and live SSO schema checks passed.
+- Arena and Canonical migration generation: no schema drift.
+- DB-backed localhost SSO: VERIFIED for login, authorization-code exchange, PKCE, state, redirect validation, replay/expiry, JIT provisioning, local session hashing, protected `/app`, logout revocation, suspension rejection, and fail-closed introspection outage behavior.
+- Arena live constraints: verified in a rolled-back transaction.
+- Retention: cleanup helpers remain explicit maintenance operations; no scheduler or request-path cleanup was added.
+- Arena quality gates: lint, typecheck, production build, migration generation, schema contract, static auth tests, local DB constraints, DB-backed SSO suite, outage suite, and diff check passed.
+- Canonical quality gates: lint, production build, migration generation, existing login-flow test, and diff check passed. Separate typecheck/test scripts are not available.
+- Development database setup: `docs/backend/DEVELOPMENT_DATABASE_SETUP.md`.
+- DB-backed evidence: `docs/backend/DB_BACKED_SSO_INTEGRATION_REPORT.md`.
+- Production database modified: NO.
+- Production migrations applied: NO.
+- Runtime production SSO verified: NO.
+- Deployment and remote push: NO.
+- Next: production-precondition work remains limited to the deferred security items; do not treat Phase 2E as production authorization.
 
 ## Phase 2D.1 — Targeted Sol Auth Re-Review
 
@@ -137,11 +155,11 @@ No API routes, route handlers, server actions, server services, middleware, prox
 
 ## Current Database Status
 
-Drizzle schema, migration configuration, an offline generated migration, and a lazy postgres.js client boundary are present. PostgreSQL/Neon is a target only: no database was connected and no migration was applied.
+Drizzle schema and reviewed migrations are now applied only to isolated development targets: the approved Arena development database and the local Canonical Docker PostgreSQL service. No production database was connected or changed.
 
 ## Current Auth Status
 
-Mock only. The future auth bridge will map the canonical Sekolah Karir immutable subject to `identity.users.auth_subject`; no cookie/session/JWT/OAuth code or Arena credentials were added.
+Arena uses the verified first-party Canonical authorization-code + PKCE bridge in the local development environment. Canonical `users.id` maps to `identity.users.auth_subject`; `skw_session` remains host-only and Arena uses a separate opaque local session. Production authorization remains unverified and undeployed.
 
 ## Phase 2A Findings
 

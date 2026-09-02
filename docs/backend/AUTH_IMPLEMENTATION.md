@@ -70,7 +70,7 @@ DATABASE_URL, ARENA_ORIGIN, SK_AUTH_ORIGIN, ARENA_SSO_CLIENT_ID, ARENA_SSO_CLIEN
 
 ## 18. Migration Summary
 
-Arena migration 0001_pink_khan.sql creates identity.sessions. Canonical migration 0011_cultured_lilandra.sql creates authorization-code and grant tables. Neither was applied.
+Arena migration `0001_pink_khan.sql` creates `identity.sessions`. Canonical migration `0011_cultured_lilandra.sql` creates authorization-code and grant tables. Phase 2E applied them only to isolated development targets: the approved Arena development database and the Canonical local Docker PostgreSQL service. No production migration was applied.
 
 ## 19. Security Assumptions
 
@@ -80,6 +80,10 @@ The shared client secret is server-only, both origins are correctly configured, 
 
 Canonical login now starts with a short-lived host-only HttpOnly CSRF and continuation cookie pair. The login page receives the random nonce from its same-origin bootstrap route, sends it in a JSON request header, and the credential route requires both that token and the exact Canonical Origin. The Arena authorize continuation is validated before storage and read only from the browser-bound cookie after successful authentication.
 
-## 21. Remaining Phase 2D Review Items
+## 21. Phase 2E Verification
 
-Perform DB-backed exchange/replay tests, distributed rate-limit integration, browser cookie/redirect integration tests, trusted cleanup scheduling, and final authorization review.
+Local DB-backed tests now cover exchange/replay/expiry, PKCE, state, return paths, cookie-backed login/logout CSRF, JIT provisioning, session hashing, revocation, suspension, live constraints, and fail-closed revalidation during a Canonical localhost outage. The local setup and evidence are recorded in `DEVELOPMENT_DATABASE_SETUP.md` and `DB_BACKED_SSO_INTEGRATION_REPORT.md`.
+
+## 22. Remaining Production Preconditions
+
+Distributed rate-limit integration, trusted cleanup scheduling, production TLS/origin/env/secret validation, production database migration planning, and final authorization review remain required before production. Phase 2E did not deploy or modify production.
