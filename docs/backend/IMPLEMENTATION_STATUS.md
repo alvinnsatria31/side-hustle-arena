@@ -2,11 +2,24 @@
 
 ## Current Phase
 
-PHASE 2A - Auth Contract Discovery
+PHASE 2B - Central Auth Bridge + Arena Server Auth
 
 ## Status
 
-COMPLETE - READ-ONLY AUDIT
+COMPLETE - explicit quality gates passed; DB-backed SSO runtime remains unverified.
+
+## Phase 2B - Central Auth Bridge + Arena Server Auth
+
+- Arena migration generated: YES (0001_pink_khan.sql).
+- Canonical migration generated: YES (0011_cultured_lilandra.sql).
+- Migrations applied: NO.
+- Actual SSO runtime verified: NO (no database-backed integration environment was used).
+- Arena quality gates: lint, typecheck, build, offline migration generation, auth tests, and diff check passed with explicit process ExitCode 0.
+- Canonical quality gates: lint, typecheck, build, auth tests, and diff check passed with explicit process ExitCode 0.
+- /app protected server-side: YES.
+- Mock auth authoritative: NO; unrelated demo project/workspace state remains mock.
+- Admin authorization: DEFERRED / NOT YET MAPPED.
+- Phase 2C readiness: READY for authentication/session/authorization security audit.
 
 ## Phase 0 - Repository/Auth/Backend Readiness Audit
 

@@ -2,8 +2,6 @@
 
 import { Modal } from '@/components/primitives/Modal';
 import { Button } from '@/components/primitives/Button';
-import { useDemo } from '@/features/demo/store';
-import { useRouter } from 'next/navigation';
 
 interface LoginModalProps {
   open: boolean;
@@ -16,20 +14,13 @@ interface LoginModalProps {
 
 /**
  * Approved login-required modal: fade + 8px lift, no scale.
- * "Masuk"/"Daftar Gratis" establish a clearly-mocked local session.
+ * The visual shell remains; authentication starts the server-side SSO flow.
  */
 export function LoginModal({ open, onClose, continueTo, onContinue }: LoginModalProps) {
-  const { login } = useDemo();
-  const router = useRouter();
-
   const establish = () => {
-    login();
     onClose();
-    if (onContinue) {
-      onContinue();
-    } else if (continueTo) {
-      router.push(continueTo);
-    }
+    const returnTo = continueTo?.startsWith('/app') ? continueTo : '/app';
+    window.location.assign('/auth/login?returnTo=' + encodeURIComponent(returnTo));
   };
 
   return (
@@ -40,20 +31,16 @@ export function LoginModal({ open, onClose, continueTo, onContinue }: LoginModal
           Simpan progress project kamu.
         </h3>
         <p className="mb-6 text-[14px] leading-relaxed text-sk-muted">
-          Masuk atau buat akun untuk mengambil project minggu ini dan menyimpan progress. Gratis, dan setup-nya kurang dari
-          satu menit.
+          Masuk dengan akun Sekolah Karir untuk mengambil project minggu ini dan menyimpan progress.
         </p>
         <div className="flex flex-wrap items-center gap-2.5">
-          <Button onClick={establish}>Masuk</Button>
-          <Button variant="ghost" onClick={establish}>
-            Daftar Gratis
-          </Button>
+          <Button onClick={establish}>Masuk dengan Sekolah Karir</Button>
           <Button variant="text" onClick={onClose} className="ml-auto">
             Kembali lihat project
           </Button>
         </div>
         <p className="mt-6 rounded-xl border border-dashed border-sk-blue-tint-border bg-sk-blue-wash px-4 py-3 text-[12px] leading-relaxed text-sk-body">
-          Mode demo lokal: tidak ada server, tidak ada password. &ldquo;Masuk&rdquo; hanya membuat sesi frontend di browser kamu.
+          Arena tidak membuat password atau sesi frontend. &ldquo;Masuk&rdquo; membuka autentikasi Sekolah Karir.
         </p>
       </div>
     </Modal>

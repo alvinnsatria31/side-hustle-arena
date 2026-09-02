@@ -8,6 +8,13 @@
       "when": 1788301999320,
       "tag": "0000_previous_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788321924625,
+      "tag": "0001_pink_khan",
+      "breakpoints": true
     }
   ]
 }
