@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-PHASE 1 - Database Foundation
+PHASE 2A - Auth Contract Discovery
 
 ## Status
 
-COMPLETE - LOCAL FOUNDATION ONLY
+COMPLETE - READ-ONLY AUDIT
 
 ## Phase 0 - Repository/Auth/Backend Readiness Audit
 
@@ -40,6 +40,20 @@ Status: COMPLETE - migration generated locally and not applied.
 
 Next phase recommendation: PHASE 2 - SEKOLAH KARIR AUTH BRIDGE + SERVER AUTHORIZATION FOUNDATION.
 
+## Phase 2A - Auth Contract Discovery
+
+Status: COMPLETE - documentation only.
+
+- Canonical auth location: `D:\Sekolah Karir Workspace`.
+- Auth mechanism: custom PostgreSQL-backed bcrypt credentials with opaque database sessions.
+- Canonical user identifier: Workspace `users.id` UUID.
+- Session cookie: `skw_session`, HttpOnly, SameSite=Lax, Secure when HTTPS, Path `/`, 14-day MaxAge, host-only because Domain is absent.
+- Subdomain readiness: no Arena callback, shared parent-domain cookie, or cross-subdomain SSO evidence found.
+- Recommended bridge method: central auth redirect plus short-lived one-time authorization-code exchange, followed by an Arena-scoped session.
+- `identity.users.auth_subject`: SUFFICIENT AS-IS for canonical subject mapping; no schema change made.
+- Phase 2B readiness: READY WITH PRECONDITIONS.
+- No source files, packages, environment files, database files, or external repositories were modified.
+
 ## Production Hostname
 
 arena.sekolahkarir.id
@@ -59,6 +73,10 @@ Drizzle schema, migration configuration, an offline generated migration, and a l
 ## Current Auth Status
 
 Mock only. The future auth bridge will map the canonical Sekolah Karir immutable subject to `identity.users.auth_subject`; no cookie/session/JWT/OAuth code or Arena credentials were added.
+
+## Phase 2A Findings
+
+The real Workspace authentication source is now located and its server contract is documented in `docs/backend/AUTH_CONTRACT_AUDIT.md` and `docs/backend/AUTH_INTEGRATION_CONTRACT.md`. Direct reuse of `skw_session` is not supported by current evidence because the cookie is host-only and Arena has no shared session verifier. Phase 2B must obtain the canonical auth owner’s callback, verification, logout, role, and origin contract before implementation.
 
 ## Repository Integrity Status
 
@@ -93,10 +111,10 @@ The approved frontend checkpoint is `36bd42f` on `feature/arena-backend-foundati
 
 ## Known Unknowns
 
-Canonical auth/session and subdomain-cookie behavior; external roles; database ownership; storage provider; access-check/review queue; automation authentication; reward fulfillment; notification delivery; and deployment topology.
+Canonical bridge endpoint/code verification; callback/origin allowlists; logout propagation; session invalidation on password change; Arena session persistence; and whether Workspace roles can express Arena administration.
 
 ## Recommended Next Phase
 
-PHASE 2 - SEKOLAH KARIR AUTH BRIDGE + SERVER AUTHORIZATION FOUNDATION
+PHASE 2B - IMPLEMENT SEKOLAH KARIR AUTH BRIDGE + SERVER AUTHORIZATION
 
-Confirm the canonical subject, session/cookie behavior, roles, subdomain policy, and server authorization before wiring any route or replacing mock state. Do not apply the migration to a real database until a separate deployment/migration phase is approved.
+Obtain the canonical auth owner’s written bridge contract, then implement server-only verification, JIT identity mapping, Arena-scoped sessions, and ownership authorization without changing approved visuals. Do not apply the Arena database migration to a real database until separately approved.
