@@ -2,11 +2,31 @@
 
 ## Current Phase
 
-PHASE 2B - Central Auth Bridge + Arena Server Auth
+PHASE 2C - Sol Authentication Security Audit
 
 ## Status
 
-COMPLETE - explicit quality gates passed; DB-backed SSO runtime remains unverified.
+COMPLETE - PASS WITH REMEDIATIONS; DB-backed SSO runtime remains unverified.
+
+## Phase 2C - Sol Authentication Security Audit
+
+- Arena review commit: `09cc39d`.
+- Canonical review commit: `98c325e`.
+- Critical findings: 0.
+- High findings: 0.
+- Medium findings: 3.
+- Low findings: 5.
+- Informational findings: 2.
+- Security gate: PASS WITH REMEDIATIONS.
+- Blocking before isolated integration test: NONE (no Critical/High finding).
+- Required before production: Canonical login-CSRF protection, auth abuse throttling, explicit resolution of the 300-second revocation/suspension window, and the documented test/deployment preconditions.
+- Auth source modified during audit: NO.
+- Canonical repository modified during audit: NO.
+- Migrations applied: NO.
+- Runtime DB-backed SSO verified: NO.
+- Next phase: PHASE 2D - TERRA TARGETED AUTH HARDENING.
+- Audit report: `docs/backend/AUTH_SECURITY_AUDIT_SOL.md`.
+- Remediation plan: `docs/backend/AUTH_REMEDIATION_PLAN.md`.
 
 ## Phase 2B - Central Auth Bridge + Arena Server Auth
 
@@ -128,6 +148,6 @@ Canonical bridge endpoint/code verification; callback/origin allowlists; logout 
 
 ## Recommended Next Phase
 
-PHASE 2B - IMPLEMENT SEKOLAH KARIR AUTH BRIDGE + SERVER AUTHORIZATION
+PHASE 2D - TERRA TARGETED AUTH HARDENING
 
-Obtain the canonical auth owner’s written bridge contract, then implement server-only verification, JIT identity mapping, Arena-scoped sessions, and ownership authorization without changing approved visuals. Do not apply the Arena database migration to a real database until separately approved.
+Remediate the Medium findings and add the required isolated DB/browser security tests without redesigning the authorization-code, PKCE, host-only-cookie, or local-session architecture. Do not apply either migration to a real database until separately approved.
