@@ -1,5 +1,9 @@
 # Side Hustle Arena - Backend Implementation Status
 
+> **Current Phase:** Phase 3 — Arena Core API Implementation.
+>
+> **Status:** COMPLETE — current-week, visible-project, enrollment, workspace, and development seed quality gates passed. The checkpoint remains local; production hardening and deployment remain out of scope.
+
 ## Current Phase
 
 PHASE 2E — Development Database Bring-Up + DB-Backed SSO Integration
@@ -7,6 +11,17 @@ PHASE 2E — Development Database Bring-Up + DB-Backed SSO Integration
 ## Status
 
 COMPLETE - isolated development migrations and localhost DB-backed SSO verification passed. Production hardening and deployment remain out of scope.
+
+## Phase 3 - Arena Core API Implementation
+
+- Current week, active division, and visible current published project services and route handlers are implemented.
+- Enrollment selection is authenticated, same-origin protected, transactionally validated, and constrained to one project per user/week.
+- Workspace progress is ownership-scoped, Zod-bounded, lazily persisted, and deadline-locked.
+- Development-only idempotent seed: `npm run db:seed:arena`.
+- No migration is required: Phase 1's existing schema contains the needed tables and uniqueness constraint.
+- Frontend demo/mock sources remain unchanged; these APIs are not yet wired into the UI.
+- Arena quality gates passed: lint, typecheck, production build, static auth regression, live database constraints, Arena core API tests, seed idempotency, migration generation, schema contract, and diff check.
+- Contract: `docs/backend/ARENA_CORE_API.md`. Service boundaries: `docs/backend/ARENA_SERVICE_ARCHITECTURE.md`.
 
 ## Phase 2E — Development Database Bring-Up + DB-Backed SSO Integration
 
