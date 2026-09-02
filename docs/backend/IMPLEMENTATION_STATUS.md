@@ -2,11 +2,33 @@
 
 ## Current Phase
 
-PHASE 2D - Targeted Auth Hardening
+PHASE 2D.1 — Targeted Sol Auth Re-Review
 
 ## Status
 
-COMPLETE - targeted static/build-time hardening verified; DB-backed SSO runtime remains unverified.
+COMPLETE - security gate passed with deferred production hardening; ready for isolated Phase 2E development database bring-up.
+
+## Phase 2D.1 — Targeted Sol Auth Re-Review
+
+- Arena reviewed baseline: `1ea722c` on `feature/arena-auth-hardening`.
+- Canonical reviewed baseline: `21ff365` on `feature/arena-sso-hardening`.
+- `SOL-AUTH-001`, `003`, `005`, `006`, and `007`: VERIFIED RESOLVED.
+- `SOL-AUTH-002`: OPEN / REQUIRED BEFORE PRODUCTION.
+- `SOL-AUTH-004`: OPEN / LOW / DEFENSE IN DEPTH.
+- `SOL-AUTH-008`: PARTIAL / cleanup implemented, scheduler pending.
+- Critical remaining: 0.
+- High remaining: 0.
+- Medium remaining: 1.
+- Low remaining: 2.
+- Security gate: PASS WITH DEFERRED PRODUCTION HARDENING.
+- Migration hygiene: VERIFIED / READY for a fresh isolated development database.
+- Development DB gate: READY FOR PHASE 2E DEVELOPMENT DATABASE BRING-UP.
+- Production authentication gate: NOT YET READY.
+- Real DB: NOT CONNECTED.
+- Migrations: NOT APPLIED.
+- Runtime database-backed SSO: NOT VERIFIED.
+- Report: `docs/backend/AUTH_SECURITY_REREVIEW_SOL.md`.
+- Next: PHASE 2E — DEVELOPMENT DATABASE BRING-UP + DB-BACKED SSO INTEGRATION.
 
 ## Phase 2D - Targeted Auth Hardening
 

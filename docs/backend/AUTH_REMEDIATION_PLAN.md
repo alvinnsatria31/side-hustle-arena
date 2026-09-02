@@ -2,6 +2,26 @@
 
 This plan is based on the Sol audit of Arena `09cc39d` and Canonical `98c325e`. It authorizes no source change by itself. Implement each item in a separately approved phase and rerun both repositories' quality gates plus the named regression tests.
 
+## Phase 2D.1 Targeted Sol Re-Review
+
+- `SOL-AUTH-001`: VERIFIED RESOLVED.
+- `SOL-AUTH-002`: OPEN - REQUIRED BEFORE PRODUCTION. Shared distributed authentication rate limiting remains deferred.
+- `SOL-AUTH-003`: VERIFIED RESOLVED.
+- `SOL-AUTH-004`: OPEN - LOW / DEFENSE IN DEPTH. Current cookie attributes remain safe; coordinated `__Host-` naming remains optional hardening.
+- `SOL-AUTH-005`: VERIFIED RESOLVED.
+- `SOL-AUTH-006`: VERIFIED RESOLVED.
+- `SOL-AUTH-007`: VERIFIED RESOLVED.
+- `SOL-AUTH-008`: PARTIAL - CLEANUP IMPLEMENTED, SCHEDULER PENDING.
+- Critical remaining: 0.
+- High remaining: 0.
+- Medium remaining: 1.
+- Low remaining: 2.
+- Security gate: PASS WITH DEFERRED PRODUCTION HARDENING.
+- Development database gate: READY FOR PHASE 2E DEVELOPMENT DATABASE BRING-UP.
+- Production authentication gate: NOT YET READY.
+- Migration hygiene: VERIFIED / READY for a fresh isolated development database; migrations applied: NO.
+- Evidence report: `docs/backend/AUTH_SECURITY_REREVIEW_SOL.md`.
+
 ## Phase 2D Update
 
 - `SOL-AUTH-001`: RESOLVED. Canonical login now requires an exact configured Origin, JSON request shape, and a per-login CSRF token bound in a short-lived host-only HttpOnly cookie. The validated Arena authorize continuation is separately browser-bound and cannot be supplied in the credential POST.
@@ -21,6 +41,16 @@ NONE.
 No Critical or High finding was confirmed. An isolated, non-production, database-backed integration test may proceed after explicit database/migration authorization. Production deployment may not proceed until the Medium items below are remediated or, where stated, formally risk-accepted.
 
 ## Required Before Production
+
+- Implement `SOL-AUTH-002` shared distributed authentication abuse throttling.
+- Schedule and monitor the `SOL-AUTH-008` cleanup services through a trusted job boundary.
+- Complete the documented DB-backed route/concurrency and real-browser auth regression tests.
+- Validate production TLS, exact origins/callbacks, environment configuration, and secret provisioning.
+- Resolve or formally accept `SOL-AUTH-004` as Low defense-in-depth risk.
+
+## Original Phase 2C Remediation Detail (Historical)
+
+The detailed items below preserve the original audit plan. The Phase 2D.1 status section above is authoritative; items marked VERIFIED RESOLVED are no longer open production work.
 
 ### Priority P1 - Prevent Canonical login CSRF/session swapping
 
