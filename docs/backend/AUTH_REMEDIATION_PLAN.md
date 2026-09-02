@@ -2,6 +2,18 @@
 
 This plan is based on the Sol audit of Arena `09cc39d` and Canonical `98c325e`. It authorizes no source change by itself. Implement each item in a separately approved phase and rerun both repositories' quality gates plus the named regression tests.
 
+## Phase 2D Update
+
+- `SOL-AUTH-001`: RESOLVED. Canonical login now requires an exact configured Origin, JSON request shape, and a per-login CSRF token bound in a short-lived host-only HttpOnly cookie. The validated Arena authorize continuation is separately browser-bound and cannot be supplied in the credential POST.
+- `SOL-AUTH-002`: OPEN — REQUIRED BEFORE PRODUCTION. No shared distributed limiter exists; the existing AI draft in-memory limiter is not suitable for authentication. Implement per-IP and normalized-account limits during the approved Upstash Redis phase.
+- `SOL-AUTH-003`: RESOLVED. Arena defaults canonical introspection to 60 seconds (configurable from 30 to 300 seconds) and remains fail-closed once validation is due. This reduces stale-revocation exposure at the cost of more Canonical introspection traffic.
+- `SOL-AUTH-004`: OPEN. Canonical `skw_session` was deliberately not renamed. Arena cookie names remain unchanged to avoid a premature production/development naming transition; all remain host-only, HttpOnly, SameSite=Lax, Path=/, and Secure on HTTPS.
+- `SOL-AUTH-005`: RESOLVED. Canonical logout remains POST and now requires the exact configured Canonical Origin before revoking the source session and linked grants.
+- `SOL-AUTH-006`: RESOLVED. Failed logins perform exactly one bcrypt comparison against the user hash when present or the precomputed dummy hash when absent.
+- `SOL-AUTH-007`: RESOLVED. Production configuration rejects non-HTTPS, credential-bearing, fragment/query/path-bearing auth origins and requires the expected HTTPS Arena callback; development HTTP is limited to localhost.
+- `SOL-AUTH-008`: PARTIAL. Explicit cleanup boundaries retain authorization codes for 24 hours and terminal grants/sessions for 30 days. They are intentionally not scheduled or executed on request paths; a trusted scheduler is still required before production.
+- Migration hygiene: RESOLVED. Canonical `0011_cultured_lilandra.sql` is now SSO-only. Proposal DDL remains solely in the pre-existing `0010_phase_3_4_proposal_drafts.sql`; see `PRE_DATABASE_MIGRATION_REVIEW.md`.
+
 ## Blocking Before Integration Test
 
 NONE.

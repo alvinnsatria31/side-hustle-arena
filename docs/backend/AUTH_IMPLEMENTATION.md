@@ -42,7 +42,7 @@ The /app layout calls requireCurrentUser() server-side before mounting the exist
 
 ## 11. Canonical Revalidation
 
-Sessions introspect grants at a configurable 300-second default. When revalidation is due and unavailable, Arena revokes the local session and fails closed.
+Sessions introspect grants at a configurable 60-second default (bounded to 30-300 seconds). When revalidation is due and unavailable, Arena revokes the local session and fails closed. The lower default reduces the revocation/suspension stale window while increasing Canonical introspection traffic.
 
 ## 12. Logout Model
 
@@ -76,6 +76,10 @@ Arena migration 0001_pink_khan.sql creates identity.sessions. Canonical migratio
 
 The shared client secret is server-only, both origins are correctly configured, and canonical database session/user status remains authoritative.
 
-## 20. Remaining Phase 2C Review Items
+## 20. Canonical Login Boundary
 
-Perform DB-backed exchange/replay tests, configuration deployment review, rate-limit integration, cookie/browser integration tests, and final authorization review.
+Canonical login now starts with a short-lived host-only HttpOnly CSRF and continuation cookie pair. The login page receives the random nonce from its same-origin bootstrap route, sends it in a JSON request header, and the credential route requires both that token and the exact Canonical Origin. The Arena authorize continuation is validated before storage and read only from the browser-bound cookie after successful authentication.
+
+## 21. Remaining Phase 2D Review Items
+
+Perform DB-backed exchange/replay tests, distributed rate-limit integration, browser cookie/redirect integration tests, trusted cleanup scheduling, and final authorization review.

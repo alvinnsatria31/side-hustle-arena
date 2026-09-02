@@ -2,11 +2,25 @@
 
 ## Current Phase
 
-PHASE 2C - Sol Authentication Security Audit
+PHASE 2D - Targeted Auth Hardening
 
 ## Status
 
-COMPLETE - PASS WITH REMEDIATIONS; DB-backed SSO runtime remains unverified.
+COMPLETE - targeted static/build-time hardening verified; DB-backed SSO runtime remains unverified.
+
+## Phase 2D - Targeted Auth Hardening
+
+- `SOL-AUTH-001` Canonical login CSRF: RESOLVED with exact Origin, JSON shape, per-login CSRF token, and browser-bound validated continuation.
+- `SOL-AUTH-002` distributed rate limiting: OPEN / REQUIRED BEFORE PRODUCTION; deferred to the approved Upstash Redis phase.
+- `SOL-AUTH-003` revocation window: RESOLVED; Arena default canonical introspection interval reduced from 300 to 60 seconds with a 30-300 second configuration bound and fail-closed due checks unchanged.
+- `SOL-AUTH-005` Canonical logout CSRF: RESOLVED with exact Origin validation while preserving source-session grant revocation.
+- `SOL-AUTH-006` login timing: RESOLVED; known and unknown failed logins each perform one bcrypt comparison.
+- `SOL-AUTH-007` HTTPS/origin configuration: RESOLVED for production origins and the expected HTTPS Arena callback; development HTTP is localhost-only.
+- `SOL-AUTH-008` retention: PARTIAL; explicit cleanup boundaries exist but require a future trusted scheduler.
+- Migration hygiene: READY. Canonical 0011 is SSO-only; proposal schema remains in 0010. Review: `docs/backend/PRE_DATABASE_MIGRATION_REVIEW.md`.
+- Real DB: NOT CONNECTED.
+- Migrations: NOT APPLIED.
+- Next: SOL TARGETED RE-REVIEW.
 
 ## Phase 2C - Sol Authentication Security Audit
 
