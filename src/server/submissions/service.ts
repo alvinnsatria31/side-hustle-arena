@@ -60,6 +60,11 @@ async function requirementForProject(db: Db, projectId: string, requirementId: s
   return requirement;
 }
 
+function serializeDraftItem(item: DraftItem) {
+  const { storageKey: _storageKey, ...clientSafe } = item;
+  return clientSafe;
+}
+
 function serializeSubmission(submission: Submission, items: DraftItem[]) {
   return {
     id: submission.id,
@@ -69,7 +74,7 @@ function serializeSubmission(submission: Submission, items: DraftItem[]) {
     notes: submission.draftNotes,
     reviewAttemptsUsed: submission.reviewAttemptsUsed,
     latestVersionId: submission.latestVersionId,
-    items,
+    items: items.map(serializeDraftItem),
   };
 }
 
@@ -127,9 +132,9 @@ export async function addArenaSubmissionLink({ userId, enrollmentId, input, now 
   if (items.filter((item) => item.itemType === "LINK").length >= MAX_LINKS || items.filter((item) => item.requirementId === requirement.id).length >= limitFor(requirement, "LINK")) {
     throw new ArenaDomainError("LINK_LIMIT_EXCEEDED", "The link limit for this submission requirement has been reached.");
   }
-  return (await db.insert(submissionDraftItems).values({
+  return serializeDraftItem((await db.insert(submissionDraftItems).values({
     submissionId: submission.id, requirementId: requirement.id, itemType: "LINK", label: parsed.data.label ?? null, externalUrl: parsed.data.url,
-  }).returning())[0];
+  }).returning())[0]);
 }
 
 export async function createArenaUploadIntent({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
@@ -193,10 +198,10 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
     if (items.filter((item) => item.itemType === "FILE").length >= MAX_FILES || items.filter((item) => item.requirementId === requirement.id).length >= limitFor(requirement, "FILE")) {
       throw new ArenaDomainError("FILE_LIMIT_EXCEEDED", "The file limit for this submission requirement has been reached.");
     }
-    return (await tx.insert(submissionDraftItems).values({
+    return serializeDraftItem((await tx.insert(submissionDraftItems).values({
       submissionId: submission.id, requirementId: freshIntent.requirementId, itemType: "FILE", storageKey: freshIntent.storageKey,
       originalFilename: freshIntent.originalFilename, mimeType: freshIntent.expectedMimeType, fileSizeBytes: freshIntent.expectedSizeBytes,
-    }).returning())[0];
+    }).returning())[0]);
   });
 }
 
