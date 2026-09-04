@@ -5,22 +5,21 @@ import { Entrance } from '@/components/motion/Reveal';
 import { ResourceList } from '@/components/arena/KanbanPreview';
 import { Card } from '@/components/primitives/Card';
 import { CtaActions, DetailTabs } from '@/components/arena/ProjectDetail';
-import { ARENA_WEEK } from '@/data/mock/arena';
-import { getProject, mockProjects } from '@/data/mock/projects';
+import { getPublicProjectDetail } from '@/lib/arena-view';
 
-export function generateStaticParams() {
-  return mockProjects.map((p) => ({ slug: p.slug }));
-}
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const project = getProject(slug);
+  const project = await getPublicProjectDetail(slug);
   return { title: project ? project.title : 'Project tidak ditemukan' };
 }
 
 export default async function AppProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const project = getProject(slug);
+  // Canonical identifier is the slug: same lookup the public detail page and
+  // the enroll button use. No mock fallback — unknown slugs 404 honestly.
+  const project = await getPublicProjectDetail(slug);
   if (!project) notFound();
 
   return (
@@ -51,8 +50,6 @@ export default async function AppProjectDetailPage({ params }: { params: Promise
               <Badge variant="dark">{project.difficulty}</Badge>
               <Badge variant="dark">Estimasi {project.estimatedTime}</Badge>
               <Badge variant="dark">Deadline · {project.deadlineLabel}</Badge>
-              <Badge variant="dark">+{project.points} points</Badge>
-              <Badge variant="dark">{project.participants} peserta</Badge>
             </div>
             <CtaActions slug={project.slug} />
           </div>
@@ -69,7 +66,6 @@ export default async function AppProjectDetailPage({ params }: { params: Promise
             ['Difficulty', project.difficulty],
             ['Estimated Time', project.estimatedTime],
             ['Deadline', project.deadlineLabel],
-            ['Points', `+${project.points}`],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between border-b border-dashed border-sk-border py-2.5 last:border-0">
               <dt className="text-sk-muted">{k}</dt>
@@ -80,7 +76,7 @@ export default async function AppProjectDetailPage({ params }: { params: Promise
         <h4 className="mb-3 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Resources</h4>
         <ResourceList resources={project.resources} />
         <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.1em] text-sk-faint">
-          Week {ARENA_WEEK} · project drop setiap Senin
+          Week {project.week} · project drop setiap Senin
         </p>
       </Card>
     </div>

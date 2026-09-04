@@ -1,10 +1,13 @@
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { Entrance } from '@/components/motion/Reveal';
 import { ProjectBrowser } from '@/components/arena/ProjectBrowser';
+import { getPublicProjects } from '@/lib/arena-view';
 
 export const metadata = { title: 'Arena · Projects' };
+export const dynamic = 'force-dynamic';
 
-export default function AppArenaProjectsPage() {
+export default async function AppArenaProjectsPage() {
+  const { groups, projects } = await getPublicProjects();
   return (
     <div>
       <Breadcrumb items={[{ label: 'App', href: '/app' }, { label: 'Arena', href: '/app/arena' }, { label: 'Projects' }]} />
@@ -14,7 +17,7 @@ export default function AppArenaProjectsPage() {
           Pilih satu project yang paling sesuai dengan skill yang ingin kamu bangun.
         </p>
       </Entrance>
-      <ProjectBrowser hrefPrefix="/app/arena/projects" />
+      <ProjectBrowser hrefPrefix="/app/arena/projects" projects={projects} groups={groups} showRecommended={false} />
     </div>
   );
 }
