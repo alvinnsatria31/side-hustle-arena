@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
-import { CalendarClock, Check, ExternalLink, Link2 } from 'lucide-react';
+import { CalendarClock, Check, Download, ExternalLink, FileText, Link2 } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
@@ -12,7 +12,9 @@ import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { ErrorState } from '@/components/states/ErrorState';
 import {
   ArenaApiError,
+  formatBytes,
   getCurrentEnrollment,
+  getDownloadGrant,
   getSubmission,
   getVisibleProjectDetail,
   type ArenaSubmission,
@@ -44,6 +46,9 @@ export default function SubmissionPage() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [submission, setSubmission] = useState<ArenaSubmission | null>(null);
   const [projectTitle, setProjectTitle] = useState('');
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +71,7 @@ export default function SubmissionPage() {
         }
         setSubmission(sub);
         setProjectTitle(detail.title);
+        setEnrollmentId(enrollment.id);
         setBoot('ready');
       } catch (err) {
         if (cancelled) return;
@@ -138,6 +144,28 @@ export default function SubmissionPage() {
 
   const finalized = submission.status === 'FINALIZED';
   const links = submission.items.filter((item) => item.itemType === 'LINK' && item.externalUrl);
+  const files = submission.items.filter((item) => item.itemType === 'FILE');
+
+  const downloadFile = async (itemId: string, fallbackName: string) => {
+    if (!enrollmentId || downloadingId) return;
+    setDownloadingId(itemId);
+    setDownloadError(null);
+    try {
+      // Short-lived signed URL from the backend — never a permanent public URL.
+      const grant = await getDownloadGrant(enrollmentId, itemId);
+      const anchor = document.createElement('a');
+      anchor.href = grant.url;
+      anchor.download = grant.filename ?? fallbackName;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (err) {
+      setDownloadError(err instanceof ArenaApiError ? err.message : 'Download gagal. Coba lagi.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <div>
@@ -195,6 +223,49 @@ export default function SubmissionPage() {
                 <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Project</dt>
                 <dd className="text-[13.5px] text-sk-muted">{projectTitle}</dd>
               </div>
+              {files.length > 0 && (
+                <div>
+                  <dt className="mb-1.5 text-[12px] font-semibold text-sk-navy">
+                    Files ({files.length})
+                  </dt>
+                  <dd className="flex flex-col gap-2">
+                    {files.map((item) => (
+                      <span
+                        key={item.id}
+                        className="flex max-w-full items-center gap-2.5 rounded-lg border border-sk-border bg-sk-bg px-3.5 py-2.5"
+                      >
+                        <FileText size={15} aria-hidden className="shrink-0 text-sk-blue" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-semibold text-sk-navy">
+                            {item.originalFilename ?? 'File'}
+                          </span>
+                          <span className="block font-mono text-[11px] text-sk-muted">
+                            {item.mimeType ?? ''}{item.mimeType && item.fileSizeBytes != null ? ' · ' : ''}
+                            {item.fileSizeBytes != null ? formatBytes(item.fileSizeBytes) : ''}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={downloadingId === item.id}
+                          aria-label={`Download ${item.originalFilename ?? 'file'}`}
+                          onClick={() => {
+                            void downloadFile(item.id, item.originalFilename ?? 'download');
+                          }}
+                          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-bold text-sk-blue transition-colors hover:bg-sk-blue-tint disabled:opacity-60"
+                        >
+                          <Download size={13} aria-hidden />
+                          {downloadingId === item.id ? '…' : 'Download'}
+                        </button>
+                      </span>
+                    ))}
+                    {downloadError && (
+                      <span role="alert" className="text-[12px] text-sk-error">
+                        {downloadError}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               {links.map((item) => (
                 <div key={item.id}>
                   <dt className="mb-1 text-[12px] font-semibold text-sk-navy">

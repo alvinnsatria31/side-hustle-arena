@@ -84,6 +84,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
+  // DELETE endpoints answer 204 with no body — never treat that as failure.
+  if (res.status === 204) return undefined as T;
   const payload: unknown = await res.json().catch(() => null);
   if (!res.ok || isFailure(payload)) {
     const code = (isFailure(payload) ? payload.error.code : 'INTERNAL_ERROR') as ArenaErrorCode;
@@ -92,6 +94,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ArenaApiError(code, message, res.status, details);
   }
   return (payload as ArenaSuccess<T>).data;
+}
+
+/* ---------- File-upload rules (mirror server schemas; server stays authoritative) ---------- */
+
+export const MAX_FILES = 5;
+export const MAX_LINKS = 5;
+export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+export const ALLOWED_FILE_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+};
+
+export const FILE_PICKER_ACCEPT = Object.keys(ALLOWED_FILE_TYPES)
+  .map((ext) => `.${ext}`)
+  .join(',');
+
+export function mimeForFilename(filename: string): string | null {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return ALLOWED_FILE_TYPES[ext] ?? null;
+}
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /* ---------- Types (ringkas, mengikuti service backend) ---------- */
@@ -329,6 +365,47 @@ export function submitEnrollment(enrollmentId: string): Promise<SubmitResult> {
   return request<SubmitResult>(`/api/arena/enrollments/${enrollmentId}/submission/submit`, {
     method: 'POST',
   });
+}
+
+export interface UploadIntent {
+  intentId: string;
+  uploadUrl: string;
+  requiredHeaders: Record<string, string>;
+  expiresAt: string | Date;
+}
+
+export function requestUploadIntent(
+  enrollmentId: string,
+  input: { requirementId: string; filename: string; mimeType: string; sizeBytes: number },
+): Promise<UploadIntent> {
+  return request<UploadIntent>(`/api/arena/enrollments/${enrollmentId}/submission/uploads/presign`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function finalizeUpload(enrollmentId: string, intentId: string): Promise<DraftItem> {
+  return request<DraftItem>(`/api/arena/enrollments/${enrollmentId}/submission/uploads/${intentId}/finalize`, {
+    method: 'POST',
+  });
+}
+
+export function deleteSubmissionItem(enrollmentId: string, itemId: string): Promise<void> {
+  return request<void>(
+    `/api/arena/submission-items/${itemId}?enrollmentId=${encodeURIComponent(enrollmentId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export interface DownloadGrant {
+  url: string;
+  filename: string | null;
+}
+
+export function getDownloadGrant(enrollmentId: string, itemId: string): Promise<DownloadGrant> {
+  return request<DownloadGrant>(
+    `/api/arena/submission-items/${itemId}?enrollmentId=${encodeURIComponent(enrollmentId)}`,
+  );
 }
 
 export function markNotificationsRead(eventIds: string[]): Promise<{ read: unknown }> {

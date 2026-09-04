@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { CalendarClock, Check, CircleAlert, FileText, Link2, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, CircleAlert, FileText, Link2, Plus, RefreshCw, Trash2, UploadCloud, X } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { Button } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
@@ -16,17 +16,28 @@ import { ResourceList } from '@/components/arena/KanbanPreview';
 import { WORKSPACE_STEP_LABELS } from '@/components/primitives/StatusBadge';
 import { useToast } from '@/features/ui/toast';
 import {
+  ALLOWED_FILE_TYPES,
   ArenaApiError,
+  FILE_PICKER_ACCEPT,
+  MAX_FILES,
+  MAX_FILE_BYTES,
+  MAX_LINKS,
   addSubmissionLink,
+  deleteSubmissionItem,
+  finalizeUpload,
+  formatBytes,
   getCurrentEnrollment,
   getSubmission,
   getVisibleProjectDetail,
   getWeekCurrent,
   getWorkspace,
+  mimeForFilename,
   patchSubmissionDraft,
   patchWorkspace,
+  requestUploadIntent,
   selectProject,
   submitEnrollment,
+  type DraftItem,
   type VisibleProjectDetail,
   type WorkspacePatch,
   type WorkspaceStep as ServerStep,
@@ -116,6 +127,21 @@ function friendlyError(err: unknown): string {
         return 'Jatah 3x review minggu ini habis.';
       case 'SUBMISSION_REQUIREMENTS_INCOMPLETE':
         return 'Requirement belum lengkap — tambah link/file sesuai ketentuan project.';
+      case 'FILE_LIMIT_EXCEEDED':
+        return `Maksimal ${MAX_FILES} file per submission.`;
+      case 'LINK_LIMIT_EXCEEDED':
+        return `Maksimal ${MAX_LINKS} link per submission.`;
+      case 'FILE_TYPE_NOT_ALLOWED':
+        return 'Tipe file tidak didukung. Pakai PDF, DOCX, PPTX, CSV, XLSX, PNG, JPG, atau WEBP.';
+      case 'FILE_TOO_LARGE':
+        return 'File melebihi 20 MB.';
+      case 'UPLOAD_INTENT_NOT_FOUND':
+      case 'UPLOAD_INTENT_EXPIRED':
+        return 'Sesi upload kedaluwarsa. Coba upload ulang file-nya.';
+      case 'UPLOAD_VALIDATION_FAILED':
+        return 'File gagal diverifikasi server. Coba upload ulang.';
+      case 'STORAGE_NOT_CONFIGURED':
+        return 'Penyimpanan lagi bermasalah. Coba lagi nanti.';
       default:
         return `Gagal menyimpan: ${err.message}`;
     }
@@ -136,6 +162,7 @@ interface LiveProject {
   deliverables: Array<{ id: string; title: string; description?: string }>;
   skills: string[];
   linkRequirementId: string | null;
+  fileRequirementId: string | null;
 }
 
 function toLiveProject(detail: VisibleProjectDetail): LiveProject {
@@ -152,7 +179,39 @@ function toLiveProject(detail: VisibleProjectDetail): LiveProject {
     deliverables: [],
     skills: detail.skills.map((s) => s.name),
     linkRequirementId: detail.requirements.find((r) => r.type === 'LINK')?.id ?? null,
+    fileRequirementId: detail.requirements.find((r) => r.type === 'FILE')?.id ?? null,
   };
+}
+
+type UploadStatus = 'queued' | 'uploading' | 'verifying' | 'uploaded' | 'failed';
+
+interface PendingUpload {
+  key: string;
+  file: File;
+  name: string;
+  size: number;
+  status: UploadStatus;
+  progress: number | null; // null = indeterminate honest state
+  error: string | null;
+}
+
+function putToCos(url: string, contentType: string, file: File, onProgress: (ratio: number | null) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('content-type', contentType);
+    xhr.timeout = 120_000;
+    xhr.upload.onprogress = (event) => {
+      onProgress(event.lengthComputable && event.total > 0 ? event.loaded / event.total : null);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed (HTTP ${xhr.status}).`));
+    };
+    xhr.onerror = () => reject(new Error('Upload gagal — cek koneksi lalu coba lagi.'));
+    xhr.ontimeout = () => reject(new Error('Upload timeout. Coba lagi.'));
+    xhr.send(file);
+  });
 }
 
 export default function WorkspacePage() {
@@ -182,6 +241,11 @@ export default function WorkspacePage() {
   const [explanation, setExplanation] = useState('');
   const [finalChecks, setFinalChecks] = useState<Record<string, boolean>>({});
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [links, setLinks] = useState<Array<{ id: string; url: string }>>([]);
+  const [files, setFiles] = useState<DraftItem[]>([]);
+  const [uploads, setUploads] = useState<PendingUpload[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [phase, setPhase] = useState<'idle' | 'submitting' | 'error'>('idle');
 
@@ -229,7 +293,14 @@ export default function WorkspacePage() {
         const nextChecks: Record<string, boolean> = {};
         for (const item of REVIEW_ITEMS) nextChecks[item.id] = serverChecks.get(item.label) ?? false;
         setChecks(nextChecks);
-        setUrl(sub.items.find((item) => item.itemType === 'LINK' && item.externalUrl)?.externalUrl ?? '');
+        // Draft attachments come from the server — refresh-safe, device-safe.
+        setLinks(
+          sub.items
+            .filter((item) => item.itemType === 'LINK' && item.externalUrl)
+            .map((item) => ({ id: item.id, url: item.externalUrl as string })),
+        );
+        setFiles(sub.items.filter((item) => item.itemType === 'FILE'));
+        setUrl('');
         setExplanation(sub.explanation ?? '');
         setBoot('ready');
       } catch (err) {
@@ -296,7 +367,94 @@ export default function WorkspacePage() {
     });
   };
 
-  const submitProject = async () => {
+  const busyUploads = uploads.length > 0;
+
+  const setUploadState = (key: string, patch: Partial<PendingUpload>) => {
+    setUploads((list) => list.map((u) => (u.key === key ? { ...u, ...patch } : u)));
+  };
+
+  const runUpload = async (entry: PendingUpload) => {
+    if (!enrollmentId || !project?.fileRequirementId) return;
+    const mime = mimeForFilename(entry.name) ?? entry.file.type;
+    setUploadState(entry.key, { status: 'uploading', progress: null, error: null });
+    try {
+      // Fresh intent per attempt: retry never reuses an expired authorization
+      // and never duplicates a finalized draft item.
+      const intent = await requestUploadIntent(enrollmentId, {
+        requirementId: project.fileRequirementId,
+        filename: entry.name,
+        mimeType: mime,
+        sizeBytes: entry.file.size,
+      });
+      await putToCos(intent.uploadUrl, mime, entry.file, (ratio) =>
+        setUploadState(entry.key, { progress: ratio }),
+      );
+      setUploadState(entry.key, { status: 'verifying', progress: null });
+      const item = await finalizeUpload(enrollmentId, intent.intentId);
+      setFiles((prev) => [...prev, item]);
+      setUploads((list) => list.filter((u) => u.key !== entry.key));
+      showToast('File terupload dan tersimpan di draft.');
+    } catch (err) {
+      // Upload failure consumes nothing: no draft item, no review attempt.
+      setUploadState(entry.key, { status: 'failed', error: friendlyError(err) });
+    }
+  };
+
+  const queueFiles = (picked: FileList | File[]) => {
+    if (!project?.fileRequirementId) {
+      showToast('Project ini tidak menerima file — pakai link atau hubungi admin Arena.');
+      return;
+    }
+    const allowedMimes = new Set(Object.values(ALLOWED_FILE_TYPES));
+    // Counted locally: state updates are batched, so one multi-file drop would
+    // otherwise read a stale count and queue past the cap.
+    let slotsUsed = files.length + uploads.length;
+    for (const file of Array.from(picked)) {
+      const mime = mimeForFilename(file.name) ?? (allowedMimes.has(file.type) ? file.type : null);
+      if (!mime) {
+        showToast(`“${file.name}” ditolak: tipe file tidak didukung.`);
+        continue;
+      }
+      if (file.size <= 0) {
+        showToast(`“${file.name}” ditolak: file kosong.`);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        showToast(`“${file.name}” ditolak: melebihi 20 MB.`);
+        continue;
+      }
+      if (slotsUsed >= MAX_FILES) {
+        showToast(`Maksimal ${MAX_FILES} file per submission.`);
+        break;
+      }
+      slotsUsed += 1;
+      const entry: PendingUpload = {
+        key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        name: file.name,
+        size: file.size,
+        status: 'queued',
+        progress: null,
+        error: null,
+      };
+      setUploads((list) => [...list, entry]);
+      void runUpload(entry);
+    }
+  };
+
+  const removeDraftItem = async (id: string) => {
+    if (!enrollmentId) return;
+    try {
+      await deleteSubmissionItem(enrollmentId, id);
+      setFiles((prev) => prev.filter((f) => f.id !== id));
+      setLinks((prev) => prev.filter((l) => l.id !== id));
+      showToast('Lampiran dihapus dari draft.');
+    } catch (err) {
+      showToast(friendlyError(err));
+    }
+  };
+
+  const addLink = async () => {
     const error = validateUrl(url);
     setUrlError(error);
     if (error || !project || !enrollmentId) return;
@@ -304,16 +462,58 @@ export default function WorkspacePage() {
       showToast('Project ini tidak menerima submission link — hubungi admin Arena.');
       return;
     }
-    setPhase('submitting');
+    if (links.length >= MAX_LINKS) {
+      showToast(`Maksimal ${MAX_LINKS} link per submission.`);
+      return;
+    }
     try {
       const normalized = url.startsWith('http') ? url.trim() : `https://${url.trim()}`;
+      const item = await addSubmissionLink(enrollmentId, { requirementId: project.linkRequirementId, url: normalized });
+      setLinks((prev) => [...prev, { id: item.id, url: normalized }]);
+      setUrl('');
+      showToast('Link ditambahkan ke draft.');
+    } catch (err) {
+      showToast(friendlyError(err));
+    }
+  };
+
+  const submitProject = async () => {
+    if (!project || !enrollmentId) return;
+    if (busyUploads) {
+      showToast('Tunggu semua file selesai diupload dulu.');
+      return;
+    }
+    // Link yang masih diketik tapi belum ditambahkan ikut disertakan.
+    if (url.trim()) {
+      const error = validateUrl(url);
+      setUrlError(error);
+      if (error) return;
+      if (!project.linkRequirementId) {
+        showToast('Project ini tidak menerima submission link — hubungi admin Arena.');
+        return;
+      }
+      try {
+        const normalized = url.startsWith('http') ? url.trim() : `https://${url.trim()}`;
+        const item = await addSubmissionLink(enrollmentId, { requirementId: project.linkRequirementId, url: normalized });
+        setLinks((prev) => [...prev, { id: item.id, url: normalized }]);
+        setUrl('');
+      } catch (err) {
+        showToast(friendlyError(err));
+        return;
+      }
+    }
+    if (links.length === 0 && files.length === 0) {
+      showToast('Tambahkan minimal satu file atau link dulu.');
+      return;
+    }
+    setPhase('submitting');
+    try {
       await patchSubmissionDraft(enrollmentId, { explanation: explanation || null, notes: notes || null });
-      await addSubmissionLink(enrollmentId, { requirementId: project.linkRequirementId, url: normalized });
       const result = await submitEnrollment(enrollmentId);
       showToast(
         result.version.accessStatus === 'ACCESSIBLE'
           ? `Submission #${result.version.reviewAttemptNumber ?? ''} diterima — hasil disegel sampai finalisasi Jumat.`
-          : 'Link tidak bisa dibuka reviewer — jatah 3x review kamu aman. Benerin sebelum deadline.',
+          : 'Ada lampiran yang tidak bisa dibuka reviewer — jatah 3x review kamu aman. Benerin sebelum deadline.',
       );
       router.push(`/app/arena/submission/${project.slug}`);
     } catch (err) {
@@ -661,23 +861,179 @@ export default function WorkspacePage() {
         Submit project kamu.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Satu link publik yang berisi semua deliverables. Reviewer akan membukanya langsung. Maksimal 3x review valid per
-        minggu — kegagalan teknis tidak memakan jatah.
+        Lampirkan file dan/atau link publik berisi deliverables-mu. Reviewer akan membukanya langsung. Maksimal 3x
+        review valid per minggu — kegagalan teknis tidak memakan jatah.
       </p>
 
-      <label className="block">
-        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Submission Link</span>
-        <Input
-          type="url"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            setUrlError(null);
+      <div>
+        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">
+          Deliverables · {files.length + uploads.length} / {MAX_FILES} file
+        </span>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
           }}
-          invalid={Boolean(urlError)}
-          placeholder="https://lookerstudio.google.com/reporting/…"
-          aria-label="Submission link"
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (e.dataTransfer.files.length > 0) queueFiles(e.dataTransfer.files);
+          }}
+          aria-label="Upload file deliverables: klik untuk pilih atau seret file ke sini"
+          className={`flex w-full flex-col items-center gap-2 rounded-[var(--radius-sk-lg)] border border-dashed px-4 py-7 text-center transition-colors ${
+            dragOver ? 'border-sk-blue bg-sk-blue-wash' : 'border-sk-blue-tint-border bg-sk-blue-wash/50 hover:border-sk-blue'
+          }`}
+        >
+          <UploadCloud size={22} aria-hidden className="text-sk-blue" />
+          <span className="text-[13.5px] font-bold text-sk-navy">Seret file ke sini atau klik untuk pilih</span>
+          <span className="text-[12px] text-sk-muted">PDF, DOCX, PPTX, CSV, XLSX, PNG, JPG, WEBP · maks 20 MB/file</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={FILE_PICKER_ACCEPT}
+          className="hidden"
+          aria-hidden={false}
+          aria-label="Pilih file deliverables"
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) queueFiles(e.target.files);
+            e.target.value = '';
+          }}
         />
+        {(files.length > 0 || uploads.length > 0) && (
+          <ul className="mt-3 flex flex-col gap-2">
+            {files.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-center gap-3 rounded-[var(--radius-sk-lg)] border border-sk-border bg-white px-3.5 py-2.5"
+              >
+                <FileText size={16} aria-hidden className="shrink-0 text-sk-blue" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-sk-navy">{f.originalFilename ?? 'File'}</span>
+                  <span className="block font-mono text-[11px] text-sk-muted">
+                    {f.fileSizeBytes != null ? formatBytes(f.fileSizeBytes) : ''} · Uploaded
+                  </span>
+                </span>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sk-success text-white" aria-label="Terupload">
+                  <Check size={11} strokeWidth={3.5} aria-hidden />
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Hapus ${f.originalFilename ?? 'file'} dari draft`}
+                  onClick={() => {
+                    void removeDraftItem(f.id);
+                  }}
+                  className="shrink-0 rounded-md p-1.5 text-sk-faint transition-colors hover:bg-sk-error-wash hover:text-sk-error"
+                >
+                  <Trash2 size={14} aria-hidden />
+                </button>
+              </li>
+            ))}
+            {uploads.map((u) => (
+              <li
+                key={u.key}
+                className="flex items-center gap-3 rounded-[var(--radius-sk-lg)] border border-sk-border bg-white px-3.5 py-2.5"
+              >
+                <FileText size={16} aria-hidden className="shrink-0 text-sk-muted" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-sk-navy">{u.name}</span>
+                  <span className="block font-mono text-[11px] text-sk-muted">
+                    {formatBytes(u.size)} ·{' '}
+                    {u.status === 'failed' ? (
+                      <span className="text-sk-error">{u.error ?? 'Upload gagal.'}</span>
+                    ) : u.status === 'verifying' ? (
+                      'Memverifikasi…'
+                    ) : u.progress != null ? (
+                      `Mengupload ${Math.round(u.progress * 100)}%`
+                    ) : (
+                      'Mengupload…'
+                    )}
+                  </span>
+                  {u.status !== 'failed' && (
+                    <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-sk-track" aria-hidden>
+                      <span
+                        className={`block h-full rounded-full bg-sk-blue transition-all ${u.progress == null ? 'w-1/3 animate-pulse' : ''}`}
+                        style={u.progress != null ? { width: `${Math.round(u.progress * 100)}%` } : undefined}
+                      />
+                    </span>
+                  )}
+                </span>
+                {u.status === 'failed' ? (
+                  <button
+                    type="button"
+                    aria-label={`Coba lagi upload ${u.name}`}
+                    onClick={() => {
+                      void runUpload(u);
+                    }}
+                    className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-bold text-sk-blue transition-colors hover:bg-sk-blue-tint"
+                  >
+                    <RefreshCw size={13} aria-hidden /> Coba lagi
+                  </button>
+                ) : (
+                  <span className="h-5 w-5 shrink-0 rounded-full border-2 border-sk-blue-tint border-t-sk-blue anim-spin" aria-label="Mengupload" />
+                )}
+                <button
+                  type="button"
+                  aria-label={`Batalkan upload ${u.name}`}
+                  onClick={() => setUploads((list) => list.filter((x) => x.key !== u.key))}
+                  className="shrink-0 rounded-md p-1.5 text-sk-faint transition-colors hover:bg-sk-error-wash hover:text-sk-error"
+                >
+                  <X size={14} aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">
+          Links · {links.length} / {MAX_LINKS}
+        </span>
+        {links.length > 0 && (
+          <ul className="mb-2.5 flex flex-col gap-2">
+            {links.map((l) => (
+              <li
+                key={l.id}
+                className="flex items-center gap-2.5 rounded-[var(--radius-sk-lg)] border border-sk-border bg-white px-3.5 py-2.5"
+              >
+                <Link2 size={14} aria-hidden className="shrink-0 text-sk-blue" />
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-sk-navy">{l.url}</span>
+                <button
+                  type="button"
+                  aria-label={`Hapus link ${l.url}`}
+                  onClick={() => {
+                    void removeDraftItem(l.id);
+                  }}
+                  className="shrink-0 rounded-md p-1.5 text-sk-faint transition-colors hover:bg-sk-error-wash hover:text-sk-error"
+                >
+                  <Trash2 size={14} aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            type="url"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setUrlError(null);
+            }}
+            invalid={Boolean(urlError)}
+            placeholder="https://lookerstudio.google.com/reporting/…"
+            aria-label="Tambah submission link"
+            className="flex-1"
+          />
+          <Button variant="ghost" onClick={() => void addLink()} className="shrink-0">
+            + Tambah Link
+          </Button>
+        </div>
         {urlError && (
           <span role="alert" className="mt-1.5 block text-[12px] text-sk-error">
             {urlError}
@@ -690,7 +1046,7 @@ export default function WorkspacePage() {
             </span>
           ))}
         </span>
-      </label>
+      </div>
 
       <label className="mt-5 block">
         <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Short Explanation</span>
@@ -718,7 +1074,7 @@ export default function WorkspacePage() {
 
       <div className="mt-7 flex flex-wrap gap-2.5">
         <Button
-          disabled={!allFinalChecked || !url.trim()}
+          disabled={!allFinalChecked || phase === 'submitting' || busyUploads}
           loading={phase === 'submitting'}
           onClick={() => {
             void submitProject();
@@ -729,6 +1085,9 @@ export default function WorkspacePage() {
         </Button>
         {phase === 'submitting' && (
           <span className="inline-flex items-center text-[12.5px] text-sk-muted">Memvalidasi link & deliverables…</span>
+        )}
+        {busyUploads && phase !== 'submitting' && (
+          <span className="inline-flex items-center text-[12.5px] text-sk-muted">Tunggu file selesai diupload dulu…</span>
         )}
       </div>
     </div>
