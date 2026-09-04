@@ -57,5 +57,7 @@ test("live object-storage roundtrip: presign PUT → upload → HEAD → presign
   assert.equal(got, body);
 
   await deletePrivateObject(key);
-  await assert.rejects(() => headPrivateObject(key), /not found|no such key|404/i);
+  // Tencent COS surfaces a deleted key as SDK `NotFound` (no space), unlike
+  // AWS S3's `NoSuchKey`/`404` wording — accept all three spellings.
+  await assert.rejects(() => headPrivateObject(key), /not\s*found|no such key|404/i);
 });

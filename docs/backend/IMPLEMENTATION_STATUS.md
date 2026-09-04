@@ -4,11 +4,11 @@
 >
 > **Status:** COMPLETE — `/arena`, `/arena/projects`, `/arena/projects/[slug]` read live Neon data via `src/lib/arena-view.ts`; mock-only numbers (per-project points, participant counters) removed, not faked; typecheck + lint + build green; HTTP-verified on production build. `/app/*` stays mocked until 9b; unknown-slug status-code fidelity tracked for hardening.
 >
-> **REMINDER (Tencent, deferred per owner 2026-09-04):** live COS bucket key/policy fix still pending — `npm run test:e2e:storage` is red at PUT 403. Setup + cheat-sheet: `docs/backend/TENCENT_COS_SETUP.md`. Re-verify before any file-upload demo.
+> **Tencent COS live (verified):** rotated CAM key + bucket policy fixed by owner — `npm run test:e2e:storage` is green (presign PUT → upload → HEAD → presigned GET → byte check → delete → gone). Bucket private (`ap-jakarta`), anonymous GET denied. Setup + cheat-sheet: `docs/backend/TENCENT_COS_SETUP.md`.
 >
 > **Locked architecture:** Vercel (deploy) + Tencent Cloud COS (file bytes, S3-compatible, private bucket) + Neon PostgreSQL (all text/metadata/state). R2 names remain as transitional local fallback only; PRD §18 Alibaba OSS direction is superseded.
 
-> **E2E (2026-09-04):** service-level flow green on live dev DB (`test:e2e:flow`: week → projects → enroll → workspace → draft → link → kill-switch refuse → submit → immutable v1 → cleanup). Public HTTP green on dev :3001 (`week/current` OPEN + `canSelect`, `divisions`, `projects`, `projects/[slug]`, `rewards/catalog` active-SKU-only; `enrollments/current` → 401 anonymous). Storage live roundtrip red at PUT 403 — code/TLS layer verified, Tencent-side key/policy fix pending (see `TENCENT_COS_SETUP.md`). Harness: `scripts/node-test-hooks.mjs` (`test:e2e:*` only; old suites untouched).
+> **E2E (2026-09-04):** service-level flow green on live dev DB (`test:e2e:flow`: week → projects → enroll → workspace → draft → link → kill-switch refuse → submit → immutable v1 → cleanup). Public HTTP green on dev :3001 (`week/current` OPEN + `canSelect`, `divisions`, `projects`, `projects/[slug]`, `rewards/catalog` active-SKU-only; `enrollments/current` → 401 anonymous). Storage live roundtrip green on Tencent COS `ap-jakarta` private bucket (presign PUT → upload → HEAD → presigned GET → bytes → delete; post-delete HEAD surfaces as SDK `NotFound`, accepted by the test). Harness: `scripts/node-test-hooks.mjs` (`test:e2e:*` only; old suites untouched).
 
 > **Previous Phase:** Phase 4 - Arena Submission System + Private Object Storage.
 
@@ -89,7 +89,7 @@ COMPLETE - isolated development migrations and localhost DB-backed SSO verificat
 - Submission records are lazy one-per-enrollment drafts. Every mutable submission operation locks at the deadline, requirements remain persisted/configurable, and immutable versions snapshot submitted draft content.
 - Private R2 uses server-only configuration, random environment-scoped keys, short-lived presigned PUT/GET URLs, metadata finalization, and no permanent public URL. The R2 client is development-only in this phase.
 - Link checks are SSRF-protected with HTTPS-only validation, DNS resolution/address rejection, connection pinning, redirect revalidation, timeout, and no credential forwarding.
-- Non-R2 tests and the live development schema constraint test are verified. Live R2 direct-upload/finalize/download/delete integration is **NOT VERIFIED** because no approved development R2 credentials or Cloudflare-authenticated provisioning access is available.
+- Non-R2 tests and the live development schema constraint test are verified. Live direct-upload/finalize/download/delete integration is **VERIFIED** against the private Tencent COS bucket (`ap-jakarta`, `npm run test:e2e:storage` 2/2): regional endpoint normalization, short-lived presigned PUT, HEAD size/type check, presigned GET byte verification, delete + gone-proof. Anonymous GET is denied (bucket stays private; verified read-only, no ACL/CORS change). Upload-intent TTL is 600s; keys stay random and environment-scoped.
 - Contract: `docs/backend/ARENA_SUBMISSIONS_API.md`.
 
 ## Phase 3 - Arena Core API Implementation
