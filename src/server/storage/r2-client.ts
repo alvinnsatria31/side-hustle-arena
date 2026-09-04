@@ -1,16 +1,6 @@
-import { S3Client } from "@aws-sdk/client-s3";
-import { getR2Config } from "./config";
+import { getStorageClient } from "./storage-client";
 
-let client: S3Client | undefined;
-
+/** @deprecated Use storage-client.ts / getStorageClient instead. */
 export function getR2Client() {
-  if (!client) {
-    const config = getR2Config();
-    client = new S3Client({
-      region: "auto",
-      endpoint: config.endpoint,
-      credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
-    });
-  }
-  return client;
+  return getStorageClient();
 }

@@ -43,27 +43,63 @@ async function resolvePublicAddresses(hostname: string): Promise<string[]> {
   return addresses.map((entry) => entry.address);
 }
 
-const probeHttps: HttpProbe = ({ url, addresses }) => new Promise((resolve, reject) => {
-  const address = addresses[0];
-  const request = httpsRequest({
-    protocol: "https:",
-    hostname: url.hostname,
-    port: url.port || undefined,
-    path: `${url.pathname}${url.search}`,
-    method: "HEAD",
-    headers: { "User-Agent": "ArenaSubmissionAccessCheck/1.0" },
-    lookup: (_hostname, _options, callback) => callback(null, address, isIP(address)),
-  }, (response) => {
-    response.destroy();
-    resolve({
-      statusCode: response.statusCode ?? 0,
-      location: typeof response.headers.location === "string" ? response.headers.location : undefined,
+/**
+ * Probe order: IPv4 first, then IPv6, duplicates removed. Every address was
+ * already vetted by assertSafeExternalUrl, so trying the next one on a
+ * connection error is safe — and necessary, because some networks resolve
+ * AAAA first while their IPv6 egress is broken. Pure (unit-testable).
+ */
+export function orderAddressesForProbe(addresses: string[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const address of [...addresses].sort((a, b) => isIP(a) - isIP(b))) {
+    if (!seen.has(address)) {
+      seen.add(address);
+      ordered.push(address);
+    }
+  }
+  return ordered;
+}
+
+function probeOnce(url: URL, address: string): Promise<{ statusCode: number; location: string | undefined }> {
+  return new Promise((resolve, reject) => {
+    const family = isIP(address);
+    const request = httpsRequest({
+      protocol: "https:",
+      hostname: url.hostname,
+      port: url.port || undefined,
+      path: `${url.pathname}${url.search}`,
+      method: "HEAD",
+      headers: { "User-Agent": "ArenaSubmissionAccessCheck/1.0" },
+      // Pin the vetted address with an explicit family: Node rejects IPv6
+      // answers from a custom lookup when family is unset.
+      family,
+      lookup: (_hostname, _options, callback) => callback(null, address, family),
+    }, (response) => {
+      response.destroy();
+      resolve({
+        statusCode: response.statusCode ?? 0,
+        location: typeof response.headers.location === "string" ? response.headers.location : undefined,
+      });
     });
+    request.setTimeout(REQUEST_TIMEOUT_MS, () => request.destroy(new Error("External URL check timed out.")));
+    request.once("error", reject);
+    request.end();
   });
-  request.setTimeout(REQUEST_TIMEOUT_MS, () => request.destroy(new Error("External URL check timed out.")));
-  request.once("error", reject);
-  request.end();
-});
+}
+
+const probeHttps: HttpProbe = async ({ url, addresses }) => {
+  const ordered = orderAddressesForProbe(addresses);
+  let lastError: unknown = new Error("No probe addresses.");
+  for (const address of ordered) {
+    try {
+      return await probeOnce(url, address);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
 
 /**
  * Verifies an external HTTPS destination without forwarding caller headers,

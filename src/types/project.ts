@@ -36,8 +36,10 @@ export interface RubricCriterion {
 
 export interface ArenaProject {
   slug: string;
-  category: ProjectCategory;
-  group: ProjectGroup;
+  /** Division/display category. Widened from the mock union: live values come from the database. */
+  category: string;
+  /** Filter group. Widened from the mock union: live values come from divisions. */
+  group: string;
   week: number;
   title: string;
   shortDescription: string;
@@ -51,8 +53,10 @@ export interface ArenaProject {
   difficulty: ProjectDifficulty;
   estimatedTime: string;
   deadlineLabel: string;
-  points: number;
-  participants: number;
+  /** Legacy mock field: per-project points are NOT a production rule (PRD §35 ranks pay points, not projects). Absent on live data. */
+  points?: number;
+  /** Legacy mock field: no live participant counter exists. Absent on live data. */
+  participants?: number;
   rubric: RubricCriterion[];
   isThisWeek?: boolean;
 }

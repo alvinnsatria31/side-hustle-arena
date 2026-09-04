@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { divisions, enrollments, projects, weekRules, weeks } from "../db/schema";
 import { ArenaDomainError } from "./errors";
+import { assertArenaFeatureOpen } from "../ops/feature-flags";
 import { projectSelectionSchema } from "./schemas";
 import { getWeekSelectionState, resolveCurrentWeekFromCandidates, type WeekCandidate } from "./week-service";
 
@@ -52,6 +53,7 @@ async function existingEnrollmentForWeek(userId: string, weekId: string) {
 export async function selectArenaProject({ userId, projectId, now = new Date() }: { userId: string; projectId: string; now?: Date }) {
   const parsed = projectSelectionSchema.safeParse({ projectId });
   if (!parsed.success) throw new ArenaDomainError("VALIDATION_ERROR", "Invalid project selection request.");
+  await assertArenaFeatureOpen("arena-enrollment");
   const db = getDb();
 
   try {

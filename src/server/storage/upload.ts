@@ -1,21 +1,23 @@
 import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getR2Client } from "./r2-client";
-import { getR2Config } from "./config";
+import { getStorageClient } from "./storage-client";
+import { getStorageConfig } from "./config";
 
-export const R2_PRESIGNED_PUT_TTL_SECONDS = 600;
+export const STORAGE_PRESIGNED_PUT_TTL_SECONDS = 600;
+/** @deprecated Use STORAGE_PRESIGNED_PUT_TTL_SECONDS instead. */
+export const R2_PRESIGNED_PUT_TTL_SECONDS = STORAGE_PRESIGNED_PUT_TTL_SECONDS;
 
 export async function createPresignedUpload(input: { storageKey: string; mimeType: string }) {
-  const config = getR2Config();
-  return getSignedUrl(getR2Client(), new PutObjectCommand({ Bucket: config.bucketName, Key: input.storageKey, ContentType: input.mimeType }), { expiresIn: R2_PRESIGNED_PUT_TTL_SECONDS });
+  const config = getStorageConfig();
+  return getSignedUrl(getStorageClient(), new PutObjectCommand({ Bucket: config.bucket, Key: input.storageKey, ContentType: input.mimeType }), { expiresIn: STORAGE_PRESIGNED_PUT_TTL_SECONDS });
 }
 
 export async function headPrivateObject(storageKey: string) {
-  const config = getR2Config();
-  return getR2Client().send(new HeadObjectCommand({ Bucket: config.bucketName, Key: storageKey }));
+  const config = getStorageConfig();
+  return getStorageClient().send(new HeadObjectCommand({ Bucket: config.bucket, Key: storageKey }));
 }
 
 export async function deletePrivateObject(storageKey: string) {
-  const config = getR2Config();
-  await getR2Client().send(new DeleteObjectCommand({ Bucket: config.bucketName, Key: storageKey }));
+  const config = getStorageConfig();
+  await getStorageClient().send(new DeleteObjectCommand({ Bucket: config.bucket, Key: storageKey }));
 }

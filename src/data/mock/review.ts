@@ -50,7 +50,7 @@ export function buildReviewResult(project: ArenaProject, submittedAt: Date): Rev
       'Kuantifikasikan dampak setiap rekomendasi yang kamu berikan.',
     ],
     skillsProven: project.skills.slice(0, 3),
-    pointsEarned: project.points,
+    pointsEarned: project.points ?? 0,
     reviewedAt: new Date(submittedAt.getTime() + 1000 * 60 * 60 * 4).toISOString(),
   };
 }

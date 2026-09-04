@@ -5,11 +5,21 @@ import { Entrance, Reveal } from '@/components/motion/Reveal';
 import { StatCard } from '@/components/primitives/StatCard';
 import { HowItWorks } from '@/components/arena/HowItWorks';
 import { KanbanPreview } from '@/components/arena/KanbanPreview';
-import { ARENA_STATS, ARENA_WEEK } from '@/data/mock/arena';
+import { getPublicArenaHome } from '@/lib/arena-view';
 
 export const metadata = { title: 'Side Hustle Arena' };
+export const dynamic = 'force-dynamic';
 
-export default function ArenaLandingPage() {
+export default async function ArenaLandingPage() {
+  // Live week/projects/divisions. Stat cards that have no backend source
+  // (fake participant/completion counters) were removed, not faked.
+  const home = await getPublicArenaHome();
+  const stats = [
+    { key: 'projects', label: 'Project Minggu Ini', value: String(home.projectCount) },
+    { key: 'deadline', label: 'Deadline', value: home.deadline, small: true },
+    { key: 'divisions', label: 'Divisi Aktif', value: String(home.divisionCount) },
+    { key: 'drop', label: 'Project Drop', value: 'Setiap Senin', small: true },
+  ];
   return (
     <div className="relative overflow-hidden bg-sk-bg">
       <div className="ambient" aria-hidden />
@@ -48,7 +58,7 @@ export default function ArenaLandingPage() {
 
             <Reveal delay={0.2}>
               <div className="grid max-w-[480px] grid-cols-2 gap-3">
-                {ARENA_STATS.map((stat) => (
+                {stats.map((stat) => (
                   <StatCard key={stat.key} label={stat.label} value={stat.value} small={stat.small} />
                 ))}
               </div>
@@ -57,7 +67,7 @@ export default function ArenaLandingPage() {
 
           {/* Right: this week's drop preview */}
           <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[480px]">
-            <KanbanPreview />
+            <KanbanPreview projects={home.projects} weekLabel={home.weekLabel} total={home.projectCount} />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">
                 Lihat project terbaik minggu lalu → Weekly Spotlight
@@ -69,7 +79,7 @@ export default function ArenaLandingPage() {
         {/* How it works */}
         <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32">
           <Reveal className="mb-8 max-w-xl">
-            <Badge variant="slate">WEEK {ARENA_WEEK}</Badge>
+            <Badge variant="slate">WEEK {home.weekNo}</Badge>
             <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
               Lima langkah, satu minggu.
             </h2>

@@ -59,7 +59,7 @@ export default async function AppProjectDetailPage({ params }: { params: Promise
         </div>
       </Entrance>
 
-      <DetailTabs slug={project.slug} />
+      <DetailTabs project={project} />
 
       <Card className="mt-6 p-6 lg:hidden">
         <h4 className="mb-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Project Info</h4>

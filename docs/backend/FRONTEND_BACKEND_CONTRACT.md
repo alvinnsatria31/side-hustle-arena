@@ -214,7 +214,7 @@ Client point mutation and the current project-point display, including the featu
 
 ### CURRENT FRONTEND
 
-No active rewards route, catalog, inventory, redemption, or history exists. A deleted HEAD-era mock rewards file is not active.
+A read-only public catalog exists at `GET /api/arena/rewards/catalog` (active SKUs only, seeded from the locked PRD §35 reward plus inactive website-proven proposals). No redemption, inventory locking, fulfillment, or history exists yet — those remain Phase 7. A deleted HEAD-era mock rewards file is not active.
 
 ### FUTURE BACKEND NEED
 

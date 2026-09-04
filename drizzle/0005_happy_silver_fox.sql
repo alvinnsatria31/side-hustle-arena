@@ -1,0 +1,2 @@
+ALTER TABLE "notifications"."events" ADD COLUMN "read_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "events_user_created_idx" ON "notifications"."events" USING btree ("user_id","created_at");

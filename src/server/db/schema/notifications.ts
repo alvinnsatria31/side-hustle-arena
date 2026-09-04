@@ -12,8 +12,11 @@ export const events = notifications.table("events", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   actionUrl: text("action_url"),
+  readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("events_user_created_idx").on(table.userId, table.createdAt),
+]);
 
 export const deliveries = notifications.table("deliveries", {
   id: uuid("id").defaultRandom().primaryKey(),

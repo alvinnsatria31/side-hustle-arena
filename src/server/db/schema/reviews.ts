@@ -29,7 +29,11 @@ export const reviewJobs = arena.table("review_jobs", {
 
 export const reviews = arena.table("reviews", {
   id: uuid("id").defaultRandom().primaryKey(),
-  submissionVersionId: uuid("submission_version_id").notNull().references(() => submissionVersions.id).unique("reviews_submission_version_id_unique"),
+  submissionVersionId: uuid("submission_version_id").notNull().references(() => submissionVersions.id),
+  // Run number supports audited admin reruns (PRD §31): each rerun inserts a
+  // new row with an incremented run number. Old rows are never mutated or
+  // deleted — the original review stays queryable forever.
+  runNumber: integer("run_number").default(1).notNull(),
   automationRunId: uuid("automation_run_id").references(() => runs.id),
   status: reviewStatus("status").default("PROCESSING").notNull(),
   aiScore: numeric("ai_score"),
@@ -47,7 +51,9 @@ export const reviews = arena.table("reviews", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   check("reviews_score_range_check", sql`(${table.aiScore} IS NULL OR (${table.aiScore} >= 0 AND ${table.aiScore} <= 100)) AND (${table.finalScore} IS NULL OR (${table.finalScore} >= 0 AND ${table.finalScore} <= 100)) AND (${table.reviewConfidence} IS NULL OR (${table.reviewConfidence} >= 0 AND ${table.reviewConfidence} <= 1))`),
+  check("reviews_run_number_positive_check", sql`${table.runNumber} > 0`),
   index("reviews_status_idx").on(table.status),
+  unique("reviews_submission_version_run_unique").on(table.submissionVersionId, table.runNumber),
 ]);
 
 export const reviewScores = arena.table("review_scores", {

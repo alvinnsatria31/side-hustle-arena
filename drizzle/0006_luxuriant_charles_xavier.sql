@@ -1,0 +1,1 @@
+ALTER TYPE "notifications"."notification_type" ADD VALUE 'MILESTONE_REACHED' BEFORE 'REWARD_REDEEMED';

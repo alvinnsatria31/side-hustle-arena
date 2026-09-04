@@ -6,3 +6,4 @@ export const rewards = pgSchema("rewards");
 export const notifications = pgSchema("notifications");
 export const automation = pgSchema("automation");
 export const audit = pgSchema("audit");
+export const ops = pgSchema("ops");

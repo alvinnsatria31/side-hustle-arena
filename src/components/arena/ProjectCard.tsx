@@ -65,7 +65,11 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
       </div>
 
       <div className="mt-auto flex items-center justify-between pt-1.5">
-        <span className="font-mono text-[12px] font-bold text-sk-blue">+{project.points} pts</span>
+        {project.points != null ? (
+          <span className="font-mono text-[12px] font-bold text-sk-blue">+{project.points} pts</span>
+        ) : (
+          <span />
+        )}
         <span className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-sk-blue">
           Lihat Detail
           <ArrowRight size={13} aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5" />

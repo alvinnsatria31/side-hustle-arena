@@ -29,23 +29,42 @@ test("storage keys are random, environment-scoped, and never derive from an orig
   assert.equal(first.includes("analysis.pdf"), false);
 });
 
-test("R2 configuration is server-only, development-scoped, and rejects incomplete endpoints", () => {
-  const valid = {
-    accountId: "a".repeat(32),
+test("object storage configuration is server-gated and accepts Tencent COS or legacy R2 endpoints", () => {
+  const tencent = {
+    bucket: "arena-files-1250000000",
+    region: "ap-jakarta",
     accessKeyId: "access-key",
     secretAccessKey: "secret-key",
-    bucketName: "side-hustle-arena-dev",
-    endpoint: `https://${"a".repeat(32)}.r2.cloudflarestorage.com`,
+    endpoint: "https://arena-files-1250000000.cos.ap-jakarta.myqcloud.com",
   };
-  assert.equal(storageConfig.parseR2Config(valid, "development").bucketName, valid.bucketName);
-  assert.throws(() => storageConfig.parseR2Config({ ...valid, endpoint: "http://example.test" }, "development"), /invalid/i);
-  assert.throws(() => storageConfig.parseR2Config({ ...valid, endpoint: "https://other.r2.cloudflarestorage.com" }, "development"), /invalid/i);
-  assert.throws(() => storageConfig.parseR2Config({ ...valid, bucketName: "side-hustle-arena" }, "production"), /configured only/i);
+  assert.equal(storageConfig.parseStorageConfig(tencent, "development").bucket, tencent.bucket);
+  assert.equal(storageConfig.parseStorageConfig(tencent, "production").region, "ap-jakarta");
+  const legacyR2 = {
+    bucket: "side-hustle-arena-dev",
+    region: "auto",
+    accessKeyId: "access-key",
+    secretAccessKey: "secret-key",
+    endpoint: "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.r2.cloudflarestorage.com",
+  };
+  assert.equal(storageConfig.parseStorageConfig(legacyR2, "development").bucket, legacyR2.bucket);
+  assert.throws(() => storageConfig.parseStorageConfig({ ...tencent, endpoint: "http://arena-files-1250000000.cos.ap-jakarta.myqcloud.com" }, "development"), /invalid/i);
+  assert.throws(() => storageConfig.parseStorageConfig({ ...tencent, endpoint: "https://files.example.com" }, "development"), /invalid/i);
+  assert.throws(() => storageConfig.parseStorageConfig(tencent, "staging"), /development or production/i);
+  // Deprecated R2-shaped input still parses through the compatibility alias.
+  assert.equal(storageConfig.parseR2Config({ ...legacyR2, bucketName: legacyR2.bucket, endpoint: legacyR2.endpoint }, "development").bucket, legacyR2.bucket);
 });
 
-test("the R2 environment reader is explicitly server-only", async () => {
+test("the object storage environment reader is explicitly server-only", async () => {
   const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/server/storage/config.ts", import.meta.url), "utf8"));
   assert.match(source, /import\s+["']server-only["']/);
+});
+
+test("probe order prefers IPv4, dedupes, and keeps every address vetted", () => {
+  assert.deepEqual(
+    access.orderAddressesForProbe(["2606:4700:10::6814:179a", "93.184.216.34", "93.184.216.34", "172.66.147.243"]),
+    ["93.184.216.34", "172.66.147.243", "2606:4700:10::6814:179a"],
+  );
+  assert.deepEqual(access.orderAddressesForProbe([]), []);
 });
 
 test("SSRF URL policy rejects non-HTTPS, credentials, private IPv4, IPv6, and metadata targets", async () => {

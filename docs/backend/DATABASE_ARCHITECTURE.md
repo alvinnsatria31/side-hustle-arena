@@ -74,7 +74,7 @@ Events are durable application records; deliveries represent channel attempts an
 
 ## 19. File Storage Boundary
 
-PostgreSQL stores submission metadata only: storage keys, external URLs, MIME types, sizes, checksums, and text content. It stores no file bytes, `BYTEA`, or blobs. Future files belong in a private R2-backed object-storage boundary.
+PostgreSQL stores submission metadata only: storage keys, external URLs, MIME types, sizes, checksums, and text content. It stores no file bytes, `BYTEA`, or blobs. Files belong in the private Tencent-COS object-storage boundary.
 
 ## 20. Future Transaction Boundaries
 

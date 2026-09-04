@@ -12,7 +12,10 @@ import {
   weekRules,
   weeks,
 } from "@/server/db/schema";
-import { createPresignedDownload, createPresignedUpload, createSubmissionObjectKey, deletePrivateObject, headPrivateObject } from "@/server/storage";
+import { createPresignedDownload, createPresignedUpload, createSubmissionObjectKey, deletePrivateObject, getStorageEnvironment, headPrivateObject } from "@/server/storage";
+import { assertArenaFeatureOpen } from "@/server/ops/feature-flags";
+import { notifyBestEffort } from "@/server/notifications/service";
+import { enqueueReviewJob } from "@/server/reviews/queue-service";
 import { checkExternalUrlAccess } from "./url-access";
 import { draftLinkSchema, draftSubmissionSchema, supportedFileMimeTypes, uploadPresignSchema } from "./schemas";
 
@@ -98,6 +101,7 @@ export async function getArenaSubmission({ userId, enrollmentId }: { userId: str
 export async function patchArenaSubmissionDraft({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
   const parsed = draftSubmissionSchema.safeParse(input);
   if (!parsed.success) throw new ArenaDomainError("VALIDATION_ERROR", "Invalid submission draft request.");
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
@@ -113,6 +117,7 @@ export async function patchArenaSubmissionDraft({ userId, enrollmentId, input, n
 export async function addArenaSubmissionLink({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
   const parsed = draftLinkSchema.safeParse(input);
   if (!parsed.success) throw new ArenaDomainError("VALIDATION_ERROR", "Invalid submission link request.");
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
@@ -130,6 +135,7 @@ export async function addArenaSubmissionLink({ userId, enrollmentId, input, now 
 export async function createArenaUploadIntent({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
   const parsed = uploadPresignSchema.safeParse(input);
   if (!parsed.success) throw new ArenaDomainError("VALIDATION_ERROR", "Invalid upload request.");
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
@@ -142,7 +148,7 @@ export async function createArenaUploadIntent({ userId, enrollmentId, input, now
     throw new ArenaDomainError("FILE_LIMIT_EXCEEDED", "The file limit for this submission requirement has been reached.");
   }
 
-  const storageKey = createSubmissionObjectKey("development");
+  const storageKey = createSubmissionObjectKey(getStorageEnvironment());
   const expiresAt = new Date(now.getTime() + UPLOAD_INTENT_TTL_MS);
   const intent = (await db.insert(uploadIntents).values({
     userId, enrollmentId, submissionId: submission.id, requirementId: requirement.id, storageKey,
@@ -248,10 +254,11 @@ async function draftItemsAccessible(items: DraftItem[]) {
 }
 
 export async function submitArenaSubmission({ userId, enrollmentId, now = new Date() }: { userId: string; enrollmentId: string; now?: Date }) {
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const submission = await ensureSubmission(tx, context);
     await tx.update(submissions).set({ updatedAt: now }).where(eq(submissions.id, submission.id));
     const items = await getDraftItems(tx, submission.id);
@@ -263,8 +270,35 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
       .where(and(eq(submissions.id, submission.id), sql`${submissions.reviewAttemptsUsed} < ${context.rules.maxReviewAttempts}`))
       .returning({ reviewAttemptsUsed: submissions.reviewAttemptsUsed }))[0];
     if (!allocation) throw new ArenaDomainError("REVIEW_ATTEMPT_LIMIT_REACHED", "The review attempt limit has been reached.");
-    return { version: await createVersion(tx, submission, items, "ACCESSIBLE", allocation.reviewAttemptsUsed, now), allocatedReviewAttempt: true };
+    const version = await createVersion(tx, submission, items, "ACCESSIBLE", allocation.reviewAttemptsUsed, now);
+    // Review queue is automation state: the user attempt is already allocated
+    // above; the job row only schedules the reviewer worker (PRD §42).
+    await enqueueReviewJob(tx, version.id, now);
+    return { version, allocatedReviewAttempt: true };
   });
+
+  // Best-effort inbox notice: must never break the submit itself (PRD §36).
+  const actionUrl = `/app/arena/submission/${context.enrollment.projectId}`;
+  if (result.version.accessStatus === "FAILED") {
+    await notifyBestEffort({
+      type: "SUBMISSION_ACCESS_FAILED",
+      userId,
+      weekId: context.week.id,
+      title: "Submission belum bisa dinilai",
+      body: "Ada link/file yang tidak bisa dibuka reviewer. Benerin sebelum deadline Jumat 23:59 WIB — jatah 3x review kamu aman.",
+      actionUrl,
+    });
+  } else {
+    await notifyBestEffort({
+      type: "SUBMISSION_RECEIVED",
+      userId,
+      weekId: context.week.id,
+      title: `Submission #${result.version.reviewAttemptNumber} diterima`,
+      body: "Karyamu masuk antrean review. Hasilnya disegel sampai finalisasi Jumat — pantau dari workspace.",
+      actionUrl,
+    });
+  }
+  return result;
 }
 
 export async function getArenaSubmissionDownload({ userId, enrollmentId, itemId }: { userId: string; enrollmentId: string; itemId: string }) {

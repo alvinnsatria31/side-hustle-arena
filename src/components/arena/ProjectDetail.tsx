@@ -10,8 +10,9 @@ import { Tabs } from '@/components/primitives/Tabs';
 import { LoginModal } from '@/components/layout/LoginModal';
 import { ResourceList } from '@/components/arena/KanbanPreview';
 import { useDemo } from '@/features/demo/store';
+import { ArenaApiError, getVisibleProject, selectProject } from '@/lib/arena-client';
 import { useToast } from '@/features/ui/toast';
-import { getProject } from '@/data/mock/projects';
+import type { ArenaProject } from '@/types/project';
 
 const SAVED_KEY = 'sk-saved-projects';
 
@@ -19,7 +20,7 @@ const SAVED_KEY = 'sk-saved-projects';
 
 export function CtaActions({ slug }: { slug: string }) {
   const router = useRouter();
-  const { state, dispatch, hydrated } = useDemo();
+  const { state, hydrated } = useDemo();
   const { showToast } = useToast();
   const [loginOpen, setLoginOpen] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -47,9 +48,10 @@ export function CtaActions({ slug }: { slug: string }) {
 
   const enrollment = state.enrollment;
   const enrolledHere = hydrated && enrollment?.projectSlug === slug;
+  const [choosing, setChoosing] = useState(false);
 
-  const choose = () => {
-    if (!hydrated) return;
+  const choose = async () => {
+    if (!hydrated || choosing) return;
     if (!state.user) {
       setLoginOpen(true);
       return;
@@ -66,8 +68,33 @@ export function CtaActions({ slug }: { slug: string }) {
       router.push(`/app/arena/submission/${slug}`);
       return;
     }
-    dispatch({ type: 'ENROLL', projectSlug: slug });
-    router.push(`/app/arena/workspace/${slug}`);
+    // Phase 9b: live enroll dulu (session cookie → POST /api/arena/enrollments).
+    // Kalau backend nolak (mis. belum login beneran / week tutup), tampilkan
+    // pesan jujur — jangan pura-pura enroll via mock.
+    setChoosing(true);
+    try {
+      const visible = await getVisibleProject(slug);
+      await selectProject(visible.id);
+      router.push(`/app/arena/workspace/${slug}`);
+    } catch (err) {
+      if (err instanceof ArenaApiError && err.status === 401) {
+        setLoginOpen(true);
+        return;
+      }
+      const message =
+        err instanceof ArenaApiError
+          ? err.code === 'ALREADY_ENROLLED_THIS_WEEK'
+            ? 'Kamu sudah ambil project lain minggu ini (1 project/minggu).'
+            : err.code === 'WEEK_NOT_OPEN' || err.code === 'WEEK_CLOSED'
+              ? 'Pendaftaran project minggu ini sudah tutup (Jumat 23:59 WIB).'
+              : err.code === 'FEATURE_CLOSED'
+                ? 'Pendaftaran lagi ditutup sementara (kill-switch). Coba lagi nanti.'
+                : `Gagal enroll: ${err.message}`
+          : 'Gagal enroll. Cek koneksi lalu coba lagi.';
+      showToast(message);
+    } finally {
+      setChoosing(false);
+    }
   };
 
   const primaryLabel = enrolledHere
@@ -85,9 +112,10 @@ export function CtaActions({ slug }: { slug: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={choose}
-          className="inline-flex h-12 items-center gap-2 rounded-[var(--radius-sk-md)] bg-white px-[26px] text-[14px] font-bold text-sk-blue shadow-md transition-transform duration-200 hover:-translate-y-px active:scale-[0.98]"
+          disabled={choosing}
+          className="inline-flex h-12 items-center gap-2 rounded-[var(--radius-sk-md)] bg-white px-[26px] text-[14px] font-bold text-sk-blue shadow-md transition-transform duration-200 hover:-translate-y-px active:scale-[0.98] disabled:opacity-70"
         >
-          {primaryLabel}
+          {choosing ? 'Mendaftarkan…' : primaryLabel}
         </button>
         <Button variant="ghostOnDark" size="lg" onClick={toggleSave} iconLeft={saved ? <Check size={15} aria-hidden /> : undefined}>
           {saved ? 'Tersimpan' : 'Simpan untuk nanti'}
@@ -98,8 +126,9 @@ export function CtaActions({ slug }: { slug: string }) {
         onClose={() => setLoginOpen(false)}
         continueTo={`/app/arena/workspace/${slug}`}
         onContinue={() => {
-          dispatch({ type: 'ENROLL', projectSlug: slug });
-          router.push(`/app/arena/workspace/${slug}`);
+          // Setelah login, enroll beneran via API (bukan mock).
+          setLoginOpen(false);
+          void choose();
         }}
       />
     </>
@@ -116,25 +145,26 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function DetailTabs({ slug }: { slug: string }) {
-  const project = getProject(slug)!;
+export function DetailTabs({ project }: { project: ArenaProject }) {
   const [activeTab, setActiveTab] = useState('overview');
+
+  const infoRows: Array<{ k: string; v: string; accent?: boolean }> = [
+    { k: 'Category', v: project.category },
+    { k: 'Difficulty', v: project.difficulty },
+    { k: 'Estimated Time', v: project.estimatedTime },
+    { k: 'Deadline', v: project.deadlineLabel },
+    ...(project.points != null ? [{ k: 'Points', v: `+${project.points}`, accent: true }] : []),
+  ];
 
   const side = (
     <div className="hidden lg:block">
       <Card className="sticky top-24 p-6">
         <h4 className="mb-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Project Info</h4>
         <dl className="text-[13px]">
-          {[
-            ['Category', project.category],
-            ['Difficulty', project.difficulty],
-            ['Estimated Time', project.estimatedTime],
-            ['Deadline', project.deadlineLabel],
-            ['Points', `+${project.points}`],
-          ].map(([k, v], i) => (
-            <div key={k} className={`flex justify-between border-b border-dashed border-sk-border py-2.5 ${i === 4 ? 'border-0' : ''}`}>
-              <dt className="text-sk-muted">{k}</dt>
-              <dd className={`font-bold ${k === 'Points' ? 'text-sk-blue' : 'text-sk-navy'}`}>{v}</dd>
+          {infoRows.map((row, i) => (
+            <div key={row.k} className={`flex justify-between border-b border-dashed border-sk-border py-2.5 ${i === infoRows.length - 1 ? 'border-0' : ''}`}>
+              <dt className="text-sk-muted">{row.k}</dt>
+              <dd className={`font-bold ${row.accent ? 'text-sk-blue' : 'text-sk-navy'}`}>{row.v}</dd>
             </div>
           ))}
         </dl>

@@ -9,9 +9,10 @@ import { SearchInput } from '@/components/primitives/SearchInput';
 import { EmptyState } from '@/components/states/EmptyState';
 import { ProjectCard } from '@/components/arena/ProjectCard';
 import { mockProjects, RECOMMENDED_PROJECT_SLUG } from '@/data/mock/projects';
+import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
 
-const GROUPS = ['Semua', 'Data', 'Development', 'Design', 'Marketing', 'HR', 'Business'] as const;
+const FALLBACK_GROUPS = ['Semua', 'Data', 'Development', 'Design', 'Marketing', 'HR', 'Business'] as const;
 const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'];
 const TIME_BUCKETS = [
   { label: '≤ 4 jam', max: 4 },
@@ -27,12 +28,24 @@ function timeToHours(estimate: string): number {
 interface ProjectBrowserProps {
   hrefPrefix?: string;
   showRecommended?: boolean;
+  /** Live data. Defaults to the mock catalog so (app) demo screens keep working until Phase 9b. */
+  projects?: ArenaProject[];
+  /** Live division names (without 'Semua'). Defaults to the mock groups. */
+  groups?: string[];
+  recommendedSlug?: string;
 }
 
-/** Working search + filters over the mock project catalog (no reload, animated). */
-export function ProjectBrowser({ hrefPrefix = '/arena/projects', showRecommended = true }: ProjectBrowserProps) {
+/** Working search + filters over the project catalog (no reload, animated). */
+export function ProjectBrowser({
+  hrefPrefix = '/arena/projects',
+  showRecommended = true,
+  projects = mockProjects,
+  groups,
+  recommendedSlug = RECOMMENDED_PROJECT_SLUG,
+}: ProjectBrowserProps) {
+  const GROUPS = useMemo(() => ['Semua', ...(groups ?? [...FALLBACK_GROUPS].slice(1))], [groups]);
   const [query, setQuery] = useState('');
-  const [group, setGroup] = useState<(typeof GROUPS)[number]>('Semua');
+  const [group, setGroup] = useState<string>('Semua');
   const [difficulty, setDifficulty] = useState<string | null>(null);
   const [skill, setSkill] = useState<string | null>(null);
   const [timeBucket, setTimeBucket] = useState<string | null>(null);
@@ -40,16 +53,16 @@ export function ProjectBrowser({ hrefPrefix = '/arena/projects', showRecommended
 
   const allSkills = useMemo(() => {
     const counts = new Map<string, number>();
-    mockProjects.forEach((p) => p.skills.forEach((s) => counts.set(s, (counts.get(s) ?? 0) + 1)));
+    projects.forEach((p) => p.skills.forEach((s) => counts.set(s, (counts.get(s) ?? 0) + 1)));
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([s]) => s);
-  }, []);
+  }, [projects]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return mockProjects.filter((p) => {
+    return projects.filter((p) => {
       if (group !== 'Semua' && p.group !== group) return false;
       if (difficulty && p.difficulty !== difficulty) return false;
       if (skill && !p.skills.some((s) => s.toLowerCase() === skill.toLowerCase())) return false;
@@ -63,17 +76,17 @@ export function ProjectBrowser({ hrefPrefix = '/arena/projects', showRecommended
       if (q && ![p.title, p.category, p.shortDescription, ...p.skills].join(' ').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [query, group, difficulty, skill, timeBucket]);
+  }, [query, group, difficulty, skill, timeBucket, projects]);
 
   // Recommended card floats to the top when it survives filtering.
   const ordered = useMemo(() => {
     if (!showRecommended) return filtered;
-    const idx = filtered.findIndex((p) => p.slug === RECOMMENDED_PROJECT_SLUG);
+    const idx = filtered.findIndex((p) => p.slug === recommendedSlug);
     if (idx <= 0) return filtered;
     const clone = [...filtered];
     const [rec] = clone.splice(idx, 1);
     return [rec, ...clone];
-  }, [filtered, showRecommended]);
+  }, [filtered, showRecommended, recommendedSlug]);
 
   const hasActiveFilters = group !== 'Semua' || difficulty !== null || skill !== null || timeBucket !== null || query !== '';
 
@@ -171,7 +184,7 @@ export function ProjectBrowser({ hrefPrefix = '/arena/projects', showRecommended
             label={g}
             active={group === g}
             onClick={() => setGroup(g)}
-            count={g === 'Semua' ? mockProjects.length : mockProjects.filter((p) => p.group === g).length}
+            count={g === 'Semua' ? projects.length : projects.filter((p) => p.group === g).length}
           />
         ))}
       </div>
@@ -200,7 +213,7 @@ export function ProjectBrowser({ hrefPrefix = '/arena/projects', showRecommended
                 key={project.slug}
                 project={project}
                 hrefPrefix={hrefPrefix}
-                recommended={showRecommended && project.slug === RECOMMENDED_PROJECT_SLUG}
+                recommended={showRecommended && project.slug === recommendedSlug}
               />
             ))}
           </AnimatePresence>

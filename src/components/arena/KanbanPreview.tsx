@@ -30,18 +30,29 @@ export function ResourceList({
 }
 
 /** Kanban-style "this week's drop" preview card (arena landing right column). */
-export function KanbanPreview() {
-  const weekly = mockProjects.filter((p) => p.isThisWeek).slice(0, 4);
+export function KanbanPreview({
+  projects,
+  weekLabel,
+  total,
+}: {
+  /** Live projects (top 4). Defaults to the mock catalog until wired. */
+  projects?: Array<{ slug: string; title: string; category: string }>;
+  weekLabel?: string;
+  total?: number;
+} = {}) {
+  const weekly = (projects ?? mockProjects.filter((p) => p.isThisWeek)).slice(0, 4);
+  const label = weekLabel ?? `WEEK ${ARENA_WEEK} · SEP 2`;
+  const count = total ?? weekly.length * 3;
   return (
     <div className="rounded-[var(--radius-sk-2xl)] bg-white p-5 shadow-[0_30px_60px_-30px_rgba(7,21,45,0.3)]">
       <div className="mb-4 flex items-center justify-between">
         <span className="font-mono text-[11px] tracking-[0.1em] text-sk-muted">
-          WEEK {ARENA_WEEK} · SEP 2
+          {label}
         </span>
         <Badge>Fresh Drop</Badge>
       </div>
       <div className="mb-[18px] border-b border-dashed border-sk-border pb-5 pt-2 text-center">
-        <div className="text-[52px] font-extrabold leading-none tracking-[-0.03em] text-sk-blue">{weekly.length * 3}</div>
+        <div className="text-[52px] font-extrabold leading-none tracking-[-0.03em] text-sk-blue">{count}</div>
         <div className="mt-1.5 font-mono text-[10.5px] tracking-[0.14em] text-sk-muted">PROJECT MINGGU INI</div>
       </div>
       <ul className="flex flex-col gap-2.5">
@@ -56,10 +67,10 @@ export function KanbanPreview() {
             </div>
             <Link
               href={`/arena/projects/${p.slug}`}
-              className="ml-auto shrink-0 font-mono text-[11px] font-semibold text-sk-blue hover:underline"
+              className="ml-auto inline-flex shrink-0 items-center font-mono text-[11px] font-semibold text-sk-blue hover:underline"
               aria-label={`Lihat ${p.title}`}
             >
-              +{p.points}
+              Lihat
               <ArrowUpRight size={11} className="ml-0.5 inline" aria-hidden />
             </Link>
           </li>
