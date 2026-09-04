@@ -1,25 +1,98 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
-import { CalendarClock, Check, ExternalLink, FileText, Link2 } from 'lucide-react';
+import { CalendarClock, Check, ExternalLink, Link2 } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { ErrorState } from '@/components/states/ErrorState';
-import { StatusBadge } from '@/components/primitives/StatusBadge';
-import { useDemo } from '@/features/demo/store';
-import { getProject } from '@/data/mock/projects';
-import { useDemoReviewTicker } from '@/features/demo/store';
+import {
+  ArenaApiError,
+  getCurrentEnrollment,
+  getSubmission,
+  getVisibleProjectDetail,
+  type ArenaSubmission,
+} from '@/lib/arena-client';
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'SUBMITTED':
+      return 'MENUNGGU REVIEW';
+    case 'UNDER_REVIEW':
+      return 'SEDANG DIREVIEW';
+    case 'REVIEWED_HIDDEN':
+      return 'DISEGEL SAMPAI FINALISASI';
+    case 'FINALIZED':
+      return 'FINAL';
+    case 'DRAFT':
+      return 'DRAFT';
+    case 'VOIDED':
+      return 'DIBATALKAN';
+    default:
+      return status.replace(/_/g, ' ');
+  }
+}
 
 export default function SubmissionPage() {
   const reduce = useReducedMotion();
-  useDemoReviewTicker();
-  const { state } = useDemo();
-  const enrollment = state.enrollment;
+  const params = useParams<{ projectId: string }>();
+  const [boot, setBoot] = useState<'loading' | 'ready' | 'missing' | 'empty' | 'expired' | 'error'>('loading');
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [submission, setSubmission] = useState<ArenaSubmission | null>(null);
+  const [projectTitle, setProjectTitle] = useState('');
 
-  if (!enrollment || !enrollment.submission) {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getVisibleProjectDetail(params.projectId);
+        const enrollment = await getCurrentEnrollment();
+        if (cancelled) return;
+        if (!enrollment || enrollment.projectId !== detail.id) {
+          setBoot('empty');
+          return;
+        }
+        const sub = await getSubmission(enrollment.id);
+        if (cancelled) return;
+        const hasContent =
+          sub.items.length > 0 || Boolean(sub.explanation) || sub.status !== 'DRAFT';
+        if (!hasContent) {
+          setBoot('empty');
+          return;
+        }
+        setSubmission(sub);
+        setProjectTitle(detail.title);
+        setBoot('ready');
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ArenaApiError && (err.code === 'PROJECT_NOT_FOUND' || err.code === 'PROJECT_NOT_PUBLISHED')) {
+          setBoot('missing');
+        } else if (err instanceof ArenaApiError && err.status === 401) {
+          setBoot('expired');
+        } else {
+          setBootError(err instanceof ArenaApiError ? err.message : 'Coba muat ulang halaman ini.');
+          setBoot('error');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.projectId]);
+
+  if (boot === 'loading') {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" aria-busy="true">
+        <span className="h-8 w-8 rounded-full border-[3px] border-sk-blue-tint border-t-sk-blue anim-spin" />
+      </div>
+    );
+  }
+
+  if (boot === 'empty') {
     return (
       <ErrorState
         title="Belum ada submission."
@@ -30,9 +103,41 @@ export default function SubmissionPage() {
     );
   }
 
-  const project = getProject(enrollment.projectSlug)!;
-  const submittedAt = new Date(enrollment.submission.submittedAt);
-  const reviewReady = enrollment.status === 'review_ready' && enrollment.review;
+  if (boot === 'missing') {
+    return (
+      <ErrorState
+        title="Project tidak ditemukan."
+        description="Project yang kamu cari tidak tersedia atau sudah berakhir."
+        primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
+        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+      />
+    );
+  }
+
+  if (boot === 'expired') {
+    return (
+      <ErrorState
+        title="Sesi berakhir."
+        description="Login ulang untuk melihat submission kamu."
+        primaryAction={{ label: 'Login', href: '/login' }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
+
+  if (boot === 'error' || !submission) {
+    return (
+      <ErrorState
+        title="Submission gagal dimuat."
+        description={bootError ?? 'Coba muat ulang halaman ini.'}
+        primaryAction={{ label: 'Muat Ulang', href: `/app/arena/submission/${params.projectId}` }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
+
+  const finalized = submission.status === 'FINALIZED';
+  const links = submission.items.filter((item) => item.itemType === 'LINK' && item.externalUrl);
 
   return (
     <div>
@@ -55,28 +160,25 @@ export default function SubmissionPage() {
             Project berhasil dikirim.
           </h1>
           <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
-            {reviewReady
-              ? 'Review selesai — feedback kamu sudah tersedia.'
-              : 'Submission kamu sedang dalam proses review. Feedback akan tersedia dalam 1–2 hari. Kamu bisa menutup halaman ini — status tersimpan otomatis.'}
+            {finalized
+              ? 'Review selesai dan week sudah difinalisasi — feedback kamu tersedia.'
+              : 'Submission kamu sedang dalam proses review. Hasilnya disegel sampai finalisasi Jumat 23:59 WIB. Kamu bisa menutup halaman ini — status tersimpan di server.'}
           </p>
 
           <div className="mb-7 flex flex-wrap gap-2">
-            <StatusBadge status={enrollment.status} />
-            <Badge variant="slate">
-              Submitted · {submittedAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}{' '}
-              {submittedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-            </Badge>
+            <Badge variant="slate">{statusLabel(submission.status)}</Badge>
+            <Badge variant="slate">Attempt {submission.reviewAttemptsUsed}/3</Badge>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {reviewReady ? (
-              <ButtonLink href={`/app/arena/result/${enrollment.projectSlug}`}>Lihat Result →</ButtonLink>
+            {finalized ? (
+              <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result →</ButtonLink>
             ) : (
               <ButtonLink href="/app/arena" variant="ghost">
                 Kembali ke Arena
               </ButtonLink>
             )}
-            <ButtonLink href={`/app/arena/projects/${project.slug}`} variant="ghost">
+            <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
               Lihat Brief Project
             </ButtonLink>
           </div>
@@ -91,22 +193,26 @@ export default function SubmissionPage() {
             <dl className="flex flex-col gap-4">
               <div>
                 <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Project</dt>
-                <dd className="text-[13.5px] text-sk-muted">{project.title}</dd>
+                <dd className="text-[13.5px] text-sk-muted">{projectTitle}</dd>
               </div>
-              <div>
-                <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Submission Link</dt>
-                <dd>
-                  <span className="inline-flex max-w-full items-center gap-2 rounded-lg border border-sk-border bg-sk-bg px-3.5 py-2.5 font-mono text-[12.5px] text-sk-navy">
-                    <Link2 size={14} className="shrink-0 text-sk-blue" aria-hidden />
-                    <span className="truncate">{enrollment.submission.url}</span>
-                    <ExternalLink size={13} className="shrink-0 text-sk-faint" aria-hidden />
-                  </span>
-                </dd>
-              </div>
-              {enrollment.submission.explanation && (
+              {links.map((item) => (
+                <div key={item.id}>
+                  <dt className="mb-1 text-[12px] font-semibold text-sk-navy">
+                    Submission Link{item.label ? ` · ${item.label}` : ''}
+                  </dt>
+                  <dd>
+                    <span className="inline-flex max-w-full items-center gap-2 rounded-lg border border-sk-border bg-sk-bg px-3.5 py-2.5 font-mono text-[12.5px] text-sk-navy">
+                      <Link2 size={14} className="shrink-0 text-sk-blue" aria-hidden />
+                      <span className="truncate">{item.externalUrl}</span>
+                      <ExternalLink size={13} className="shrink-0 text-sk-faint" aria-hidden />
+                    </span>
+                  </dd>
+                </div>
+              ))}
+              {submission.explanation && (
                 <div>
                   <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Short Explanation</dt>
-                  <dd className="text-[13.5px] leading-relaxed text-sk-muted">{enrollment.submission.explanation}</dd>
+                  <dd className="text-[13.5px] leading-relaxed text-sk-muted">{submission.explanation}</dd>
                 </div>
               )}
             </dl>
@@ -120,8 +226,8 @@ export default function SubmissionPage() {
             <ol className="flex flex-col gap-4">
               {[
                 { label: 'Submission diterima', done: true },
-                { label: 'Reviewer memeriksa deliverables', done: enrollment.status !== 'submitted' },
-                { label: 'Feedback tersedia', done: reviewReady },
+                { label: 'Reviewer memeriksa deliverables', done: submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT' },
+                { label: 'Feedback tersedia', done: finalized },
               ].map((s) => (
                 <li key={s.label} className="flex items-center gap-3">
                   <span
@@ -136,14 +242,13 @@ export default function SubmissionPage() {
                 </li>
               ))}
             </ol>
-            {!reviewReady && (
+            {!finalized && (
               <p className="mt-5 rounded-xl bg-sk-bg px-3.5 py-3 text-[11.5px] leading-relaxed text-sk-muted">
-                <FileText size={11} className="mr-1 inline" aria-hidden />
-                Demo lokal: review selesai otomatis beberapa detik setelah submit.
+                Hasil review disegel sampai finalisasi Jumat 23:59 WIB — bukan hitungan detik.
               </p>
             )}
-            {reviewReady && (
-              <ButtonLink href={`/app/arena/result/${enrollment.projectSlug}`} size="sm" className="mt-5" fullWidth>
+            {finalized && (
+              <ButtonLink href={`/app/arena/result/${params.projectId}`} size="sm" className="mt-5" fullWidth>
                 Buka Feedback →
               </ButtonLink>
             )}

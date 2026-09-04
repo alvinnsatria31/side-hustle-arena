@@ -12,47 +12,163 @@ import { CountUp } from '@/components/motion/CountUp';
 import { Entrance } from '@/components/motion/Reveal';
 import { ProgressBar } from '@/components/primitives/ProgressBar';
 import { ErrorState } from '@/components/states/ErrorState';
-import { useDemo } from '@/features/demo/store';
-import { getProject } from '@/data/mock/projects';
-import { DEMO_USER } from '@/data/mock/user';
+import {
+  ArenaApiError,
+  getCurrentEnrollment,
+  getResult,
+  getVisibleProjectDetail,
+  type ArenaResult,
+} from '@/lib/arena-client';
+
+type Ranked = Extract<ArenaResult, { ranked: true }>;
+type Sealed = Extract<ArenaResult, { sealed: true }>;
 
 export default function ProjectResultPage() {
   const params = useParams<{ projectId: string }>();
   const reduce = useReducedMotion();
-  const { state, dispatch } = useDemo();
+  const [boot, setBoot] = useState<'loading' | 'ready' | 'sealed' | 'unranked' | 'missing' | 'expired' | 'error'>('loading');
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [result, setResult] = useState<Ranked | null>(null);
+  const [sealed, setSealed] = useState<Sealed | null>(null);
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectCategory, setProjectCategory] = useState('');
   const [counted, setCounted] = useState(false);
 
-  const enrollment = state.enrollment;
-  const belongsHere = Boolean(enrollment && enrollment.projectSlug === params.projectId);
-  const review = belongsHere ? enrollment!.review : null;
-
-  // Opening the result marks the project as completed (loop closes).
   useEffect(() => {
-    if (belongsHere && review && enrollment!.status !== 'completed') {
-      dispatch({ type: 'COMPLETE_PROJECT' });
-    }
-  }, [belongsHere, review, enrollment?.status, dispatch]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getVisibleProjectDetail(params.projectId);
+        const enrollment = await getCurrentEnrollment();
+        if (cancelled) return;
+        if (!enrollment || enrollment.projectId !== detail.id) {
+          setBoot('missing');
+          return;
+        }
+        const res = await getResult(enrollment.id);
+        if (cancelled) return;
+        setProjectTitle(detail.title);
+        setProjectCategory(detail.division.name);
+        if (res.sealed) {
+          setSealed(res);
+          setBoot('sealed');
+        } else if (!res.finalized || !res.ranked) {
+          setBoot('unranked');
+        } else {
+          setResult(res);
+          setBoot('ready');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ArenaApiError && (err.code === 'PROJECT_NOT_FOUND' || err.code === 'PROJECT_NOT_PUBLISHED')) {
+          setBoot('missing');
+        } else if (err instanceof ArenaApiError && err.status === 401) {
+          setBoot('expired');
+        } else {
+          setBootError(err instanceof ArenaApiError ? err.message : 'Coba muat ulang halaman ini.');
+          setBoot('error');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.projectId]);
 
   useEffect(() => {
-    if (review) {
+    if (boot === 'ready') {
       const t = window.setTimeout(() => setCounted(true), reduce ? 0 : 250);
       return () => window.clearTimeout(t);
     }
-  }, [review, reduce]);
+  }, [boot, reduce]);
 
-  if (!belongsHere || !review) {
+  if (boot === 'loading') {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" aria-busy="true">
+        <span className="h-8 w-8 rounded-full border-[3px] border-sk-blue-tint border-t-sk-blue anim-spin" />
+      </div>
+    );
+  }
+
+  if (boot === 'sealed') {
+    return (
+      <div>
+        <Breadcrumb
+          items={[
+            { label: 'App', href: '/app' },
+            { label: 'Arena', href: '/app/arena' },
+            { label: 'Submission', href: `/app/arena/submission/${params.projectId}` },
+            { label: 'Result' },
+          ]}
+        />
+        <Card className="mt-5 p-7 sm:p-9">
+          <span className="eyebrow">Disegel sampai finalisasi</span>
+          <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
+            Feedback belum bisa dibuka.
+          </h1>
+          <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
+            Reviewer mungkin sudah menilai, tapi skor dikunci sampai finalisasi Jumat 23:59 WIB biar adil buat semua
+            peserta. Jatah review kepakai {sealed?.reviewAttemptsUsed ?? 0}/3.
+          </p>
+          <div className="mb-7 flex flex-wrap gap-2">
+            <Badge variant="slate">{(sealed?.submissionStatus ?? 'DRAFT').replace(/_/g, ' ')}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <ButtonLink href={`/app/arena/submission/${params.projectId}`} variant="ghost">
+              Lihat Submission
+            </ButtonLink>
+            <ButtonLink href="/app/arena" variant="ghost">
+              Kembali ke Arena
+            </ButtonLink>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (boot === 'unranked') {
     return (
       <ErrorState
-        title="Feedback belum tersedia."
-        description="Kamu belum punya hasil review untuk project ini. Selesaikan workspace dan submit dulu — feedback muncul otomatis setelah review selesai."
+        title="Belum ada hasil final."
+        description="Week ini sudah difinalisasi tapi submission kamu tidak masuk peringkat (tidak submit, tidak lolos syarat, atau dibatalkan). Coba lagi minggu depan."
         primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
         secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
       />
     );
   }
 
-  const project = getProject(enrollment!.projectSlug)!;
-  const user = state.user ?? DEMO_USER;
+  if (boot === 'missing') {
+    return (
+      <ErrorState
+        title="Feedback belum tersedia."
+        description="Kamu belum punya hasil review untuk project ini. Selesaikan workspace dan submit dulu."
+        primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
+        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+      />
+    );
+  }
+
+  if (boot === 'expired') {
+    return (
+      <ErrorState
+        title="Sesi berakhir."
+        description="Login ulang untuk melihat hasil kamu."
+        primaryAction={{ label: 'Login', href: '/login' }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
+
+  if (boot === 'error' || !result) {
+    return (
+      <ErrorState
+        title="Hasil gagal dimuat."
+        description={bootError ?? 'Coba muat ulang halaman ini.'}
+        primaryAction={{ label: 'Muat Ulang', href: `/app/arena/result/${params.projectId}` }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -60,7 +176,7 @@ export default function ProjectResultPage() {
         items={[
           { label: 'App', href: '/app' },
           { label: 'Arena', href: '/app/arena' },
-          { label: 'Submission', href: `/app/arena/submission/${project.slug}` },
+          { label: 'Submission', href: `/app/arena/submission/${params.projectId}` },
           { label: 'Result' },
         ]}
       />
@@ -76,13 +192,13 @@ export default function ProjectResultPage() {
             <div>
               <span className="eyebrow eyebrow-dark">Project Result</span>
               <h1 className="mb-2.5 mt-3 text-[32px] font-extrabold leading-[1.05] tracking-[-0.025em] sm:text-[44px]">
-                Great work, {user.name}.
+                Great work.
               </h1>
-              <p className="mb-5 max-w-[520px] text-[14.5px] leading-relaxed text-white/75">{review.summary}</p>
+              <p className="mb-5 max-w-[520px] text-[14.5px] leading-relaxed text-white/75">{result.summary ?? ''}</p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="recommended">{review.statusLabel}</Badge>
+                <Badge variant="recommended">Peringkat #{result.rank}</Badge>
                 <Badge variant="dark">
-                  {project.category} · Week {project.week}
+                  {projectCategory} · {result.weekCode}
                 </Badge>
               </div>
             </div>
@@ -99,10 +215,10 @@ export default function ProjectResultPage() {
                   WebkitTextFillColor: 'transparent',
                 }}
               >
-                <CountUp to={review.score} />
+                <CountUp to={Math.round(result.finalScore)} />
               </motion.div>
               <div className="mt-2 font-mono text-[14px] text-white/60">/ 100</div>
-              <div className="mt-2.5 text-[13px] font-bold tracking-[0.05em] text-[#5ae0a0]">{review.statusLabel}</div>
+              <div className="mt-2.5 text-[13px] font-bold tracking-[0.05em] text-[#5ae0a0]">Peringkat #{result.rank}</div>
             </div>
           </div>
         </div>
@@ -115,17 +231,17 @@ export default function ProjectResultPage() {
         transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
         className="mb-7 mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
       >
-        {review.rubric.map((r, i) => (
+        {result.rubric.map((r, i) => (
           <Card key={r.label} className="p-5">
             <div className="mb-2 font-mono text-[10px] tracking-[0.1em] text-sk-muted">{r.label.toUpperCase()}</div>
             <div className="mb-2.5 flex items-baseline justify-between">
               <span className="text-[30px] font-extrabold tracking-[-0.02em] text-sk-navy">
-                {counted ? <CountUp to={r.score} duration={0.7} /> : 0}
+                {counted ? <CountUp to={Math.round(r.score)} duration={0.7} /> : 0}
               </span>
-              <span className="font-mono text-[12px] text-sk-muted">/{r.max}</span>
+              <span className="font-mono text-[12px] text-sk-muted">/{Math.round(r.max)}</span>
             </div>
             <ProgressBar
-              value={(r.score / r.max) * 100}
+              value={r.max > 0 ? (r.score / r.max) * 100 : 0}
               delay={0.3 + i * 0.1}
               barClassName="bg-gradient-to-r from-sk-blue to-sk-mint"
             />
@@ -143,7 +259,7 @@ export default function ProjectResultPage() {
         <Card className="p-6">
           <PanelHeading pin="g">Kekuatan</PanelHeading>
           <ul className="flex flex-col gap-3">
-            {review.strengths.map((s, i) => (
+            {result.strengths.map((s, i) => (
               <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
                 <span aria-hidden className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-sk-success-tint text-sk-success">
                   <Check size={12} strokeWidth={3} />
@@ -156,7 +272,7 @@ export default function ProjectResultPage() {
         <Card className="p-6">
           <PanelHeading pin="a">Perlu ditingkatkan</PanelHeading>
           <ul className="flex flex-col gap-3">
-            {review.improvements.map((s, i) => (
+            {result.improvements.map((s, i) => (
               <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
                 <span aria-hidden className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-sk-warning-wash text-sk-warning-ink">
                   <TriangleAlert size={11} strokeWidth={2.4} />
@@ -178,7 +294,7 @@ export default function ProjectResultPage() {
         <div>
           <div className="mb-4 font-mono text-[11px] tracking-[0.15em] text-sk-blue">SKILLS PROVEN</div>
           <div className="flex flex-wrap gap-2.5">
-            {review.skillsProven.map((skill, i) => (
+            {result.skillsProven.map((skill, i) => (
               <motion.span
                 key={skill}
                 initial={reduce ? false : { opacity: 0, y: 8 }}
@@ -200,7 +316,7 @@ export default function ProjectResultPage() {
           transition={{ duration: 0.45, delay: 0.85, ease: 'easeOut' }}
           className="text-right"
         >
-          <div className="text-[36px] font-extrabold leading-none tracking-[-0.02em] text-sk-blue">+{review.pointsEarned}</div>
+          <div className="text-[36px] font-extrabold leading-none tracking-[-0.02em] text-sk-blue">+{result.pointsAwarded}</div>
           <div className="mt-1 font-mono text-[11px] tracking-[0.1em] text-sk-muted">CAREER POINTS</div>
         </motion.div>
       </motion.div>

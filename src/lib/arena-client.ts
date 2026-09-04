@@ -28,8 +28,21 @@ export type ArenaErrorCode =
   | 'ALREADY_ENROLLED_THIS_WEEK'
   | 'ENROLLMENT_NOT_FOUND'
   | 'SUBMISSION_NOT_FOUND'
+  | 'SUBMISSION_ITEM_NOT_FOUND'
   | 'SUBMISSION_DEADLINE_PASSED'
+  | 'SUBMISSION_REQUIREMENTS_INCOMPLETE'
+  | 'FILE_LIMIT_EXCEEDED'
+  | 'LINK_LIMIT_EXCEEDED'
+  | 'FILE_TYPE_NOT_ALLOWED'
+  | 'FILE_TOO_LARGE'
+  | 'UPLOAD_INTENT_NOT_FOUND'
+  | 'UPLOAD_INTENT_EXPIRED'
+  | 'UPLOAD_VALIDATION_FAILED'
   | 'REVIEW_ATTEMPT_LIMIT_REACHED'
+  | 'REVIEW_JOB_NOT_FOUND'
+  | 'REVIEW_JOB_UNAVAILABLE'
+  | 'REVIEW_VALIDATION_FAILED'
+  | 'REVIEW_PROVIDER_FAILED'
   | 'WEEK_NOT_READY'
   | 'WEEK_NOT_FINALIZED'
   | 'FEATURE_CLOSED'
@@ -116,6 +129,42 @@ export interface SubmissionLinkResult {
   url: string;
 }
 
+export interface DraftItem {
+  id: string;
+  requirementId: string;
+  itemType: 'FILE' | 'LINK';
+  label: string | null;
+  externalUrl: string | null;
+  originalFilename: string | null;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+}
+
+export interface ArenaSubmission {
+  id: string;
+  enrollmentId: string;
+  status: string;
+  explanation: string | null;
+  notes: string | null;
+  reviewAttemptsUsed: number;
+  latestVersionId: string | null;
+  items: DraftItem[];
+}
+
+export function getSubmission(enrollmentId: string): Promise<ArenaSubmission> {
+  return request<ArenaSubmission>(`/api/arena/enrollments/${enrollmentId}/submission`);
+}
+
+export function patchSubmissionDraft(
+  enrollmentId: string,
+  draft: { explanation?: string | null; notes?: string | null },
+): Promise<ArenaSubmission> {
+  return request<ArenaSubmission>(`/api/arena/enrollments/${enrollmentId}/submission`, {
+    method: 'PATCH',
+    body: JSON.stringify(draft),
+  });
+}
+
 export interface SubmitResult {
   version: {
     id: string;
@@ -125,10 +174,19 @@ export interface SubmitResult {
 }
 
 export interface LeaderboardEntry {
-  userId: string;
-  displayName: string | null;
-  score: number;
   rank: number;
+  displayName: string;
+  projectTitle: string;
+  divisionName: string;
+  finalScore: number;
+  pointsAwarded: number;
+  finalSubmittedAt: string | Date;
+}
+
+export interface LeaderboardResponse {
+  weekCode: string;
+  finalizedAt: string | Date | null;
+  rows: LeaderboardEntry[];
 }
 
 export interface NotificationItem {
@@ -150,8 +208,8 @@ export function getWorkspace(enrollmentId: string): Promise<WorkspaceProgress | 
   return request<WorkspaceProgress | null>(`/api/arena/enrollments/${enrollmentId}/workspace`);
 }
 
-export function getWeekCurrent(): Promise<unknown> {
-  return request<unknown>('/api/arena/week/current');
+export function getWeekCurrent(): Promise<WeekCurrent> {
+  return request<WeekCurrent>('/api/arena/week/current');
 }
 
 export interface VisibleProject {
@@ -160,13 +218,70 @@ export interface VisibleProject {
   title: string;
 }
 
+export interface ProjectRequirement {
+  id: string;
+  label: string;
+  type: 'FILE' | 'LINK' | 'TEXT';
+  required: boolean;
+  minItems: number;
+  maxItems: number;
+  instructions: string | null;
+}
+
+export interface VisibleProjectDetail extends VisibleProject {
+  division: { id: string; slug: string; name: string };
+  difficulty: string;
+  estimatedMinutes: number | null;
+  caseBackground: string | null;
+  roleDescription: string | null;
+  objective: string | null;
+  skills: Array<{ slug: string; name: string }>;
+  requirements: ProjectRequirement[];
+}
+
+export interface WeekCurrent {
+  id: string;
+  weekCode: string;
+  status: string;
+  submissionDeadlineAt: string;
+}
+
 export function getVisibleProject(slug: string): Promise<VisibleProject> {
   return request<VisibleProject>(`/api/arena/projects/${encodeURIComponent(slug)}`);
 }
 
-export function getLeaderboard(week?: string): Promise<LeaderboardEntry[]> {
+export function getVisibleProjectDetail(slug: string): Promise<VisibleProjectDetail> {
+  return request<VisibleProjectDetail>(`/api/arena/projects/${encodeURIComponent(slug)}`);
+}
+
+export function getLeaderboard(week?: string): Promise<LeaderboardResponse> {
   const qs = week ? `?week=${encodeURIComponent(week)}` : '';
-  return request<LeaderboardEntry[]>(`/api/arena/leaderboard${qs}`);
+  return request<LeaderboardResponse>(`/api/arena/leaderboard${qs}`);
+}
+
+export type ArenaResult =
+  | { sealed: true; weekStatus: string; reviewAttemptsUsed: number; submissionStatus: string }
+  | { sealed: false; finalized: false }
+  | {
+      sealed: false;
+      finalized: true;
+      ranked: true;
+      rank: number;
+      weekCode: string;
+      finalScore: number;
+      pointsAwarded: number;
+      summary: string | null;
+      strengths: string[];
+      improvements: string[];
+      rubric: Array<{ label: string; score: number; max: number; feedback: string | null }>;
+      skillsProven: string[];
+      versionNumber: number;
+      submittedAt: string | Date;
+    }
+  | { sealed: false; finalized: true; ranked: false };
+
+export function getResult(enrollmentId: string): Promise<ArenaResult> {
+  return request<ArenaResult>(`/api/arena/enrollments/${enrollmentId}/result`);
 }
 
 export function getNotifications(opts?: { unreadOnly?: boolean; limit?: number }): Promise<{
@@ -200,10 +315,13 @@ export function patchWorkspace(enrollmentId: string, patch: WorkspacePatch): Pro
   });
 }
 
-export function addSubmissionLink(enrollmentId: string, url: string): Promise<SubmissionLinkResult> {
+export function addSubmissionLink(
+  enrollmentId: string,
+  input: { requirementId: string; url: string; label?: string },
+): Promise<SubmissionLinkResult> {
   return request<SubmissionLinkResult>(`/api/arena/enrollments/${enrollmentId}/submission/links`, {
     method: 'POST',
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(input),
   });
 }
 

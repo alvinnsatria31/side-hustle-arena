@@ -13,10 +13,24 @@ import { ChecklistRow } from '@/components/primitives/ChecklistRow';
 import { WorkspaceStepper } from '@/components/primitives/WorkspaceStepper';
 import { ErrorState } from '@/components/states/ErrorState';
 import { ResourceList } from '@/components/arena/KanbanPreview';
-import { StatusBadge, WORKSPACE_STEP_LABELS } from '@/components/primitives/StatusBadge';
-import { useDemo } from '@/features/demo/store';
+import { WORKSPACE_STEP_LABELS } from '@/components/primitives/StatusBadge';
 import { useToast } from '@/features/ui/toast';
-import { getProject } from '@/data/mock/projects';
+import {
+  ArenaApiError,
+  addSubmissionLink,
+  getCurrentEnrollment,
+  getSubmission,
+  getVisibleProjectDetail,
+  getWeekCurrent,
+  getWorkspace,
+  patchSubmissionDraft,
+  patchWorkspace,
+  selectProject,
+  submitEnrollment,
+  type VisibleProjectDetail,
+  type WorkspacePatch,
+  type WorkspaceStep as ServerStep,
+} from '@/lib/arena-client';
 import type { WorkspaceStep } from '@/types/project';
 
 const STEPS: WorkspaceStep[] = ['brief', 'plan', 'work', 'review', 'submit'];
@@ -64,18 +78,98 @@ function validateUrl(raw: string): string | null {
   return null;
 }
 
+function toServerStep(step: WorkspaceStep): ServerStep {
+  return step.toUpperCase() as ServerStep;
+}
+
+function fromServerStep(step: ServerStep | null): WorkspaceStep {
+  const lower = (step ?? 'BRIEF').toLowerCase();
+  return (STEPS as string[]).includes(lower) ? (lower as WorkspaceStep) : 'brief';
+}
+
+function deadlineLabel(iso: string): string {
+  const date = new Date(iso);
+  const weekday = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' }).format(date);
+  const time = new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jakarta' }).format(date);
+  return `${weekday} · ${time}`;
+}
+
+function estimatedLabel(minutes: number | null): string {
+  if (!minutes || minutes <= 0) return 'Fleksibel';
+  const formatted = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(Math.round((minutes / 60) * 2) / 2);
+  return `${formatted} jam`;
+}
+
+function friendlyError(err: unknown): string {
+  if (err instanceof ArenaApiError) {
+    switch (err.code) {
+      case 'UNAUTHORIZED':
+        return 'Sesi berakhir. Login ulang lalu coba lagi.';
+      case 'WEEK_CLOSED':
+      case 'WEEK_NOT_OPEN':
+      case 'SUBMISSION_DEADLINE_PASSED':
+      case 'SELECTION_DEADLINE_PASSED':
+        return 'Week sudah tutup (Jumat 23:59 WIB). Perubahan tidak bisa disimpan.';
+      case 'FEATURE_CLOSED':
+        return 'Fitur lagi ditutup sementara (kill-switch). Coba lagi nanti.';
+      case 'REVIEW_ATTEMPT_LIMIT_REACHED':
+        return 'Jatah 3x review minggu ini habis.';
+      case 'SUBMISSION_REQUIREMENTS_INCOMPLETE':
+        return 'Requirement belum lengkap — tambah link/file sesuai ketentuan project.';
+      default:
+        return `Gagal menyimpan: ${err.message}`;
+    }
+  }
+  return 'Gagal menyimpan. Cek koneksi lalu coba lagi.';
+}
+
+interface LiveProject {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  difficulty: string;
+  estimatedTime: string;
+  caseBackground: string;
+  role: string;
+  objective: string[];
+  deliverables: Array<{ id: string; title: string; description?: string }>;
+  skills: string[];
+  linkRequirementId: string | null;
+}
+
+function toLiveProject(detail: VisibleProjectDetail): LiveProject {
+  return {
+    id: detail.id,
+    slug: detail.slug,
+    title: detail.title,
+    category: detail.division.name,
+    difficulty: detail.difficulty === 'STANDARD' ? 'Intermediate' : detail.difficulty,
+    estimatedTime: estimatedLabel(detail.estimatedMinutes),
+    caseBackground: detail.caseBackground ?? '',
+    role: detail.roleDescription ?? '',
+    objective: detail.objective ? [detail.objective] : [],
+    deliverables: [],
+    skills: detail.skills.map((s) => s.name),
+    linkRequirementId: detail.requirements.find((r) => r.type === 'LINK')?.id ?? null,
+  };
+}
+
 export default function WorkspacePage() {
   const params = useParams<{ projectId: string }>();
   const router = useRouter();
   const reduce = useReducedMotion();
-  const { state, dispatch, hydrated } = useDemo();
   const { showToast } = useToast();
 
-  const project = getProject(params.projectId);
-  const enrollment = state.enrollment;
-  const belongsHere = Boolean(enrollment && enrollment.projectSlug === params.projectId);
-
-  const [phase, setPhase] = useState<'idle' | 'submitting' | 'error'>('idle');
+  const [boot, setBoot] = useState<'loading' | 'ready' | 'missing-project' | 'no-enrollment' | 'session-expired' | 'error'>('loading');
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [project, setProject] = useState<LiveProject | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<string>('ACTIVE');
+  const [weekCode, setWeekCode] = useState<string>('');
+  const [deadline, setDeadline] = useState<string>('');
+  const [step, setStep] = useState<WorkspaceStep>('brief');
 
   // Plan step local drafts (persisted on save).
   const [approach, setApproach] = useState('');
@@ -83,58 +177,153 @@ export default function WorkspacePage() {
   const [tasks, setTasks] = useState<{ id: string; label: string; done: boolean }[]>([]);
   const [newTask, setNewTask] = useState('');
   const [notes, setNotes] = useState('');
+  const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [url, setUrl] = useState('');
   const [explanation, setExplanation] = useState('');
   const [finalChecks, setFinalChecks] = useState<Record<string, boolean>>({});
   const [urlError, setUrlError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!hydrated || !belongsHere || !enrollment) return;
-    setApproach(enrollment.plan.approach);
-    setTools(enrollment.plan.tools);
-    setTasks(
-      enrollment.plan.tasks.length > 0
-        ? enrollment.plan.tasks
-        : DEFAULT_TASKS.map((label, i) => ({ id: `t-${i + 1}`, label, done: false })),
-    );
-    setNotes(enrollment.notes);
-    setUrl(enrollment.submission?.url ?? '');
-    setExplanation(enrollment.submission?.explanation ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, belongsHere]);
+  const [phase, setPhase] = useState<'idle' | 'submitting' | 'error'>('idle');
 
-  const step = belongsHere && enrollment ? enrollment.workspaceStep : 'brief';
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getVisibleProjectDetail(params.projectId);
+        const enrollment = await getCurrentEnrollment();
+        if (cancelled) return;
+        if (!enrollment || enrollment.projectId !== detail.id) {
+          setProject(toLiveProject(detail));
+          setProjectId(detail.id);
+          setBoot('no-enrollment');
+          return;
+        }
+        const [ws, sub, week] = await Promise.all([
+          getWorkspace(enrollment.id),
+          getSubmission(enrollment.id),
+          getWeekCurrent(),
+        ]);
+        if (cancelled) return;
+        const live = toLiveProject(detail);
+        live.deliverables = detail.requirements.map((r) => ({
+          id: r.id,
+          title: r.label,
+          description: r.instructions ?? undefined,
+        }));
+        setProject(live);
+        setProjectId(detail.id);
+        setEnrollmentId(enrollment.id);
+        setEnrollmentStatus(enrollment.status);
+        setWeekCode(week.weekCode);
+        setDeadline(deadlineLabel(week.submissionDeadlineAt));
+        setStep(fromServerStep(ws?.currentStep ?? null));
+        setApproach(ws?.planText ?? '');
+        setTools((ws?.tools ?? []).join(', '));
+        setTasks(
+          ws?.taskBreakdown && ws.taskBreakdown.length > 0
+            ? ws.taskBreakdown.map((t, i) => ({ id: `t-${i + 1}`, label: t.title, done: t.done }))
+            : DEFAULT_TASKS.map((label, i) => ({ id: `t-${i + 1}`, label, done: false })),
+        );
+        setNotes(ws?.notes ?? sub.notes ?? '');
+        const serverChecks = new Map((ws?.reviewChecklist ?? []).map((c) => [c.label, c.done]));
+        const nextChecks: Record<string, boolean> = {};
+        for (const item of REVIEW_ITEMS) nextChecks[item.id] = serverChecks.get(item.label) ?? false;
+        setChecks(nextChecks);
+        setUrl(sub.items.find((item) => item.itemType === 'LINK' && item.externalUrl)?.externalUrl ?? '');
+        setExplanation(sub.explanation ?? '');
+        setBoot('ready');
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ArenaApiError && (err.code === 'PROJECT_NOT_FOUND' || err.code === 'PROJECT_NOT_PUBLISHED')) {
+          setBoot('missing-project');
+        } else if (err instanceof ArenaApiError && err.status === 401) {
+          setBoot('session-expired');
+        } else {
+          setBootError(friendlyError(err));
+          setBoot('error');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.projectId]);
+
+  const savePatch = async (patch: WorkspacePatch, toastMsg?: string) => {
+    if (!enrollmentId) return;
+    try {
+      await patchWorkspace(enrollmentId, patch);
+      if (toastMsg) showToast(toastMsg);
+    } catch (err) {
+      showToast(friendlyError(err));
+    }
+  };
+
+  const goStep = (target: WorkspaceStep) => {
+    setStep(target);
+    void savePatch({ currentStep: toServerStep(target) });
+  };
+
   const stepIndex = STEPS.indexOf(step);
   const progress = Math.round(((stepIndex + 1) / STEPS.length) * 100);
 
   const doneMandatory = useMemo(
-    () => REVIEW_ITEMS.filter((i) => i.mandatory && (enrollment?.checklist?.[i.id] ?? false)).length,
-    [enrollment?.checklist],
+    () => REVIEW_ITEMS.filter((i) => i.mandatory && (checks[i.id] ?? false)).length,
+    [checks],
   );
   const allMandatory = doneMandatory === REVIEW_ITEMS.filter((i) => i.mandatory).length;
   const allFinalChecked = SUBMIT_CHECKLIST.every((c) => finalChecks[c.id]);
 
-  const submitProject = () => {
-    const error = validateUrl(url);
-    setUrlError(error);
-    if (error || !project) return;
-    setPhase('submitting');
-    window.setTimeout(() => {
-      dispatch({
-        type: 'WS_SUBMIT',
-        submission: {
-          url: url.startsWith('http') ? url : `https://${url.trim()}`,
-          explanation,
-          notes,
-          submittedAt: new Date().toISOString(),
-        },
-      });
-      router.push(`/app/arena/submission/${project.slug}`);
-    }, 1_400);
+  const enrollHere = async () => {
+    if (!projectId) return;
+    try {
+      const res = await selectProject(projectId);
+      setEnrollmentId(res.enrollment.id);
+      setEnrollmentStatus(res.enrollment.status);
+      setBoot('ready');
+      router.refresh();
+    } catch (err) {
+      showToast(friendlyError(err));
+    }
   };
 
-  /* ---------- Guard: missing / invalid demo project state ---------- */
-  if (!hydrated) {
+  const toggleCheck = (id: string) => {
+    const next = { ...checks, [id]: !(checks[id] ?? false) };
+    setChecks(next);
+    void savePatch({
+      reviewChecklist: REVIEW_ITEMS.map((item) => ({ label: item.label, done: next[item.id] ?? false })),
+    });
+  };
+
+  const submitProject = async () => {
+    const error = validateUrl(url);
+    setUrlError(error);
+    if (error || !project || !enrollmentId) return;
+    if (!project.linkRequirementId) {
+      showToast('Project ini tidak menerima submission link — hubungi admin Arena.');
+      return;
+    }
+    setPhase('submitting');
+    try {
+      const normalized = url.startsWith('http') ? url.trim() : `https://${url.trim()}`;
+      await patchSubmissionDraft(enrollmentId, { explanation: explanation || null, notes: notes || null });
+      await addSubmissionLink(enrollmentId, { requirementId: project.linkRequirementId, url: normalized });
+      const result = await submitEnrollment(enrollmentId);
+      showToast(
+        result.version.accessStatus === 'ACCESSIBLE'
+          ? `Submission #${result.version.reviewAttemptNumber ?? ''} diterima — hasil disegel sampai finalisasi Jumat.`
+          : 'Link tidak bisa dibuka reviewer — jatah 3x review kamu aman. Benerin sebelum deadline.',
+      );
+      router.push(`/app/arena/submission/${project.slug}`);
+    } catch (err) {
+      setPhase('error');
+      showToast(friendlyError(err));
+    }
+  };
+
+  /* ---------- Guards ---------- */
+  if (boot === 'loading') {
     return (
       <div className="flex min-h-[50vh] items-center justify-center" aria-busy="true">
         <span className="h-8 w-8 rounded-full border-[3px] border-sk-blue-tint border-t-sk-blue anim-spin" />
@@ -142,7 +331,7 @@ export default function WorkspacePage() {
     );
   }
 
-  if (!project) {
+  if (boot === 'missing-project' || (boot === 'ready' && !project)) {
     return (
       <ErrorState
         title="Project tidak ditemukan."
@@ -153,7 +342,29 @@ export default function WorkspacePage() {
     );
   }
 
-  if (!belongsHere || !enrollment) {
+  if (boot === 'session-expired') {
+    return (
+      <ErrorState
+        title="Sesi berakhir."
+        description="Login ulang untuk membuka workspace project kamu."
+        primaryAction={{ label: 'Login', href: '/login' }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
+
+  if (boot === 'error') {
+    return (
+      <ErrorState
+        title="Workspace gagal dimuat."
+        description={bootError ?? 'Coba muat ulang halaman ini.'}
+        primaryAction={{ label: 'Muat Ulang', href: `/app/arena/workspace/${params.projectId}` }}
+        secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
+      />
+    );
+  }
+
+  if (boot === 'no-enrollment' || !enrollmentId || !project) {
     return (
       <ErrorState
         title="Kamu belum mengambil project ini."
@@ -161,8 +372,7 @@ export default function WorkspacePage() {
         primaryAction={{
           label: 'Pilih Project Ini',
           onClick: () => {
-            dispatch({ type: 'ENROLL', projectSlug: project.slug });
-            router.refresh();
+            void enrollHere();
           },
         }}
         secondaryAction={{ label: 'Lihat Project Lain', href: '/app/arena/projects' }}
@@ -206,13 +416,7 @@ export default function WorkspacePage() {
       </ul>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button
-          onClick={() => {
-            dispatch({ type: 'WS_SET_STEP', step: 'plan' });
-          }}
-        >
-          Saya Paham, Mulai Rencanakan →
-        </Button>
+        <Button onClick={() => goStep('plan')}>Saya Paham, Mulai Rencanakan →</Button>
       </div>
     </div>
   );
@@ -224,7 +428,7 @@ export default function WorkspacePage() {
         Rencanakan kerjamu.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Plan yang jelas membuat eksekusi lebih fokus. Isi singkat saja — ini untuk kamu sendiri.
+        Plan yang jelas membuat eksekusi lebih fokus. Isi singkat saja — tersimpan di server, bisa dilanjut dari mana saja.
       </p>
 
       <label className="block">
@@ -298,9 +502,20 @@ export default function WorkspacePage() {
       <div className="mt-7 flex flex-wrap gap-2.5">
         <Button
           onClick={() => {
-            dispatch({ type: 'WS_SAVE_PLAN', plan: { approach, tools, tasks } });
-            dispatch({ type: 'WS_SET_STEP', step: 'work' });
-            showToast('Plan tersimpan. Selamat mengerjakan!');
+            void savePatch(
+              {
+                currentStep: 'WORK',
+                planText: approach || null,
+                tools: tools
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .slice(0, 50),
+                taskBreakdown: tasks.map((t) => ({ title: t.label, done: t.done })),
+              },
+              'Plan tersimpan di server. Selamat mengerjakan!',
+            );
+            setStep('work');
           }}
         >
           Simpan Plan & Mulai Kerja →
@@ -364,24 +579,25 @@ export default function WorkspacePage() {
 
       <label className="mt-6 block">
         <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">
-          Catatan Pribadi (tersimpan lokal)
+          Catatan Pribadi (tersimpan di server)
         </span>
         <Textarea
           rows={4}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => dispatch({ type: 'WS_SAVE_NOTES', notes })}
+          onBlur={() => {
+            void savePatch({ notes });
+          }}
           placeholder="Temuan, pertanyaan, atau keputusan yang ingin kamu ingat saat mengerjakan…"
         />
       </label>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button onClick={() => dispatch({ type: 'WS_SET_STEP', step: 'review' })}>Lanjut ke Review Checklist →</Button>
+        <Button onClick={() => goStep('review')}>Lanjut ke Review Checklist →</Button>
         <Button
           variant="ghost"
           onClick={() => {
-            dispatch({ type: 'WS_SAVE_NOTES', notes });
-            showToast('Catatan tersimpan.');
+            void savePatch({ notes }, 'Catatan tersimpan.');
           }}
         >
           Simpan Catatan
@@ -406,8 +622,8 @@ export default function WorkspacePage() {
             key={item.id}
             label={item.label}
             mandatory={item.mandatory}
-            checked={enrollment.checklist?.[item.id] ?? false}
-            onToggle={() => dispatch({ type: 'WS_TOGGLE_CHECK', id: item.id, value: !(enrollment.checklist?.[item.id] ?? false) })}
+            checked={checks[item.id] ?? false}
+            onToggle={() => toggleCheck(item.id)}
           />
         ))}
       </div>
@@ -426,7 +642,7 @@ export default function WorkspacePage() {
       </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-2.5">
-        <Button disabled={!allMandatory} onClick={() => dispatch({ type: 'WS_SET_STEP', step: 'submit' })}>
+        <Button disabled={!allMandatory} onClick={() => goStep('submit')}>
           Lanjut ke Submit →
         </Button>
         {!allMandatory && (
@@ -445,7 +661,8 @@ export default function WorkspacePage() {
         Submit project kamu.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Satu link publik yang berisi semua deliverables. Reviewer akan membukanya langsung.
+        Satu link publik yang berisi semua deliverables. Reviewer akan membukanya langsung. Maksimal 3x review valid per
+        minggu — kegagalan teknis tidak memakan jatah.
       </p>
 
       <label className="block">
@@ -503,7 +720,9 @@ export default function WorkspacePage() {
         <Button
           disabled={!allFinalChecked || !url.trim()}
           loading={phase === 'submitting'}
-          onClick={submitProject}
+          onClick={() => {
+            void submitProject();
+          }}
           className="min-w-[220px]"
         >
           {phase === 'submitting' ? 'Mengirim submission…' : 'Submit Project →'}
@@ -516,6 +735,18 @@ export default function WorkspacePage() {
   );
 
   const stepBodies = [briefBody, planBody, workBody, reviewBody, submitBody];
+  const statusLabel =
+    enrollmentStatus === 'ACTIVE'
+      ? 'IN PROGRESS'
+      : enrollmentStatus === 'SUBMITTED'
+        ? 'MENUNGGU REVIEW'
+        : enrollmentStatus === 'UNDER_REVIEW'
+          ? 'SEDANG DIREVIEW'
+          : enrollmentStatus === 'REVIEW_READY'
+            ? 'FEEDBACK SIAP'
+            : enrollmentStatus === 'COMPLETED'
+              ? 'COMPLETED'
+              : enrollmentStatus.replace(/_/g, ' ');
 
   return (
     <div>
@@ -524,7 +755,7 @@ export default function WorkspacePage() {
         <Badge variant="slate">{project.category.toUpperCase()}</Badge>
         <span className="text-[15px] font-bold text-sk-navy sm:text-[17px]">{project.title}</span>
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          <span className="hidden font-mono text-[11.5px] text-sk-muted sm:inline">DEADLINE · {project.deadlineLabel.toUpperCase()}</span>
+          <span className="hidden font-mono text-[11.5px] text-sk-muted sm:inline">DEADLINE · {deadline.toUpperCase()}</span>
           <div className="h-1.5 w-28 overflow-hidden rounded-full bg-sk-track">
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-sk-blue to-sk-mint"
@@ -540,7 +771,7 @@ export default function WorkspacePage() {
         current={step}
         onStepClick={(target) => {
           // Allow going back to earlier steps only.
-          if (STEPS.indexOf(target) <= stepIndex) dispatch({ type: 'WS_SET_STEP', step: target });
+          if (STEPS.indexOf(target) <= stepIndex) goStep(target);
         }}
       />
 
@@ -565,9 +796,9 @@ export default function WorkspacePage() {
             <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Deadline</h5>
             <div className="flex items-center gap-2 text-[20px] font-extrabold tracking-[-0.02em] text-sk-navy">
               <CalendarClock size={17} className="text-sk-warning" aria-hidden />
-              {project.deadlineLabel}
+              {deadline}
             </div>
-            <div className="mt-1 text-[12px] text-sk-muted">Jumat minggu ini · 21:59 WIB</div>
+            <div className="mt-1 text-[12px] text-sk-muted">{weekCode ? `Minggu ${weekCode} · tutup Jumat 23:59 WIB` : ''}</div>
           </Card>
 
           <Card className="p-5">
@@ -585,12 +816,12 @@ export default function WorkspacePage() {
 
           <Card className="p-5">
             <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Resources</h5>
-            <ResourceList resources={project.resources} />
+            <ResourceList resources={[]} />
           </Card>
 
           <Card className="p-5">
             <h5 className="mb-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Project Status</h5>
-            <StatusBadge status={enrollment.status} />
+            <Badge variant="slate">{statusLabel}</Badge>
             <div className="mt-3 flex items-center gap-1.5 text-[11.5px] text-sk-muted">
               <FileText size={12} aria-hidden />
               Step {stepIndex + 1} dari 5 · {WORKSPACE_STEP_LABELS[step]}
@@ -599,7 +830,7 @@ export default function WorkspacePage() {
 
           <div className="flex items-center gap-2 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border px-4 py-3 text-[11.5px] leading-relaxed text-sk-muted">
             <Link2 size={13} aria-hidden className="shrink-0" />
-            Progress tersimpan otomatis di browser ini.
+            Progress tersimpan di server — lanjut dari perangkat mana pun.
           </div>
         </div>
       </div>
