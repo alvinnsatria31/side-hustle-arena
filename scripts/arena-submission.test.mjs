@@ -80,6 +80,40 @@ test("SSRF URL policy rejects non-HTTPS, credentials, private IPv4, IPv6, and me
   assert.deepEqual(safe.addresses, ["93.184.216.34"]);
 });
 
+test("SSRF IPv6 policy blocks transition mechanisms smuggling private IPv4", async () => {
+  const blocked = [
+    "::ffff:7f00:1", // hex-form mapped loopback (old regex only caught dotted form)
+    "2002:0a00:0001::", // 6to4 embedding 10.0.0.1
+    "2001:0:4136:e378:8000:63bf:80ff:fffe", // Teredo embedding 127.0.0.1
+    "64:ff9b::0a00:0001", // NAT64 embedding 10.0.0.1
+    "64:ff9b::a9fe:a9fe", // NAT64 embedding 169.254.169.254
+    "fe80::1%eth0", // zone ID rejected explicitly
+    "2001:10::1", // ORCHID experimental range
+  ];
+  for (const address of blocked) {
+    await assert.rejects(
+      () => access.assertSafeExternalUrl("https://example.com", { resolve: async () => [address] }),
+      /blocked/i,
+      `must block ${address}`,
+    );
+  }
+  // Public embedded addresses stay reachable.
+  const mapped = await access.assertSafeExternalUrl("https://example.com", { resolve: async () => ["::ffff:8.8.8.8"] });
+  assert.deepEqual(mapped.addresses, ["::ffff:8.8.8.8"]);
+  const nat64 = await access.assertSafeExternalUrl("https://example.com", { resolve: async () => ["64:ff9b::0808:0808"] });
+  assert.deepEqual(nat64.addresses, ["64:ff9b::0808:0808"]);
+});
+
+test("SSRF policy blocks non-canonical IPv4 literals via fail-closed fallthrough", async () => {
+  for (const address of ["0x7f.0.0.1", "2130706433", "0177.0.0.1"]) {
+    await assert.rejects(
+      () => access.assertSafeExternalUrl("https://example.com", { resolve: async () => [address] }),
+      /blocked/i,
+      `must block ${address}`,
+    );
+  }
+});
+
 test("external URL checks pin safe DNS addresses and revalidate every redirect", async () => {
   const redirects = [];
   const result = await access.checkExternalUrlAccess("https://example.test/start", {

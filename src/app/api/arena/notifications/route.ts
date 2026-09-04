@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { getCurrentUser } from "@/server/auth";
+import { hasAllowedMutationOrigin } from "@/server/auth/origin";
 import { arenaData, arenaError, arenaUnauthorized } from "@/server/arena";
+import { arenaForbidden } from "@/server/arena/http";
 import { getUnreadCount, listUserNotifications } from "@/server/notifications/service";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +33,7 @@ const readSchema = z.object({
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return arenaUnauthorized();
+  if (!hasAllowedMutationOrigin(request)) return arenaForbidden();
   try {
     const { markAllNotificationsRead, markNotificationsRead } = await import("@/server/notifications/service");
     const parsed = readSchema.safeParse(await request.json().catch(() => null));

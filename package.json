@@ -21,6 +21,7 @@
     "test:e2e:flow": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/e2e-arena-flow.test.mjs",
     "test:e2e:reviews": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/e2e-reviews.test.mjs",
     "test:e2e:storage": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/e2e-storage-live.test.mjs",
+    "test:phase4s:attack": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/phase4s-attack.test.mjs",
     "test:arena:core": "node --test scripts/arena-core-api.test.mjs scripts/arena-core-seed.test.mjs scripts/arena-core-live.test.mjs",
     "test:arena:submissions": "node --test scripts/arena-submission.test.mjs scripts/arena-submission-schema.test.mjs",
     "test:sso:local": "node --test scripts/db-sso-integration.test.mjs",

@@ -164,6 +164,7 @@ export async function createArenaUploadIntent({ userId, enrollmentId, input, now
 }
 
 export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now = new Date() }: { userId: string; enrollmentId: string; intentId: string; now?: Date }) {
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
@@ -200,6 +201,7 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
 }
 
 export async function deleteArenaSubmissionItem({ userId, enrollmentId, itemId, now = new Date() }: { userId: string; enrollmentId: string; itemId: string; now?: Date }) {
+  await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
@@ -260,10 +262,22 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
   assertBeforeDeadline(context.week.submissionDeadlineAt, now);
   const result = await db.transaction(async (tx) => {
     const submission = await ensureSubmission(tx, context);
+    // Serialize concurrent submits for one submission: without this lock, two
+    // transactions can read the same MAX(version_number) and the loser aborts
+    // on the unique backstop with a raw 500. Row lock, never a new constraint.
+    await tx.select({ id: submissions.id }).from(submissions).where(eq(submissions.id, submission.id)).for("update");
     await tx.update(submissions).set({ updatedAt: now }).where(eq(submissions.id, submission.id));
     const items = await getDraftItems(tx, submission.id);
     const requirements = await tx.select().from(projectSubmissionRequirements).where(eq(projectSubmissionRequirements.projectId, context.enrollment.projectId));
     validateRequirements(requirements, items);
+    // Global caps are re-checked here (not only at add-time): requirement
+    // maxItems may have been raised after items were added.
+    if (items.filter((item) => item.itemType === "FILE").length > MAX_FILES) {
+      throw new ArenaDomainError("FILE_LIMIT_EXCEEDED", "The file limit for this submission has been reached.");
+    }
+    if (items.filter((item) => item.itemType === "LINK").length > MAX_LINKS) {
+      throw new ArenaDomainError("LINK_LIMIT_EXCEEDED", "The link limit for this submission has been reached.");
+    }
     if (!await draftItemsAccessible(items)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
 
     const allocation = (await tx.update(submissions).set({ reviewAttemptsUsed: sql`${submissions.reviewAttemptsUsed} + 1`, updatedAt: now })

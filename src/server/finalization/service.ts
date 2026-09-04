@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import {
   enrollments,
@@ -54,10 +54,16 @@ export async function closeWeekForFinalization(input: {
   if (!input.force && now < week.submissionDeadlineAt) {
     throw new ArenaDomainError("WEEK_NOT_READY", "The submission deadline has not passed yet.");
   }
-  await db
+  // Guarded write: a concurrent finalize/admin action that moved the week to
+  // FINALIZING/FINALIZED/ARCHIVED after our pre-check must not be regressed.
+  const closed = await db
     .update(weeks)
     .set({ status: "FINALIZING", closedAt: week.closedAt ?? now, updatedAt: now })
-    .where(eq(weeks.id, week.id));
+    .where(and(eq(weeks.id, week.id), not(inArray(weeks.status, ["FINALIZING", "FINALIZED", "ARCHIVED"]))))
+    .returning({ id: weeks.id });
+  if (!closed[0]) {
+    throw new ArenaDomainError("WEEK_CLOSED", "Week moved to a closed state concurrently.");
+  }
   await writeAudit(db, {
     actorType: "ADMIN",
     actorSubject: input.actorSubject,
