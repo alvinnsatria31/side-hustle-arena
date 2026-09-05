@@ -1,14 +1,83 @@
-# Side Hustle Arena - Backend Implementation Status
+# Side Hustle Arena — Backend Implementation Status
 
-> **Current Phase:** Phase 9a - Public frontend wiring (live reads, visuals frozen).
+> **Diperiksa:** 5 September 2026 · **HEAD:** `8c938d7` · 24 commit di `main`
 >
-> **Status:** COMPLETE — `/arena`, `/arena/projects`, `/arena/projects/[slug]` read live Neon data via `src/lib/arena-view.ts`; mock-only numbers (per-project points, participant counters) removed, not faked; typecheck + lint + build green; HTTP-verified on production build. `/app/*` stays mocked until 9b; unknown-slug status-code fidelity tracked for hardening.
+> **Fase berjalan:** Phase 9c — alur peserta tuntas di browser; menyambungkan reviewer AI sungguhan adalah pekerjaan berikutnya.
 >
-> **Tencent COS live (verified):** rotated CAM key + bucket policy fixed by owner — `npm run test:e2e:storage` is green (presign PUT → upload → HEAD → presigned GET → byte check → delete → gone). Bucket private (`ap-jakarta`), anonymous GET denied. Setup + cheat-sheet: `docs/backend/TENCENT_COS_SETUP.md`.
->
-> **Locked architecture:** Vercel (deploy) + Tencent Cloud COS (file bytes, S3-compatible, private bucket) + Neon PostgreSQL (all text/metadata/state). R2 names remain as transitional local fallback only; PRD §18 Alibaba OSS direction is superseded.
+> **Arsitektur terkunci:** Vercel (deploy) + Tencent Cloud COS (byte file, S3-compatible, bucket privat) + Neon PostgreSQL (seluruh teks/metadata/state). Nama R2 tersisa hanya sebagai fallback lokal transisional; arah PRD §18 (Alibaba OSS) sudah digantikan.
 
-> **E2E (2026-09-04):** service-level flow green on live dev DB (`test:e2e:flow`: week → projects → enroll → workspace → draft → link → kill-switch refuse → submit → immutable v1 → cleanup). Public HTTP green on dev :3001 (`week/current` OPEN + `canSelect`, `divisions`, `projects`, `projects/[slug]`, `rewards/catalog` active-SKU-only; `enrollments/current` → 401 anonymous). Storage live roundtrip green on Tencent COS `ap-jakarta` private bucket (presign PUT → upload → HEAD → presigned GET → bytes → delete; post-delete HEAD surfaces as SDK `NotFound`, accepted by the test). Harness: `scripts/node-test-hooks.mjs` (`test:e2e:*` only; old suites untouched).
+## Ringkasan: sudah dan belum
+
+### Sudah, dan terbukti
+
+- [x] **Alur peserta utuh di browser sungguhan** — 9 langkah hijau di `test:e2e:browser`: lihat project → enroll → workspace → tolak file terlarang → upload file nyata ke Tencent COS → tambah link → submit → unduh hasilnya. Ini pertama kalinya alur ini diuji lewat browser, bukan hanya lewat service.
+- [x] **Login memakai sesi peserta Sekolah Karir** (`sk_participant`, HS256, `SESSION_SECRET` bersama). Lihat [PARTICIPANT_SESSION.md](./PARTICIPANT_SESSION.md).
+- [x] **CORS bucket aktif** — preflight `PUT` dari browser dijawab `200` dengan `Access-Control-Allow-Origin`. Sebelumnya `403` tanpa header, yang membuat upload mustahil dari halaman manapun.
+- [x] **Berkas terunduh dengan nama aslinya** — nama dikirim lewat `Content-Disposition` dari object storage, karena browser mengabaikan atribut `download` untuk URL lintas-origin.
+- [x] **Penjadwal siklus mingguan** — close, finalisasi, flush email, bersih-bersih sesi (`vercel.json` + `/api/cron/[job]`, auth fail-closed).
+- [x] Fondasi frontend, database + migrasi, jembatan auth + hardening, Arena core (week/project/enrollment/workspace), submission (draft, versi immutable, jatah 3× review), penyimpanan privat COS, pertahanan IDOR/SSRF/race/deadline.
+
+### Sudah di backend, belum ada UI-nya
+
+- [ ] Pipeline review (validator, scorer, second judge) — lengkap dan teruji, **tetapi provider aktifnya masih `stub-dev-v1`**
+- [ ] Finalisasi, ranking, poin, void/reversal — bekerja penuh di service, belum punya permukaan admin
+- [ ] Notifikasi, rewards/milestone, admin ops, hook VPS — API tersedia dan teruji, belum tersambung ke halaman manapun
+
+### Belum dibangun
+
+- [ ] **Reviewer AI sungguhan** — provider, ekstraksi artefak, worker produksi. Prioritas nomor satu: alur peserta sudah utuh, jadi membuka Arena sekarang berarti peserta mengumpulkan kerja nyata dan menerima skor palsu.
+- [ ] **Generator project mingguan** — generator, validator, anti-duplikat, fallback library, auto-publish. Cron-nya sudah menunggu dan melapor setiap Senin bahwa generatornya belum ada.
+- [ ] UI leaderboard, inbox notifikasi, dan alur redeem reward
+- [ ] Dashboard admin dan model peran
+- [ ] Halaman yang masih memakai data palsu: homepage Arena privat, showcase publik, CV Scanner, Career Report, Jobs
+- [ ] Kontrak voucher ke situs utama (`MAIN_SITE_VOUCHER_TOKEN`)
+- [ ] Validasi isi file lewat magic bytes (saat ini masih berbasis MIME + ekstensi)
+- [ ] Pembersih upload intent dan objek yatim di bucket
+- [ ] Rate limiting auth terdistribusi, termasuk prefix cookie `__Host-`
+- [ ] CI/CD, monitoring, alert, backup/recovery
+
+### Menunggu tindakan di luar repo ini
+
+- [ ] Project Vercel + DNS `arena.sekolahkarir.id` (satu CNAME ke Vercel; VPS Biznet tidak perlu menanggung apa pun)
+- [ ] Database production, migrasi yang ditinjau, backup, dan seluruh secret production
+- [ ] `SESSION_SECRET` dan `COOKIE_DOMAIN` disamakan persis dengan situs utama — kalau meleset, setiap pengunjung terbaca belum login
+
+## Status test
+
+Seluruhnya dijalankan pada 5 September 2026 terhadap database development dan bucket COS yang sebenarnya.
+
+| Suite | Lolos | Catatan |
+|---|---|---|
+| `test:e2e:browser` | 9/9 | Alur Arena di browser sungguhan; 5 placeholder di-skip |
+| `test:arena:core` | 9/9 | |
+| `test:arena:submissions` | 10/10 | |
+| `test:phase4s:attack` | 7/7 | IDOR, deadline, race, immutability |
+| `test:e2e:upload` | 4/4 | |
+| `test:e2e:storage` | 2/2 | Roundtrip COS live |
+| `test:e2e:flow` | 1/1 | |
+| `test:e2e:reviews` | 1/1 | |
+| `test:e2e:finalize` | 1/1 | |
+| `test:auth:participant` | 5/5 | Verifikasi cookie, forgery, suspend |
+| `test:scheduler` | 3/3 | |
+| `test:reviews:pipeline` | 10/10 | |
+| `test:vps:automation` | 6/6 | |
+| `test:finalize:ranking` | 4/4 | |
+| `test:website:transfer` | 6/6 | |
+| `test:db:local` | 1/1 | |
+| `auth-security` | 7/7 | Dijalankan via `node --test`, belum punya npm script |
+| `test:sso:local` | 1/9 | **Dorman** — menguji jembatan SSO yang tidak lagi dipakai untuk login |
+
+`test:e2e:browser` dan QA manual tidak bisa berjalan bersamaan: aplikasi hanya mengenal satu week aktif, jadi fixture QA merebutnya. Suite akan berhenti dengan pesan yang menyebut penyebabnya.
+
+## Dua temuan yang mengubah rencana
+
+**Arena sudah hidup di `arena.sekolahkarir.id` sejak 9 Agustus 2026** — aplikasi terpisah di Cloudflare Workers dengan database D1 sendiri. Jadi ini penggantian, bukan peluncuran baru. `/arena` dan `/arena/enter` di `sekolah-karir-website` adalah etalase dan pintu masuknya (termasuk perbaikan cakupan cookie), **bukan sisa yang layak dihapus**.
+
+**Situs utama tidak punya endpoint SSO sama sekali** — tidak ada `/api/sso/`. Itulah sebabnya `SK_AUTH_ORIGIN` selalu menolak koneksi selama pengembangan: bukan servernya mati, melainkan loketnya memang belum pernah dibangun. Login karena itu memakai cookie bersama, sama seperti Arena yang sekarang berjalan. Jembatan SSO tetap disimpan sebagai jalur upgrade.
+
+---
+
+Bagian di bawah ini adalah catatan per fase, disimpan sebagai riwayat.
 
 > **Previous Phase:** Phase 4 - Arena Submission System + Private Object Storage.
 
