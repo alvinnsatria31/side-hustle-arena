@@ -25,6 +25,7 @@
     "test:e2e:browser": "playwright test",
     "test:scheduler": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/scheduler.test.mjs",
     "test:auth:participant": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/participant-auth.test.mjs",
+    "verify:eval": "node --import ./scripts/node-test-hooks.mjs scripts/verify-eval-payload.mjs",
     "test:phase4s:attack": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/phase4s-attack.test.mjs",
     "test:arena:core": "node --test scripts/arena-core-api.test.mjs scripts/arena-core-seed.test.mjs scripts/arena-core-live.test.mjs",
     "test:arena:submissions": "node --test scripts/arena-submission.test.mjs scripts/arena-submission-schema.test.mjs",
