@@ -83,8 +83,30 @@ export async function teardownFixture(sql: Sql) {
   }
 }
 
+
+/**
+ * Refuse to run beside another open week.
+ *
+ * The app resolves a single "current week", so a second OPEN row — the manual
+ * QA fixture is the usual culprit — silently steals it, and the suite then
+ * drives a workspace whose week is not the one it built. That surfaces as a
+ * step that will not advance, which looks nothing like its cause.
+ */
+async function assertNoCompetingOpenWeek(sql: Sql) {
+  const others = await sql`
+    select week_code from arena.weeks where status = 'OPEN' and week_code <> ${WEEK_CODE}`;
+  if (others.length === 0) return;
+  const names = others.map((row) => row.week_code).join(", ");
+  throw new Error(
+    `Another Arena week is OPEN (${names}), so the app would treat it as the current week ` +
+      `instead of the one this suite builds. Close or remove it first — if it is the manual QA ` +
+      `fixture, run: node scripts/qa-session.tmp.mjs teardown`,
+  );
+}
+
 export async function setupFixture(sql: Sql) {
   await teardownFixture(sql);
+  await assertNoCompetingOpenWeek(sql);
   const now = new Date();
 
   const [week] = await sql`

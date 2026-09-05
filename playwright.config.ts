@@ -12,8 +12,11 @@ export default defineConfig({
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  timeout: 90_000,
-  expect: { timeout: 15_000 },
+  // A Next dev server compiles each route on demand and ships an unminified
+  // bundle, so first paint of these pages is seconds, not milliseconds. These
+  // budgets are sized for that; against a production build they are never hit.
+  timeout: 240_000,
+  expect: { timeout: 30_000 },
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",

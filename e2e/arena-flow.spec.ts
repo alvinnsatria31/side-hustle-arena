@@ -53,43 +53,52 @@ async function clickIfPresent(locator: Locator) {
 }
 
 /**
- * Drive the workspace to its submit step. Written as a loop rather than a fixed
- * click sequence because the current step is persisted server-side, so a second
- * visit resumes wherever the previous test left off.
+ * Drive the workspace to its submit step.
+ *
+ * Each click waits for the button that only exists on the following step, which
+ * is what Playwright's auto-waiting is for — polling the "Step N" caption
+ * instead made the helper wait on text that may not have re-rendered yet.
+ *
+ * Steps are skipped when their button is absent: the current step is persisted
+ * server-side, so a later visit resumes wherever the previous one stopped.
  */
 async function reachSubmitStep(page: Page) {
   await page.goto(WORKSPACE);
-  const submitStep = page.getByText("Step 5 · Submit");
 
-  for (let guard = 0; guard < 8; guard += 1) {
-    if (await isVisible(submitStep)) break;
+  // The workspace fetches its project, enrolment, week and draft before it can
+  // render a step, so wait for whichever step it resumes on to actually be on
+  // screen. Without this the non-waiting isVisible checks below all read false
+  // against the loading state and every advance is skipped.
+  await page
+    .getByRole("button", {
+      name: /Saya Paham|Simpan Plan|Lanjut ke Review|Lanjut ke Submit|Submit Project/,
+    })
+    .first()
+    .waitFor({ timeout: 90_000 });
 
-    const toSubmit = page.getByRole("button", { name: "Lanjut ke Submit" });
-    if (await isVisible(toSubmit)) {
-      for (const label of MANDATORY_REVIEW_ITEMS) {
-        const box = page.getByRole("checkbox", { name: label }).first();
-        if ((await box.getAttribute("aria-checked")) === "false") await box.click();
-      }
-      await clickIfPresent(toSubmit);
-      continue;
-    }
+  const advances = [
+    { click: "Saya Paham, Mulai Rencanakan", reveals: "Simpan Plan & Mulai Kerja" },
+    { click: "Simpan Plan & Mulai Kerja", reveals: "Lanjut ke Review Checklist" },
+    { click: "Lanjut ke Review Checklist", reveals: "Lanjut ke Submit" },
+  ];
 
-    let advanced = false;
-    for (const name of [
-      "Saya Paham, Mulai Rencanakan",
-      "Simpan Plan & Mulai Kerja",
-      "Lanjut ke Review Checklist",
-    ]) {
-      const button = page.getByRole("button", { name });
-      if (await isVisible(button)) {
-        advanced = await clickIfPresent(button);
-        if (advanced) break;
-      }
-    }
-    if (!advanced) await page.waitForTimeout(500);
+  for (const advance of advances) {
+    const button = page.getByRole("button", { name: advance.click });
+    if (!(await isVisible(button))) continue;
+    await button.click();
+    await page.getByRole("button", { name: advance.reveals }).waitFor({ timeout: 90_000 });
   }
 
-  await expect(submitStep).toBeVisible();
+  const toSubmit = page.getByRole("button", { name: "Lanjut ke Submit" });
+  if (await isVisible(toSubmit)) {
+    for (const label of MANDATORY_REVIEW_ITEMS) {
+      const box = page.getByRole("checkbox", { name: label }).first();
+      if ((await box.getAttribute("aria-checked")) === "false") await box.click();
+    }
+    await toSubmit.click();
+  }
+
+  await expect(page.getByLabel("Pilih file deliverables")).toBeAttached({ timeout: 90_000 });
 }
 
 test.describe.serial("Arena end-to-end", () => {
@@ -111,7 +120,8 @@ test.describe.serial("Arena end-to-end", () => {
   test("enrolling from the project detail UI", async ({ page }) => {
     await page.goto(`/app/arena/projects/${PROJECT_SLUG}`);
     await page.getByRole("button", { name: "Pilih Project Ini" }).click();
-    await expect(page).toHaveURL(new RegExp(WORKSPACE), { timeout: 10_000 });
+    // Enrolling loads the workspace, which a dev server compiles on first visit.
+    await expect(page).toHaveURL(new RegExp(WORKSPACE), { timeout: 90_000 });
   });
 
   test("the workspace walks to the submit step with an empty deliverables list", async ({ page, db }) => {

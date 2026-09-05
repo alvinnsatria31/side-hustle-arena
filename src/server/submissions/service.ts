@@ -327,7 +327,7 @@ export async function getArenaSubmissionDownload({ userId, enrollmentId, itemId 
   const item = (await db.select().from(submissionDraftItems).where(and(eq(submissionDraftItems.id, itemId), eq(submissionDraftItems.submissionId, submission.id))))[0];
   if (!item?.storageKey) throw new ArenaDomainError("SUBMISSION_ITEM_NOT_FOUND", "Private file not found.");
   try {
-    return { url: await createPresignedDownload(item.storageKey), filename: item.originalFilename };
+    return { url: await createPresignedDownload(item.storageKey, item.originalFilename), filename: item.originalFilename };
   } catch (error) {
     return mapStorageError(error);
   }

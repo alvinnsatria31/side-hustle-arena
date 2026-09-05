@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
-import { connect, setupFixture } from "./fixture-db";
+import { connect, setupFixture, PROJECT_SLUG } from "./fixture-db";
 
 const AUTH_DIR = path.join(process.cwd(), "e2e", ".auth");
 const ARTIFACT_DIR = path.join(process.cwd(), "e2e", ".artifacts");
@@ -41,6 +41,32 @@ async function probeCorsReady(origin: string): Promise<boolean> {
     return allowed === "*" || allowed === origin;
   } catch {
     return false;
+  }
+}
+
+
+/**
+ * Compile the routes the suite drives before any test starts.
+ *
+ * A dev server builds each route on its first request, and those first builds
+ * routinely outrun a test's timeout — which surfaces as a click that seems to
+ * do nothing, on a different test each run. Paying that cost once here keeps
+ * the failures that remain about the product.
+ */
+async function warmRoutes(origin: string, token: string, slug: string) {
+  const paths = [
+    "/arena",
+    "/app/arena",
+    "/app/arena/projects",
+    `/app/arena/projects/${slug}`,
+    `/app/arena/workspace/${slug}`,
+    `/app/arena/submission/${slug}`,
+  ];
+  for (const path of paths) {
+    await fetch(`${origin}${path}`, {
+      headers: { cookie: `sk_participant=${token}` },
+      signal: AbortSignal.timeout(120_000),
+    }).catch(() => undefined);
   }
 }
 
@@ -87,6 +113,8 @@ export default async function globalSetup() {
       path.join(AUTH_DIR, "env.json"),
       JSON.stringify({ corsReady: await probeCorsReady(origin), origin }, null, 2),
     );
+
+    await warmRoutes(origin, token, PROJECT_SLUG);
   } finally {
     await sql.end({ timeout: 5 });
   }
