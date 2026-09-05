@@ -1,15 +1,16 @@
 // Database fixture for browser E2E. Uses raw SQL rather than the app's server
 // modules so the Playwright process never pulls in `server-only` code.
 //
-// PLACEHOLDER (needs a decision from the repo owner): the session below is
-// minted directly instead of going through the real SSO login, because the
-// canonical auth server on :3000 is a separate codebase that does not run on
-// this machine. Once canonical is reachable in CI, replace mintSession() with a
-// real login and delete the keep-alive helper. See e2e/README.md.
-import { createHash, randomBytes } from "node:crypto";
+// Sign-in is minted, not performed: the Arena verifies the Sekolah Karir
+// participant cookie but cannot issue one, and the main site is a separate
+// application. Signing this suite's own `sk_participant` with the shared
+// SESSION_SECRET produces exactly what a real login hands the browser, so
+// everything downstream of the cookie is the real path.
+import { SignJWT } from "jose";
 import postgres from "postgres";
 
-export const SUBJECT = "e2e-arena-user";
+export const PARTICIPANT_ID = "e2e-participant";
+export const AUTH_SUBJECT = `sk-participant:${PARTICIPANT_ID}`;
 export const WEEK_CODE = "E2E-ARENA";
 export const DIVISION_SLUG = "e2e-arena-div";
 export const PROJECT_SLUG = "e2e-arena-project";
@@ -26,8 +27,26 @@ export function connect() {
 
 type Sql = ReturnType<typeof connect>;
 
+/** The same token shape the main site signs, so the app verifies it unchanged. */
+export async function mintParticipantToken(): Promise<string> {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET is required: the app verifies the participant cookie with it.");
+  return new SignJWT({
+    sub: PARTICIPANT_ID,
+    email: "e2e@example.test",
+    username: "e2erunner",
+    firstName: "E2E",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("2h")
+    .sign(new TextEncoder().encode(secret));
+}
+
 export async function teardownFixture(sql: Sql) {
-  const [user] = await sql`select id from identity.users where auth_subject = ${SUBJECT}`;
+  // The app provisions this row itself on the first authenticated request, so
+  // teardown finds it by subject rather than by an id the fixture invented.
+  const [user] = await sql`select id from identity.users where auth_subject = ${AUTH_SUBJECT}`;
   if (user) {
     const enrollments = await sql`select id from arena.enrollments where user_id = ${user.id}`;
     for (const enrollment of enrollments) {
@@ -68,15 +87,6 @@ export async function setupFixture(sql: Sql) {
   await teardownFixture(sql);
   const now = new Date();
 
-  const [user] = await sql`
-    insert into identity.users (auth_subject, email_cache, display_name_cache)
-    values (${SUBJECT}, 'e2e@example.test', 'E2E Runner') returning id`;
-  const token = randomBytes(32).toString("base64url");
-  await sql`
-    insert into identity.sessions (user_id, token_hash, canonical_grant_id, expires_at, last_canonical_check_at)
-    values (${user.id}, ${createHash("sha256").update(token).digest("hex")}, ${`e2e-grant-${Date.now()}`},
-            ${new Date(now.getTime() + 24 * 3600_000)}, now())`;
-
   const [week] = await sql`
     insert into arena.weeks (week_code, title, status, opens_at, submission_deadline_at, timezone)
     values (${WEEK_CODE}, 'E2E Arena Week', 'OPEN', ${new Date(now.getTime() - 3600_000)},
@@ -98,12 +108,12 @@ export async function setupFixture(sql: Sql) {
     insert into arena.project_submission_requirements (project_id, label, type, required, min_items, max_items, instructions, sort_order)
     values (${project.id}, 'Work links', 'LINK', false, 0, 5, 'Add up to 5 links.', 1)`;
 
-  return { userId: user.id as string, token };
+  return { token: await mintParticipantToken() };
 }
 
 /** Reset the user back to "enrolled in nothing" without rebuilding the week. */
 export async function resetEnrollment(sql: Sql) {
-  const [user] = await sql`select id from identity.users where auth_subject = ${SUBJECT}`;
+  const [user] = await sql`select id from identity.users where auth_subject = ${AUTH_SUBJECT}`;
   if (!user) return;
   const enrollments = await sql`select id from arena.enrollments where user_id = ${user.id}`;
   for (const enrollment of enrollments) {
@@ -122,17 +132,6 @@ export async function resetEnrollment(sql: Sql) {
     await sql`delete from arena.workspace_progress where enrollment_id = ${enrollment.id}`;
     await sql`delete from arena.enrollments where id = ${enrollment.id}`;
   }
-}
-
-/**
- * PLACEHOLDER SUPPORT: with canonical :3000 offline, getCurrentUser revokes the
- * session the first time revalidation is due. Pushing the checkpoint forward
- * keeps a run alive. Delete this once real SSO login is wired into E2E.
- */
-export async function refreshSessionCheckpoint(sql: Sql) {
-  await sql`
-    update identity.sessions set last_canonical_check_at = now()
-    where user_id = (select id from identity.users where auth_subject = ${SUBJECT})`;
 }
 
 export async function getProjectId(sql: Sql) {

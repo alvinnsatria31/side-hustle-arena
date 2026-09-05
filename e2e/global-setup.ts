@@ -58,7 +58,7 @@ export default async function globalSetup() {
         {
           cookies: [
             {
-              name: "arena_session",
+              name: "sk_participant",
               value: token,
               domain: "localhost",
               path: "/",

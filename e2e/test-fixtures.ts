@@ -1,7 +1,7 @@
 import path from "node:path";
 import { test as base } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
-import { connect, refreshSessionCheckpoint, resetEnrollment } from "./fixture-db";
+import { connect, resetEnrollment } from "./fixture-db";
 
 loadEnvConfig(process.cwd());
 
@@ -12,8 +12,6 @@ type Fixtures = {
 
 type WorkerFixtures = {
   db: ReturnType<typeof connect>;
-  /** Keeps the minted session from being revoked mid-run. See fixture-db.ts. */
-  sessionKeepAlive: void;
   /** Puts the fixture user back to "enrolled in nothing" for each worker. */
   freshEnrollment: void;
 };
@@ -26,18 +24,6 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
       await sql.end({ timeout: 5 });
     },
     { scope: "worker" },
-  ],
-
-  sessionKeepAlive: [
-    async ({ db }, use) => {
-      await refreshSessionCheckpoint(db);
-      const timer = setInterval(() => {
-        void refreshSessionCheckpoint(db).catch(() => undefined);
-      }, 10_000);
-      await use();
-      clearInterval(timer);
-    },
-    { scope: "worker", auto: true },
   ],
 
   freshEnrollment: [

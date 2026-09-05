@@ -194,9 +194,10 @@ test.describe.serial("Arena end-to-end", () => {
  * missing coverage.
  */
 test.describe("Arena end-to-end: not yet coverable", () => {
-  // Needs the canonical auth server on :3000 (separate codebase, not running
-  // here). Until then globalSetup mints the session directly.
-  test.fixme("logging in through the real Sekolah Karir SSO", async () => {});
+  // Signing in happens on sekolah-karir-website, a separate application that is
+  // not running here. globalSetup signs the same sk_participant token the main
+  // site would issue, so everything downstream of the cookie is the real path.
+  test.fixme("signing in on the main site and arriving through /arena/enter", async () => {});
 
   // The review provider is still `stub-dev-v1`; no real model or Hermes worker
   // is wired up, so there is nothing honest to assert.

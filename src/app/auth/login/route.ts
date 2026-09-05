@@ -1,24 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateOpaqueToken } from "@/server/auth/crypto";
-import { setTemporaryCookie, ARENA_PKCE_COOKIE, ARENA_RETURN_COOKIE, ARENA_STATE_COOKIE } from "@/server/auth/cookies";
-import { getAuthConfig, getArenaCallbackUri } from "@/server/auth/config";
-import { toS256Challenge } from "@/server/auth/pkce";
-import { sanitizeInternalReturnPath } from "@/server/auth/return-path";
+import { getAuthConfig } from "@/server/auth/config";
 
-export async function GET(request: NextRequest) {
-  const state = generateOpaqueToken();
-  const verifier = generateOpaqueToken();
-  const returnTo = sanitizeInternalReturnPath(request.nextUrl.searchParams.get("returnTo"));
-  const config = getAuthConfig();
-  const authorizeUrl = new URL("/api/sso/arena/authorize", config.canonicalOrigin);
-  authorizeUrl.searchParams.set("client_id", config.clientId);
-  authorizeUrl.searchParams.set("redirect_uri", getArenaCallbackUri());
-  authorizeUrl.searchParams.set("state", state);
-  authorizeUrl.searchParams.set("code_challenge", toS256Challenge(verifier));
-  authorizeUrl.searchParams.set("code_challenge_method", "S256");
-  const response = NextResponse.redirect(authorizeUrl);
-  setTemporaryCookie(response, ARENA_STATE_COOKIE, state);
-  setTemporaryCookie(response, ARENA_PKCE_COOKIE, verifier);
-  setTemporaryCookie(response, ARENA_RETURN_COOKIE, returnTo);
-  return response;
+export const dynamic = "force-dynamic";
+
+/**
+ * Send an anonymous visitor to sign in.
+ *
+ * The Arena has no login of its own: it verifies the Sekolah Karir participant
+ * session and nothing more. So "log in" means "go to the main site's Arena
+ * gate", which raises the OTP modal and, once signed in, offers the door back
+ * here — the door that re-scopes the cookie to the registrable domain so this
+ * subdomain receives it.
+ *
+ * `returnTo` is not forwarded: the gate on the main site decides where a
+ * participant lands, and a redirect target this app accepts from a query string
+ * and hands to another origin is an open-redirect waiting to be found.
+ *
+ * The PKCE authorize flow this route used to build is kept in
+ * src/server/auth/{pkce,authorization,sso-client}.ts for the day the main site
+ * grows a token endpoint. See docs/backend/AUTH_INTEGRATION_CONTRACT.md.
+ */
+export async function GET(_request: NextRequest) {
+  const gate = new URL("/arena", getAuthConfig().canonicalOrigin);
+  return NextResponse.redirect(gate, 302);
 }

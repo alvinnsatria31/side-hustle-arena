@@ -40,12 +40,14 @@ Add a bucket CORS rule allowing:
 `globalSetup` re-probes the bucket on every run, so those two tests start
 running by themselves once the rule is live — no code change needed.
 
-**2. Real SSO login is not exercised.** The canonical auth server on `:3000` is
-a separate codebase that does not run on this machine, so the session is minted
-directly in `fixture-db.ts` and kept alive by pushing
-`last_canonical_check_at` forward (otherwise revalidation revokes it after
-`ARENA_SSO_INTROSPECTION_INTERVAL_SECONDS`). When canonical is reachable in CI,
-replace the mint with a real login and delete `refreshSessionCheckpoint`.
+**2. Signing in happens on the main site.** The Arena verifies the Sekolah Karir
+participant cookie but cannot issue one, and `sekolah-karir-website` is a
+separate application. `fixture-db.ts` therefore signs its own `sk_participant`
+with the shared `SESSION_SECRET` — the same token shape a real login hands the
+browser, so everything downstream of the cookie is the real path.
+
+`SESSION_SECRET` must be set for the suite to run: without it the app treats
+every request as signed out and the whole suite fails at the first page.
 
 ## Known product gap recorded by this suite
 

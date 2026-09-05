@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import nextEnv from "@next/env";
 import postgres from "postgres";
+import { SignJWT } from "jose";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
@@ -53,13 +54,19 @@ after(async () => {
   }
 });
 
-function sessionToken() {
-  return randomBytes(32).toString("base64url");
+async function participantToken(subject) {
+  const secret = process.env.SESSION_SECRET;
+  assert.ok(secret, "SESSION_SECRET must be configured: the app verifies the participant cookie with it");
+  return new SignJWT({ sub: subject, email: `${subject}@example.test`, username: subject, firstName: "Fixture" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(new TextEncoder().encode(secret));
 }
 
 async function api(path, token, init = {}) {
   const headers = new Headers(init.headers);
-  if (token) headers.set("cookie", `arena_session=${token}`);
+  if (token) headers.set("cookie", `sk_participant=${token}`);
   const response = await fetch(`${arenaOrigin}${path}`, { ...init, headers });
   const body = response.status === 204 ? null : response.headers.get("content-type")?.includes("application/json") ? await response.json() : await response.text();
   return { response, body };
@@ -75,16 +82,19 @@ async function createFixture() {
   const now = new Date();
   const openAt = new Date(now.getTime() - 60 * 60 * 1_000);
   const deadlineAt = new Date(now.getTime() + 60 * 60 * 1_000);
-  const tokens = { userA: sessionToken(), userB: sessionToken(), userC: sessionToken() };
+  // auth_subject has to be what the app derives from the token, so provisioning
+  // finds these fixture rows instead of creating new ones.
+  const subjects = { userA: `${run}-user-a`, userB: `${run}-user-b`, userC: `${run}-user-c` };
+  const tokens = {
+    userA: await participantToken(subjects.userA),
+    userB: await participantToken(subjects.userB),
+    userC: await participantToken(subjects.userC),
+  };
 
   await sql`insert into identity.users (id, auth_subject) values
-    (${ids.userA}, ${`${run}-user-a`}),
-    (${ids.userB}, ${`${run}-user-b`}),
-    (${ids.userC}, ${`${run}-user-c`})`;
-  for (const [name, token] of Object.entries(tokens)) {
-    await sql`insert into identity.sessions (user_id, token_hash, canonical_grant_id, expires_at, last_canonical_check_at)
-      values (${ids[name]}, ${createHash("sha256").update(token).digest("hex")}, ${`${run}-${name}-grant`}, ${new Date(now.getTime() + 60 * 60 * 1_000)}, ${now})`;
-  }
+    (${ids.userA}, ${`sk-participant:${subjects.userA}`}),
+    (${ids.userB}, ${`sk-participant:${subjects.userB}`}),
+    (${ids.userC}, ${`sk-participant:${subjects.userC}`})`;
   await sql`insert into arena.divisions (id, slug, name, sort_order) values
     (${ids.divisionData}, ${`${run}-data`}, 'Data', 1),
     (${ids.divisionDesign}, ${`${run}-design`}, 'Design', 2),
