@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "@/server/db/client";
 import { sessions, users } from "@/server/db/schema";
@@ -8,7 +8,7 @@ import { hashOpaqueToken, generateOpaqueToken } from "./crypto";
 import { getAuthConfig } from "./config";
 import { getArenaSessionExpiry } from "./expiry";
 import { introspectArenaGrant } from "./sso-client";
-import { ARENA_SESSION_RETENTION_MS } from "./retention";
+
 
 export type ArenaUser = { id: string; authSubject: string; email: string | null; displayName: string | null; avatarUrl: string | null };
 
@@ -55,12 +55,5 @@ export async function revokeArenaSessionByToken(token: string): Promise<void> {
   await getDb().update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.tokenHash, hashOpaqueToken(token)));
 }
 
-/** Explicit maintenance operation for a future trusted scheduler; never invoked by auth requests. */
-export async function cleanupExpiredArenaSessions(now = new Date()) {
-  const cutoff = new Date(now.getTime() - ARENA_SESSION_RETENTION_MS);
-  const deleted = await getDb().delete(sessions).where(or(
-    lt(sessions.expiresAt, cutoff),
-    and(isNotNull(sessions.revokedAt), lt(sessions.revokedAt, cutoff)),
-  )).returning({ id: sessions.id });
-  return deleted.length;
-}
+// cleanupExpiredArenaSessions moved to ./session-retention so the scheduler and
+// offline tests can run it without pulling in next/headers.

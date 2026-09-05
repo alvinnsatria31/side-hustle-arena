@@ -23,6 +23,7 @@
     "test:e2e:storage": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/e2e-storage-live.test.mjs",
     "test:e2e:upload": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/phase9b-upload.test.mjs",
     "test:e2e:browser": "playwright test",
+    "test:scheduler": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/scheduler.test.mjs",
     "test:phase4s:attack": "node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/phase4s-attack.test.mjs",
     "test:arena:core": "node --test scripts/arena-core-api.test.mjs scripts/arena-core-seed.test.mjs scripts/arena-core-live.test.mjs",
     "test:arena:submissions": "node --test scripts/arena-submission.test.mjs scripts/arena-submission-schema.test.mjs",
