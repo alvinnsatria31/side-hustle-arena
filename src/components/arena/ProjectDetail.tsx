@@ -52,10 +52,10 @@ export function CtaActions({ slug }: { slug: string }) {
 
   const choose = async () => {
     if (!hydrated || choosing) return;
-    if (!state.user) {
-      setLoginOpen(true);
-      return;
-    }
+    // Sign-in is decided by the server, never by the localStorage demo store:
+    // that store has no real user, so gating here showed the login modal to
+    // people who were already authenticated. An anonymous visitor on the public
+    // detail page still gets the modal — from the 401 handled below.
     if (enrolledHere && enrollment && enrollment.status !== 'completed') {
       if (enrollment.status === 'active') {
         router.push(`/app/arena/workspace/${slug}`);
@@ -99,13 +99,13 @@ export function CtaActions({ slug }: { slug: string }) {
 
   const primaryLabel = enrolledHere
     ? enrollment?.status === 'active'
-      ? 'Lanjutkan Project →'
+      ? 'Lanjutkan Project'
       : enrollment?.status === 'review_ready'
-        ? 'Lihat Feedback →'
+        ? 'Lihat Feedback'
         : enrollment?.status === 'completed'
-          ? 'Ambil Lagi →'
-          : 'Lihat Submission →'
-    : 'Pilih Project Ini →';
+          ? 'Ambil Lagi'
+          : 'Lihat Submission'
+    : 'Pilih Project Ini';
 
   return (
     <>

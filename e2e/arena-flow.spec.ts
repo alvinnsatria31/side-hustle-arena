@@ -104,14 +104,11 @@ test.describe.serial("Arena end-to-end", () => {
     await expect(page.getByRole("button", { name: "Pilih Project Ini" })).toBeVisible();
   });
 
-  // KNOWN GAP, not a flake. ProjectDetail gates enrolment on `state.user` from
-  // the localStorage demo store (useDemo), which never learns about the real
-  // session cookie, so a genuinely signed-in user gets the login modal instead
-  // of an enrolment. ArenaSessionProvider exists for exactly this migration but
-  // ProjectDetail has not moved onto it yet. Once it does, Playwright reports
-  // "passed unexpectedly" here — delete the test.fail() line then.
+  // Regression guard: enrolment used to be gated on `state.user` from the
+  // localStorage demo store, which never learns about the real session cookie,
+  // so a signed-in user got the login modal instead of an enrolment. The server
+  // decides now — an anonymous visitor still gets the modal, from the 401.
   test("enrolling from the project detail UI", async ({ page }) => {
-    test.fail();
     await page.goto(`/app/arena/projects/${PROJECT_SLUG}`);
     await page.getByRole("button", { name: "Pilih Project Ini" }).click();
     await expect(page).toHaveURL(new RegExp(WORKSPACE), { timeout: 10_000 });
