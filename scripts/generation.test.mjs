@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validatePackage, chooseCandidate, fingerprint, isDuplicate, publicationBlock, weeklyWindow } from "../src/server/generation/core.ts";
+import { validatePackage, chooseCandidate, fingerprint, isDuplicate, publicationBlock, weeklyWindow, generationConfig } from "../src/server/generation/core.ts";
 
 const divisionId = "11111111-1111-4111-8111-111111111111";
 const skillId = "22222222-2222-4222-8222-222222222222";
@@ -100,4 +100,18 @@ test("Jakarta weekly schedule is stable across the Sunday/Monday UTC boundary", 
   assert.equal(sunday.previewAt.toISOString(), "2026-09-06T02:00:00.000Z");
   assert.equal(sunday.submissionDeadlineAt.toISOString(), "2026-09-11T16:59:59.999Z");
   assert.equal(weeklyWindow(new Date("2026-09-06T18:00:00Z")).weekCode, sunday.weekCode);
+});
+
+test("generationConfig treats a blank env value as unset, not zero", () => {
+  // .env.example ships these keys blank; copying it forward must not crash
+  // every generation with Number("") === 0 out of range. Regression for a bug
+  // found running the off-schedule release end to end against the sandbox.
+  const blank = generationConfig({ ARENA_GENERATION_WINDOW_WEEKS: "", ARENA_GENERATION_SIMILARITY_THRESHOLD: "  ", ARENA_GENERATION_PREVIEW_HOURS: "" });
+  assert.equal(blank.windowWeeks, 12);
+  assert.equal(blank.threshold, 0.8);
+  assert.equal(blank.previewHours, 6);
+
+  // A real out-of-range value is still rejected — only blank means "unset".
+  assert.throws(() => generationConfig({ ARENA_GENERATION_WINDOW_WEEKS: "3" }), /Invalid ARENA_GENERATION_WINDOW_WEEKS/);
+  assert.equal(generationConfig({ ARENA_GENERATION_WINDOW_WEEKS: "10" }).windowWeeks, 10);
 });

@@ -173,7 +173,11 @@ export function weeklyWindow(now: Date) {
 
 export function generationConfig(env: NodeJS.ProcessEnv = process.env) {
   const number = (key: string, fallback: number, min: number, max: number) => {
-    const value = env[key] === undefined ? fallback : Number(env[key]);
+    // An empty or whitespace-only value means "unset", not zero. `.env.example`
+    // ships these keys blank, so copying it forward must fall back to the
+    // default rather than fail every generation with Number("") === 0.
+    const raw = env[key];
+    const value = raw === undefined || raw.trim() === "" ? fallback : Number(raw);
     if (!Number.isFinite(value) || value < min || value > max) throw new ArenaDomainError("VALIDATION_ERROR", `Invalid ${key} configuration.`);
     return value;
   };
