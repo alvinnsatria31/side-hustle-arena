@@ -1,0 +1,37 @@
+RANGGA WIJAYA
+Data Analyst (Junior)
+Bandung, Indonesia  |  rangga.wijaya.data@gmail.com  |  +62 812-3456-7890
+LinkedIn: linkedin.com/in/ranggawijaya  |  Portofolio: ranggawijaya.github.io
+
+RINGKASAN
+Lulusan Statistika yang fokus pada analisis data produk dan pelaporan bisnis.
+Terbiasa bekerja dengan SQL dan Python untuk membersihkan serta memodelkan data,
+dan membangun dashboard yang dipakai tim non-teknis untuk mengambil keputusan.
+
+PENGALAMAN
+Data Analyst Intern - PT Niaga Digital Nusantara
+Januari 2024 - Sekarang
+- Membangun pipeline pembersihan data transaksi harian memakai Python dan SQL,
+  menurunkan waktu penyusunan laporan mingguan dari 6 jam menjadi 1 jam (-83%).
+- Membuat dashboard penjualan untuk tim marketing dan operasional.
+- Menyiapkan analisis kohort retensi yang dipakai pada rapat bulanan manajemen.
+
+Asisten Riset - Laboratorium Statistika Terapan, Universitas Padjadjaran
+2022 - 2023
+- Mengolah data survei 1.200 responden dengan R dan SPSS.
+- Menulis dokumentasi metodologi untuk tiga proyek dosen.
+
+PENDIDIKAN
+S1 Statistika - Universitas Padjadjaran
+2020 - 2024  |  IPK 3.42 / 4.00
+Skripsi: prediksi churn pelanggan e-commerce dengan gradient boosting.
+
+KEAHLIAN
+SQL, Python (pandas, scikit-learn), R, Microsoft Excel, Tableau, Power BI, Git
+
+SERTIFIKASI
+Google Data Analytics Professional Certificate - 2023
+Kredensial: coursera.org/verify/XXXXXXX
+
+ORGANISASI
+Anggota Himpunan Mahasiswa Statistika - Divisi Riset dan Keilmuan (2021 - 2022)

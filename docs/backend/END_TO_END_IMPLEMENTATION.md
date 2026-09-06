@@ -299,3 +299,42 @@ has. The public Arena landing page also stopped throwing when no week exists
 (`getPublicArenaHome` returns null for `WEEK_NOT_FOUND` only, so a database
 outage still surfaces as an error), which is what made `/arena` return 500 on the
 first production deployment.
+
+### CV Scanner: What The Live Run Changed
+
+The unit tests passed against a fake transport, so the chain was exercised for
+real before claiming it worked. Three findings came out of that, none of which
+the offline tests could have produced.
+
+**The prompt did not pin the object shape.** Named only in prose, the model
+returned `qualityChecks` entries shaped `{finding, impact, suggestion}` instead
+of `{label, pass, note}`, and every reply was rejected by the schema. The fix is
+a literal JSON template in the instruction plus "use exactly these names; do not
+add, rename or nest fields". Naming keys in a sentence is not a contract.
+
+**Latency is the real constraint, and it varies.** Three measured runs: 30s, 86s
+and 48s for the same kind of document. Capping the reply (4 strengths, 4
+improvements, 6 skills, 4 checks each, 2 rewrites, 220 characters per sentence)
+took a representative run from 86s to 48s, and the request timeout moved from
+90s to 110s. **This is unresolved on the Hobby plan**, which caps serverless
+function duration well below the slow end of that range — the route declares
+`maxDuration = 120`, which Hobby will not honour. A slow scan will be killed by
+the platform, not by our timeout. Either the plan changes, the model gets
+faster, or the scan moves off the request path. Verify against the deployed
+function before the flag is turned on.
+
+**Quality is good enough to ship behind the flag.** Against a deliberately weak
+sample CV the analysis scored 56/100 with Impact and Career Evidence flagged
+weak, quoted a real detail from the document ("IPK 3.42"), caught an ambiguity
+in the date range, correctly observed that a listed skill never appears in the
+experience section, and rewrote an achievement line using only facts already
+present. No invented employers or numbers — the prompt's no-invention rule held.
+
+PDF extraction is now proven on a text-bearing document. It was not, when the
+only fixture was `qa-files/deliverable.pdf` — a structurally valid but empty
+page, whose refusal demonstrated the guard rather than the extraction.
+`scripts/cv-fixtures.mjs` now builds `cv-sample.pdf` and `cv-sample.docx`,
+carrying the same deliberately flawed CV, and `npm run test:cv:scan` asserts
+that both extract to the same text and that the result is long enough to reach
+the analyzer. The contentless fixture is kept as the negative case. The
+extractor itself is the one the Arena reviewer already uses.

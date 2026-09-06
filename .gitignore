@@ -31,5 +31,12 @@ next-env.d.ts
 # Generated: code-graph tool output (AST/semantic caches, reports)
 /graphify-out/
 
-# Manual-QA fixtures, including a 21 MB oversize-upload sample
-/qa-files/
+# Manual-QA scratch: ignore the contents, keep the small committed fixtures the
+# CV Scanner tests read. A directory that is itself excluded cannot be
+# re-included from within, hence `/qa-files/*` rather than `/qa-files/`.
+# Deliberately still out: kegedean.pdf, a 21 MB oversize-upload sample.
+/qa-files/*
+!/qa-files/cv-sample.pdf
+!/qa-files/cv-sample.docx
+!/qa-files/cv-sample.txt
+!/qa-files/deliverable.pdf
