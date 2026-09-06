@@ -9,6 +9,8 @@ import { scheduledWeekNotices } from "@/server/notifications/schedule";
 import { cleanupExpiredArenaSessions } from "@/server/auth/session-retention";
 import { cleanupExpiredUploads } from "@/server/storage/cleanup";
 import { generateWeek, prepareScheduledWeek, publishWeek } from "@/server/generation/service";
+import { createReviewProvider } from "@/server/reviews/model-router";
+import { runConfiguredReviewJob } from "@/server/reviews/worker";
 import { generationConfig } from "@/server/generation/core";
 import { createGenerationProvider } from "@/server/generation/ai-provider";
 
@@ -169,6 +171,79 @@ export async function runStorageCleanup(): Promise<JobResult> {
   return { job: "storage-cleanup", done: true, detail: { ...totals } };
 }
 
+/**
+ * One drain tick is deliberately SMALL.
+ *
+ * A serverless invocation has a hard ceiling (60s on the free plan), and a tick
+ * that overruns it is killed mid-review — leaving jobs leased to a worker that
+ * no longer exists and waiting out the lease before anyone can retry them. So a
+ * tick takes a few jobs, stops well inside the ceiling, and lets the next
+ * trigger continue. Frequent small ticks, not one long drain.
+ */
+const REVIEW_DRAIN_MAX_JOBS = Number(process.env.ARENA_REVIEW_DRAIN_MAX_JOBS ?? 3);
+const REVIEW_DRAIN_BUDGET_MS = Number(process.env.ARENA_REVIEW_DRAIN_BUDGET_MS ?? 45_000);
+
+const reviewJobs = {
+  provider: () => createReviewProvider("review"),
+  runOne: runConfiguredReviewJob,
+  maxJobs: REVIEW_DRAIN_MAX_JOBS,
+  budgetMs: REVIEW_DRAIN_BUDGET_MS,
+  clock: () => Date.now(),
+};
+
+/**
+ * Review whatever is queued, using the configured AI provider (PRD §20, §43).
+ *
+ * This is the link that makes the pipeline run itself: without it a submission
+ * reaches QUEUED and stops there until a human poked `/api/internal/reviews/run`
+ * once per job. The scoring still happens inside Arena — the trigger only says
+ * "now", it never carries a score.
+ *
+ * Unconfigured AI is reported as skipped, not as a failure: an environment
+ * without model credentials should stay quiet rather than alarm every tick.
+ * A provider that fails mid-batch stops the tick — `runConfiguredReviewJob` has
+ * already handed that job back for retry, and hammering a broken provider would
+ * just burn the automation attempts of every other job behind it.
+ */
+export async function runReviewsRun(_now = new Date(), deps = reviewJobs): Promise<JobResult> {
+  const job = "reviews-run";
+  try {
+    deps.provider();
+  } catch (error) {
+    return { job, done: false, detail: { skipped: "AI review provider is not configured", reason: (error as Error).message } };
+  }
+
+  const deadline = deps.clock() + deps.budgetMs;
+  const reviewed: Array<Record<string, unknown>> = [];
+  let stopped: string | undefined;
+  let failure: string | undefined;
+
+  for (let attempt = 0; attempt < deps.maxJobs; attempt += 1) {
+    if (deps.clock() >= deadline) {
+      stopped = "time budget reached; the next tick continues";
+      break;
+    }
+    let completed: Awaited<ReturnType<typeof runConfiguredReviewJob>>;
+    try {
+      completed = await deps.runOne();
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+      break;
+    }
+    if (!completed) {
+      stopped = "queue empty";
+      break;
+    }
+    reviewed.push({ versionId: completed.versionId, status: completed.status, aiScore: completed.aiScore, secondJudge: completed.secondJudge.ran });
+  }
+
+  return {
+    job,
+    done: failure === undefined,
+    detail: { reviewed: reviewed.length, results: reviewed, ...(stopped ? { stopped } : {}), ...(failure ? { failed: failure } : {}) },
+  };
+}
+
 export const JOBS = {
   "week-close": runWeekClose,
   "week-finalize": runWeekFinalize,
@@ -178,6 +253,7 @@ export const JOBS = {
   "storage-cleanup": runStorageCleanup,
   "project-drop": runProjectDrop,
   "project-generate": runProjectGenerate,
+  "reviews-run": runReviewsRun,
 } satisfies Record<string, (now?: Date) => Promise<JobResult>>;
 
 export type JobName = keyof typeof JOBS;

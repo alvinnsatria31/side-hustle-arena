@@ -196,3 +196,67 @@ test("maintenance jobs report counts and disabled generation stays visible", asy
     else process.env.ARENA_GENERATION_ENABLED = saved;
   }
 });
+
+test("reviews-run drains the queue in small ticks and never lets a broken provider run wild", async () => {
+  const base = {
+    provider: () => ({ name: "test-provider" }),
+    maxJobs: 3,
+    budgetMs: 45_000,
+    clock: () => 0,
+  };
+  const completed = (n) => ({ versionId: `v${n}`, status: "COMPLETED_HIDDEN", aiScore: 80, secondJudge: { ran: false } });
+
+  // Unconfigured AI is quiet, not alarming — and must not touch the queue.
+  let touched = 0;
+  const unconfigured = await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    provider: () => { throw new Error("AI review provider is not configured."); },
+    runOne: async () => { touched += 1; return completed(1); },
+  });
+  assert.equal(unconfigured.done, false);
+  assert.match(unconfigured.detail.skipped, /not configured/);
+  assert.equal(touched, 0, "an unconfigured tick must not claim a job");
+
+  // An empty queue is a successful tick with nothing to show for it.
+  const empty = await scheduler.runReviewsRun(new Date(), { ...base, runOne: async () => null });
+  assert.equal(empty.done, true);
+  assert.equal(empty.detail.reviewed, 0);
+  assert.equal(empty.detail.stopped, "queue empty");
+
+  // A tick takes at most maxJobs, leaving the rest for the next trigger.
+  let runs = 0;
+  const batch = await scheduler.runReviewsRun(new Date(), { ...base, runOne: async () => completed(++runs) });
+  assert.equal(batch.done, true);
+  assert.equal(batch.detail.reviewed, 3);
+  assert.equal(runs, 3, "the tick must stop at its job ceiling, not drain forever");
+
+  // The wall-clock budget stops it even when jobs remain, because an overrun
+  // invocation is killed mid-review and leaves jobs leased to a dead worker.
+  let ticks = 0;
+  let calls = 0;
+  const timed = await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    maxJobs: 10,
+    budgetMs: 100,
+    clock: () => (ticks++ === 0 ? 0 : 1000),
+    runOne: async () => { calls += 1; return completed(calls); },
+  });
+  assert.equal(timed.done, true);
+  assert.match(timed.detail.stopped, /time budget/);
+  assert.ok(calls <= 1, "the budget must cut the batch short");
+
+  // A failing provider stops the tick: the job it broke is already handed back
+  // for retry, and continuing would burn every queued job's attempts too.
+  let attempts = 0;
+  const broken = await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    runOne: async () => { attempts += 1; throw new Error("REVIEW_PROVIDER_FAILED"); },
+  });
+  assert.equal(broken.done, false);
+  assert.match(broken.detail.failed, /REVIEW_PROVIDER_FAILED/);
+  assert.equal(attempts, 1, "a broken provider must be tried once per tick, not once per job");
+});
+
+test("reviews-run is a registered scheduled job", () => {
+  assert.equal(typeof scheduler.JOBS["reviews-run"], "function");
+});

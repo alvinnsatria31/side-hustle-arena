@@ -54,6 +54,17 @@ const config = [
     },
   },
   {
+    // `src/server/**` is `import "server-only"` Node code — no React reaches it.
+    // The hooks rule matches on NAME alone, so a plain server helper called
+    // `useLocalStoragePathStyle` is reported as a hook used outside a component.
+    // Same reasoning as the scripts/e2e block above: scope the React rules to
+    // React code rather than rename server functions to appease a matcher.
+    files: ['src/server/**'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
+  {
     // `set-state-in-effect` ships enabled in the React Compiler-era hooks
     // plugin and flags eight pre-existing sites here (hydration gates, external
     // store syncs, route-change resets). They are real and worth fixing, but

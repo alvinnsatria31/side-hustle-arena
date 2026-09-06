@@ -32,6 +32,90 @@ The implementation is ready for the following owner-operated gates; no credentia
 3. In a fresh incognito browser, log in on the main site, then open Arena through `/arena/enter`. Verify the participant identity, enrollment/workspace access, and a protected Arena API request without a second login.
 4. Sign out from Arena. Confirm the main site and a newly opened Arena page now both require sign-in. Repeat on a second browser/device. A host-only or `__Host-` main-site cookie is a stop condition: keep it host-only and implement the documented authorization-code/PKCE bridge rather than widening the cookie domain.
 
+## Completed 2026-09-07 (Arena lane): AI Runs The Cycle, n8n Only Triggers It
+
+Owner decision this session: **n8n is a trigger, nothing more.** Arena does the work —
+generates and publishes the weekly project, reviews submissions with its own configured
+model, computes the score, closes and finalizes. No payload from n8n ever carries a score.
+
+### The link that was missing
+
+`JOBS` had no review job. A submission reached `QUEUED` and stopped there unless somebody
+POSTed `/api/internal/reviews/run` once per job, by hand. Nothing drained the queue on a
+schedule, so "AI end to end" could not happen no matter what triggered it.
+
+`runReviewsRun` (`reviews-run`) closes that. It is deliberately a **small tick**: a few
+jobs, and a wall-clock budget well inside the serverless ceiling (60s on the free plan).
+An overrunning invocation is killed mid-review and leaves jobs leased to a worker that no
+longer exists, which then have to wait out the lease before anyone can retry them. Frequent
+small ticks beat one long drain. Both bounds are env-tunable
+(`ARENA_REVIEW_DRAIN_MAX_JOBS`, `ARENA_REVIEW_DRAIN_BUDGET_MS`).
+
+Unconfigured AI reports `skipped`, not failure — an environment without model credentials
+should stay quiet. A provider that fails mid-batch stops the tick: that job is already
+handed back for retry, and continuing would burn every queued job's attempts behind it.
+
+`n8n/arena-trigger-workflow.json` is the trigger-only workflow: seven schedule triggers →
+one router → one authenticated GET to `/api/cron/{job}`. Verified programmatically that the
+nine job names it references are exactly the nine in Arena's `JOBS` map. The cron guard
+already accepted `INTERNAL_AUTOMATION_TOKEN` for VPS automation, so no new credential class
+was invented.
+
+### The first real model call, and what it found
+
+Everything before this ran against the stub. Triggering the real cycle end to end —
+published project → participant submits → `GET /api/cron/reviews-run` → live model —
+**failed on the first attempt**, and the failure was real:
+
+```
+criteria[0].issues: expected array, received string
+```
+
+`deepseek/deepseek-v4-flash` returned `issues` as a bare string and overran the ten-item
+cap, so a complete and correct set of scores was thrown away and one of the job's
+automation attempts was spent. The prompt already stated the rule; prose alone did not hold.
+
+Fix: `normaliseReviewerOutput` repairs **shape only** before validation — a lone string
+becomes a one-item array, over-long advisory lists are capped. Nothing that carries meaning
+is touched: scores, confidences and criterion ids must still arrive correct or the review
+fails, `criteria` is never truncated (too many means the model invented some, which must
+surface), and no content is ever invented. The prompt now names the JSON types explicitly
+too. `review-evidence.test.mjs` pins the exact payload that failed, plus the cases that must
+still fail.
+
+Second run, same trigger, real model:
+
+```
+reviews-run -> done=true, reviewed=1
+model       : deepseek/deepseek-v4-flash
+ai_score    : 68.25   final_score: 68.25   confidence: 0.55
+Kualitas Analisis  raw=65  weighted=48.75
+Komunikasi         raw=78  weighted=19.50
+second judge: ran (confidence below 0.70)
+```
+
+The backend did the arithmetic — (65×3 + 78×1) / 4 = 68.25 — and the low confidence routed
+a second judge on its own, exactly as designed. Fixture removed afterwards.
+
+### What still blocks the Monday drop
+
+Triggering the whole cycle the way n8n will, every job answered correctly and the auth was
+fail-closed (403 without a token, 403 with a wrong one). Two jobs reported themselves off:
+
+```
+project-generate  done=false  {"skipped":"generation disabled"}
+project-drop      done=false  {"skipped":"auto-publish disabled; manual publication required"}
+```
+
+Nothing is broken — automatic publication is **switched off by configuration**. Production
+needs `ARENA_GENERATION_ENABLED=true` and `ARENA_AUTO_PUBLISH_ENABLED=true`, plus the
+`AI_*` credentials and `INTERNAL_AUTOMATION_TOKEN` for the trigger. Until those are set, the
+weekly project must be published by hand.
+
+Verification: `test:scheduler` 5/5, `test:reviews:pipeline` 10/10, `review-evidence` 5/5,
+typecheck, lint (0 errors), db:check, build all exit 0. One live model call was made
+deliberately, to prove this path; it is the first in this repo.
+
 ## Completed 2026-09-07 (Arena lane): Public Showcase On Finalized Results
 
 The Weekly Spotlight was the last Arena surface still served from `src/data/mock` — it

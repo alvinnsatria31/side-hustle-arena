@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateReviewerOutput } from '../src/server/reviews/validator.ts';
 import { ApiReviewProvider, createReviewProvider, StubReviewProvider } from '../src/server/reviews/model-router.ts';
+import { normaliseReviewerOutput, reviewerOutputSchema } from '../src/server/reviews/review-schema.ts';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const rubric = [{ id, name: 'Research', weight: 100, maxScore: 100, description: null, reviewInstruction: null }];
@@ -40,4 +41,43 @@ test('development stub chooses a verifiable source after a short explanation', a
   const result = await new StubReviewProvider().review({ profile: 'review', model: 'stub', input });
   assert.equal(validateReviewerOutput(result, rubric, input.sources).ok, true);
   assert.match(result.criteria[0].evidence[0], /^\[artifact\]/);
+});
+
+test('a real model returned issues as a bare string; shape is repaired, meaning is not', () => {
+  // The exact failure seen from deepseek/deepseek-v4-flash on the first live
+  // run: `issues` came back as a string, which rejected an otherwise correct
+  // set of scores and spent one of the job's automation attempts.
+  const fromModel = {
+    criteria: [{ criterionId: id, score: 80, evidence: '[explanation] interviewed twelve customers', issues: 'Tidak ada pembanding.', confidence: 0.9 }],
+    strengths: 'Alur runtut.',
+    priorityImprovements: [],
+    confidence: 0.9,
+  };
+  assert.equal(reviewerOutputSchema.safeParse(fromModel).success, false, 'raw model output is what used to fail');
+
+  const repaired = reviewerOutputSchema.parse(normaliseReviewerOutput(fromModel));
+  assert.deepEqual(repaired.criteria[0].issues, ['Tidak ada pembanding.']);
+  assert.deepEqual(repaired.criteria[0].evidence, ['[explanation] interviewed twelve customers']);
+  assert.deepEqual(repaired.strengths, ['Alur runtut.']);
+  assert.equal(repaired.criteria[0].score, 80, 'a score must never be rewritten');
+  assert.equal(validateReviewerOutput(repaired, rubric, sources).ok, true);
+
+  // Over-long advisory lists are capped rather than failing the whole review.
+  const many = normaliseReviewerOutput({ ...fromModel, strengths: Array.from({ length: 14 }, (_, i) => `poin ${i}`) });
+  assert.equal(many.strengths.length, 10);
+
+  // Nothing that carries meaning is coerced, and nothing is invented.
+  for (const bad of [
+    { ...fromModel, criteria: [{ ...fromModel.criteria[0], score: 'delapan puluh' }] },
+    { ...fromModel, criteria: [{ ...fromModel.criteria[0], confidence: 'tinggi' }] },
+    { ...fromModel, criteria: [{ ...fromModel.criteria[0], evidence: 42 }] },
+  ]) {
+    assert.equal(reviewerOutputSchema.safeParse(normaliseReviewerOutput(bad)).success, false);
+  }
+  assert.equal(normaliseReviewerOutput(null), null);
+
+  // Too many criteria means the model invented some; that must still surface.
+  const invented = normaliseReviewerOutput({ ...fromModel, criteria: Array.from({ length: 25 }, () => fromModel.criteria[0]) });
+  assert.equal(invented.criteria.length, 25, 'criteria are never silently truncated');
+  assert.equal(reviewerOutputSchema.safeParse(invented).success, false);
 });
