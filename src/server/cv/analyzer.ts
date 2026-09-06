@@ -135,17 +135,34 @@ export interface CvProviderConfig {
   model: string;
 }
 
+/**
+ * Which provider scans a CV.
+ *
+ * Defaults to the Arena reviewer's provider, so a working deployment scans CVs
+ * with nothing extra to configure. But the two jobs have opposite requirements:
+ * the reviewer grades a submission in a background worker where thinking time
+ * is free, while this runs inside a request a serverless platform will kill.
+ * A reasoning model is right for one and disqualifying for the other — measured
+ * on deepseek-v4-flash, reasoning ranged 1,535-10,635 tokens and 18-91s on the
+ * same CV, against a 60s ceiling.
+ *
+ * So AI_CV_* overrides base URL and key independently, letting the scan point
+ * at a fast non-reasoning provider without moving the reviewer off the one it
+ * is tuned for. Set none of them and nothing changes.
+ */
 export function resolveCvProviderConfig(env: NodeJS.ProcessEnv = process.env): CvProviderConfig {
-  if (env.AI_REVIEW_PROVIDER !== "openai-compatible" || !env.AI_API_BASE_URL || !env.AI_API_KEY) {
+  const baseUrl = env.AI_CV_API_BASE_URL || env.AI_API_BASE_URL;
+  // The key must follow its own base URL: pairing one provider's endpoint with
+  // another's credential leaks the key to a host that was never meant to see it.
+  const apiKey = env.AI_CV_API_BASE_URL ? env.AI_CV_API_KEY : env.AI_API_KEY;
+  if (env.AI_REVIEW_PROVIDER !== "openai-compatible" || !baseUrl || !apiKey) {
     throw new Error("CV scan provider is not configured.");
   }
-  // Falls back to the reviewer model so a working Arena deployment scans CVs
-  // without a second model to configure.
   const model = env.AI_CV_MODEL || env.AI_REVIEW_MODEL;
   if (!model) throw new Error("CV scan model is not configured.");
-  const url = new URL(env.AI_API_BASE_URL);
+  const url = new URL(baseUrl);
   if (url.protocol !== "https:" || url.username || url.password) throw new Error("AI provider must use HTTPS.");
-  return { baseUrl: env.AI_API_BASE_URL, apiKey: env.AI_API_KEY, model };
+  return { baseUrl, apiKey, model };
 }
 
 export async function analyseCvText(

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { analyseCvText, toCvResult } from '../src/server/cv/analyzer.ts';
+import { analyseCvText, resolveCvProviderConfig, toCvResult } from '../src/server/cv/analyzer.ts';
 import { checkRateLimit, clientKey, resetRateLimit } from '../src/server/cv/rate-limit.ts';
 import { extractDocumentText } from '../src/server/reviews/extract.ts';
 
@@ -194,5 +194,62 @@ test('the contentless e2e fixture is still refused by the extractor guard', asyn
   await assert.rejects(
     () => extractDocumentText(bytes, 'deliverable.pdf', 'application/pdf'),
     /insufficient readable text|Invalid document/i,
+  );
+});
+
+// --- provider selection -----------------------------------------------------
+// The scan may run on a different provider than the Arena reviewer: the
+// reviewer grades in a background worker where thinking time is free, the scan
+// runs inside a request the platform will kill.
+
+const REVIEWER_ENV = {
+  AI_REVIEW_PROVIDER: 'openai-compatible',
+  AI_API_BASE_URL: 'https://reviewer.example/v1',
+  AI_API_KEY: 'reviewer-key',
+  AI_REVIEW_MODEL: 'reviewer-model',
+};
+
+test('the scan borrows the reviewer provider when nothing is overridden', () => {
+  const config = resolveCvProviderConfig({ ...REVIEWER_ENV });
+  assert.deepEqual(config, {
+    baseUrl: 'https://reviewer.example/v1',
+    apiKey: 'reviewer-key',
+    model: 'reviewer-model',
+  });
+});
+
+test('AI_CV_MODEL alone swaps the model but keeps the provider', () => {
+  const config = resolveCvProviderConfig({ ...REVIEWER_ENV, AI_CV_MODEL: 'fast-model' });
+  assert.equal(config.baseUrl, 'https://reviewer.example/v1');
+  assert.equal(config.model, 'fast-model');
+});
+
+test('AI_CV_API_BASE_URL moves the scan to its own provider, key and all', () => {
+  const config = resolveCvProviderConfig({
+    ...REVIEWER_ENV,
+    AI_CV_API_BASE_URL: 'https://api.groq.com/openai/v1',
+    AI_CV_API_KEY: 'scan-key',
+    AI_CV_MODEL: 'llama-3.3-70b-versatile',
+  });
+  assert.deepEqual(config, {
+    baseUrl: 'https://api.groq.com/openai/v1',
+    apiKey: 'scan-key',
+    model: 'llama-3.3-70b-versatile',
+  });
+});
+
+test('a scan endpoint without its own key is refused, never paired with the reviewer credential', () => {
+  // Sending the reviewer's key to another company's endpoint would hand that
+  // host a credential it was never meant to see.
+  assert.throws(
+    () => resolveCvProviderConfig({ ...REVIEWER_ENV, AI_CV_API_BASE_URL: 'https://api.groq.com/openai/v1' }),
+    /not configured/i,
+  );
+});
+
+test('the scan provider must be HTTPS', () => {
+  assert.throws(
+    () => resolveCvProviderConfig({ ...REVIEWER_ENV, AI_CV_API_BASE_URL: 'http://api.groq.com/openai/v1', AI_CV_API_KEY: 'k' }),
+    /HTTPS/i,
   );
 });

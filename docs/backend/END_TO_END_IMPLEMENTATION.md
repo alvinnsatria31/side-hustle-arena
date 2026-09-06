@@ -382,4 +382,21 @@ Options, in the order they are worth considering:
 3. **Vercel Pro** (300s). Works, but pays monthly to paper over a 10:1
    reasoning-to-answer ratio.
 
+The provider key in use makes option 2 impossible without action from whoever
+owns the MAIA Router account: every other model name is refused with *"key not
+allowed to access model. This key can only access models=['deepseek/...']"*.
+Fourteen names were probed — GPT, Gemini, Claude, Llama, Qwen, Mistral, and
+DeepSeek's own non-reasoning chat models — all 403.
+
+So the scan can now point at its own provider. `AI_CV_API_BASE_URL` and
+`AI_CV_API_KEY` override the reviewer's endpoint and credential independently;
+set neither and nothing changes. The key must accompany its own base URL — a
+scan endpoint given no key is refused rather than falling back to
+`AI_API_KEY`, which would hand one provider's credential to another's host.
+
+That makes a free fast provider a configuration change rather than a code
+change. Groq's free tier is the obvious candidate: OpenAI-compatible, no
+reasoning tokens, and fast enough that the 60s ceiling stops being the
+constraint at all.
+
 Until one of these lands, `NEXT_PUBLIC_CV_SCANNER_ENABLED` must stay unset.
