@@ -26,8 +26,20 @@ function load(relative, mocks = {}) {
     if (specifier === "@/server/auth/session") return { getCurrentUser: async () => session };
     if (specifier === "@/server/auth/origin") return { hasAllowedMutationOrigin: () => allowedOrigin };
     if (specifier === "@/server/arena") return load("src/server/arena/http.ts", mocks);
-    if (specifier.startsWith("@/")) return load(`src/${specifier.slice(2)}.ts`, mocks);
-    if (specifier.startsWith(".")) return load(path.resolve(path.dirname(filename), `${specifier}.ts`), mocks);
+    if (specifier.startsWith("@/")) {
+      const tsPath = `src/${specifier.slice(2)}.ts`;
+      if (existsSync(path.resolve(root, tsPath))) return load(tsPath, mocks);
+      const indexPath = `src/${specifier.slice(2)}/index.ts`;
+      if (existsSync(path.resolve(root, indexPath))) return load(indexPath, mocks);
+      return load(tsPath, mocks);
+    }
+    if (specifier.startsWith(".")) {
+      const tsPath = path.resolve(path.dirname(filename), `${specifier}.ts`);
+      if (existsSync(tsPath)) return load(tsPath, mocks);
+      const indexPath = path.resolve(path.dirname(filename), specifier, "index.ts");
+      if (existsSync(indexPath)) return load(indexPath, mocks);
+      return load(tsPath, mocks);
+    }
     return require(specifier);
   };
   new Function("require", "module", "exports", compiled)(resolve, module, module.exports);
@@ -88,6 +100,21 @@ test("roles enforce scope isolation and malformed config fails closed", async ()
   }
 });
 
+test("nav flag reads the same allowlist and hides the console on bad config", async () => {
+  reset();
+  const api = auth();
+  assert.deepEqual(api.arenaAdminScopesFor("sk-participant:admin"), []);
+  process.env.ARENA_ADMIN_SUBJECTS = "sk-participant:admin";
+  assert.deepEqual(api.arenaAdminScopesFor("sk-participant:admin"), [...api.arenaAdminScopes]);
+  assert.deepEqual(api.arenaAdminScopesFor("sk-participant:someone-else"), []);
+  process.env.ARENA_ADMIN_ROLES = JSON.stringify({ "sk-participant:reviewer": ["reviews"] });
+  assert.deepEqual(api.arenaAdminScopesFor("sk-participant:reviewer"), ["reviews"]);
+  // Signed-in pages render this on every request, so a broken roles map must
+  // drop the entrance rather than throw the whole navbar away.
+  process.env.ARENA_ADMIN_ROLES = "{";
+  assert.deepEqual(api.arenaAdminScopesFor("sk-participant:reviewer"), []);
+});
+
 test("service token requires distinct credential, configured actor, and explicit scope", async () => {
   reset();
   const api = auth();
@@ -124,6 +151,14 @@ test("admin mutation routes derive auditable actor from guard, never request bod
     "@/server/admin/overview": { setArenaFeatureFlag: capture },
     "@/server/reviews/admin": { rerunReview: capture, overrideReview: capture },
     "@/server/finalization/service": { closeWeekForFinalization: capture, finalizeWeek: capture, voidEnrollment: capture },
+    "@/server/admin/content": {
+      weekCreateSchema: { safeParse: () => ({ success: true, data: {} }) },
+      weekRescheduleSchema: { safeParse: () => ({ success: true, data: {} }) },
+      createAdminWeek: capture,
+      rescheduleAdminWeek: capture,
+    },
+    "@/server/generation/ai-provider": { createGenerationProvider: () => null },
+    "@/server/generation/service": { generateWeek: capture, publishWeek: capture },
   };
   const uuid = "11111111-1111-4111-8111-111111111111";
   const cases = [

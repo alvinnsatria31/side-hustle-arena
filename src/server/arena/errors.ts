@@ -85,14 +85,21 @@ export class ArenaDomainError extends Error {
 }
 
 export function toArenaErrorResponse(error: unknown) {
-  if (error instanceof ArenaDomainError) {
+  const isDomainError = error instanceof ArenaDomainError || (
+    typeof error === "object" &&
+    error !== null &&
+    ("code" in error && typeof (error as { code: unknown }).code === "string" && (error as { code: string }).code in statusByCode)
+  );
+
+  if (isDomainError) {
+    const domainError = error as ArenaDomainError;
     return {
-      status: statusByCode[error.code],
+      status: statusByCode[domainError.code],
       body: {
         error: {
-          code: error.code,
-          message: error.message,
-          ...(error.details ? { details: error.details } : {}),
+          code: domainError.code,
+          message: domainError.message,
+          ...(domainError.details ? { details: domainError.details } : {}),
         },
       },
     };

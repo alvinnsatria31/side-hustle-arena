@@ -250,6 +250,29 @@ export async function previewWeek(input: { weekId: string; db?: Db }) {
   return { week, projects: entries, runs: automationRuns };
 }
 
+/**
+ * One project with everything the console needs to edit it safely.
+ *
+ * The stored package is the only correct starting point for an edit: writing
+ * project columns directly would leave the validation record's content hash
+ * behind, and `publishWeek` refuses content that changed after validation. So
+ * the editor round-trips this package back through `reviewProject`.
+ */
+export async function previewProject(input: { projectId: string; db?: Db }) {
+  const db = input.db ?? getDb();
+  const project = await projectRow(db, input.projectId);
+  const [week] = await db.select().from(weeks).where(eq(weeks.id, project.weekId));
+  if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Week not found.");
+  const [division] = await db.select().from(divisions).where(eq(divisions.id, project.divisionId));
+  const validation = await validationRecord(db, project.id);
+  return {
+    project, week, division: division ?? null,
+    package: await storedPackage(db, project, validation?.metadata.package),
+    validatedAt: validation?.createdAt ?? null,
+    validationSource: validation?.metadata.source ?? null,
+  };
+}
+
 export async function reviewProject(input: Options & { projectId: string; action: "approve" | "veto" | "regenerate" | "edit"; reason: string; package?: unknown }) {
   const db = input.db ?? getDb(); const now = input.now ?? new Date();
   return locked(db, async (tx) => {

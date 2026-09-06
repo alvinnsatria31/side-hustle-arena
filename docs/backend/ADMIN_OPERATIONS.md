@@ -22,6 +22,17 @@ No environment files, packages, or schemas were changed.
 
 Keep every variable server-only. Browser operations use the participant session; bearer credentials never authorize the console page.
 
+## Reaching the console
+
+`/app/admin` has no public link. The avatar menu in the signed-in navbar shows an
+**Admin** entry only when the session subject holds at least one scope, which
+`arenaAdminScopesFor` (same allowlist as the guards, non-throwing) decides in
+`src/app/(app)/layout.tsx`. The flag is presentation only — every admin page and
+route still runs its own gate, so a stale or forged flag reaches nothing. Until
+`ARENA_ADMIN_SUBJECTS` or `ARENA_ADMIN_ROLES` names a subject, nobody sees the
+entry and `/app/admin` redirects to `/app`. Copy the value from
+`identity.users.auth_subject` after the intended admin has signed in once.
+
 ## Integration contract
 
 - Generator routes import `requireArenaAdmin` from `@/server/admin/auth` and require `projects`.

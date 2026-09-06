@@ -9,6 +9,12 @@ export interface Participant {
   avatarUrl: string | null;
   /** The preset avatar they picked, or null if they have not yet. */
   avatarId: string | null;
+  /**
+   * Whether this account holds any Arena admin scope. The console gate stays
+   * on the server; this only decides whether the chrome shows the way in, so
+   * that operators stop having to type `/app/admin` from memory.
+   */
+  isAdmin: boolean;
 }
 
 interface ParticipantValue {
@@ -41,6 +47,11 @@ function useParticipantValue() {
 
 export function useParticipant() {
   return useParticipantValue().user;
+}
+
+/** Whether to offer the admin console in navigation. Never a permission check. */
+export function useIsAdmin() {
+  return useParticipantValue().user.isAdmin;
 }
 
 /** The picked avatar plus the local setter the picker calls once its save lands. */

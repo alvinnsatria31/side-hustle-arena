@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Gauge, ShieldAlert, CalendarClock, ClipboardCheck, Users, Gift, Mail, RefreshCw } from 'lucide-react';
+import { Gauge, ShieldAlert, CalendarClock, ClipboardCheck, Users, Gift, Mail, RefreshCw, FolderKanban, Layers, Workflow } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import type { ArenaAdminScope } from '@/server/admin/auth';
 
@@ -11,6 +11,9 @@ const NAV: Array<{ href: string; label: string; Icon: typeof Gauge; scope: Arena
   { href: '/app/admin', label: 'Overview', Icon: Gauge, scope: null },
   { href: '/app/admin/flags', label: 'Saklar Darurat', Icon: ShieldAlert, scope: 'projects' },
   { href: '/app/admin/weeks', label: 'Minggu', Icon: CalendarClock, scope: 'weeks' },
+  { href: '/app/admin/projects', label: 'Project', Icon: FolderKanban, scope: 'projects' },
+  { href: '/app/admin/divisions', label: 'Divisi', Icon: Layers, scope: 'projects' },
+  { href: '/app/admin/jobs', label: 'Otomasi', Icon: Workflow, scope: 'overview' },
   { href: '/app/admin/reviews', label: 'Review', Icon: ClipboardCheck, scope: 'reviews' },
   { href: '/app/admin/users', label: 'Peserta', Icon: Users, scope: 'users' },
   { href: '/app/admin/rewards', label: 'Reward', Icon: Gift, scope: 'rewards' },

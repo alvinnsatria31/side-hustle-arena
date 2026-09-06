@@ -11,6 +11,15 @@ import type {
   listAdminUsers,
   listAdminWeeks,
 } from '@/server/admin/operations';
+import type { adminJobCatalogue, listAutomationRuns } from '@/server/admin/jobs';
+import type { listAdminDivisions, listAdminProjects } from '@/server/admin/content';
+import type { previewProject } from '@/server/generation/service';
+
+/** Every `Date` becomes an ISO string over the wire; pages format them themselves. */
+type Serialized<T> = T extends Date ? string
+  : T extends (infer Item)[] ? Serialized<Item>[]
+  : T extends object ? { [K in keyof T]: Serialized<T[K]> }
+  : T;
 
 export type AdminOverview = Awaited<ReturnType<typeof getOpsOverview>>;
 export type AdminWeek = Awaited<ReturnType<typeof listAdminWeeks>>[number];
@@ -27,6 +36,12 @@ export type AdminEmailDelivery = Omit<EmailOutboxRow, 'availableAt' | 'firstAtte
   leaseExpiresAt: string | null;
   createdAt: string;
 };
+export type AdminJob = ReturnType<typeof adminJobCatalogue>[number];
+export type AdminJobResult = { job: string; done: boolean; detail: Record<string, unknown>; durationMs: number };
+export type AdminAutomationRun = Serialized<Awaited<ReturnType<typeof listAutomationRuns>>[number]>;
+export type AdminProjectRow = Serialized<Awaited<ReturnType<typeof listAdminProjects>>[number]>;
+export type AdminDivision = Serialized<Awaited<ReturnType<typeof listAdminDivisions>>[number]>;
+export type AdminProjectDetail = Serialized<Awaited<ReturnType<typeof previewProject>>>;
 export type { EmailBucket, EmailOutboxSummary };
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -192,3 +207,71 @@ export const requeueAdminEmailDelivery = (input: { deliveryId: string; reason: s
 
 export const cancelAdminEmailDelivery = (input: { deliveryId: string; reason: string }) =>
   adminRequest('/api/internal/admin/email-outbox/cancel', { method: 'POST', body: JSON.stringify(input) });
+
+// ------------------------------------------------------------- automation
+
+export const getAdminJobs = () =>
+  adminRequest<{ jobs: AdminJob[]; runs: AdminAutomationRun[] }>('/api/internal/admin/jobs');
+
+export const runAdminJobClient = (job: string) =>
+  adminRequest<{ result: AdminJobResult }>('/api/internal/admin/jobs', {
+    method: 'POST',
+    body: JSON.stringify({ job }),
+  }).then((r) => r.result);
+
+// --------------------------------------------------------------- projects
+
+export const listAdminProjectsClient = (params?: { weekId?: string; divisionId?: string; status?: string; limit?: number; offset?: number }) =>
+  adminRequest<{ projects: AdminProjectRow[] }>(`/api/internal/admin/projects${qs({ ...params })}`).then((r) => r.projects);
+
+export const getAdminProject = (projectId: string) =>
+  adminRequest<AdminProjectDetail>(`/api/internal/admin/projects/${projectId}`);
+
+export const reviewAdminProject = (input: { projectId: string; action: 'approve' | 'veto' | 'regenerate'; reason: string }) =>
+  adminRequest(`/api/internal/admin/projects/${input.projectId}/${input.action}`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: input.reason }),
+  });
+
+export const editAdminProject = (input: { projectId: string; reason: string; package: unknown }) =>
+  adminRequest(`/api/internal/admin/projects/${input.projectId}/edit`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: input.reason, package: input.package }),
+  });
+
+export const scheduleAdminProject = (input: { projectId: string; scheduledPublishAt: string | null; reason: string }) =>
+  adminRequest(`/api/internal/admin/projects/${input.projectId}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify({ scheduledPublishAt: input.scheduledPublishAt, reason: input.reason }),
+  });
+
+// -------------------------------------------------------------- divisions
+
+export const listAdminDivisionsClient = () =>
+  adminRequest<{ divisions: AdminDivision[] }>('/api/internal/admin/divisions').then((r) => r.divisions);
+
+export const createAdminDivisionClient = (input: { slug: string; name: string; description?: string | null; isActive: boolean; sortOrder: number }) =>
+  adminRequest('/api/internal/admin/divisions', { method: 'POST', body: JSON.stringify(input) });
+
+export const updateAdminDivisionClient = (input: { divisionId: string; name?: string; description?: string | null; isActive?: boolean; sortOrder?: number }) =>
+  adminRequest('/api/internal/admin/divisions', { method: 'PATCH', body: JSON.stringify(input) });
+
+// ------------------------------------------------------ week orchestration
+
+export const createAdminWeekClient = (input: { weekCode: string; title: string; opensAt: string; submissionDeadlineAt: string; previewAt?: string | null }) =>
+  adminRequest<{ week: AdminWeek }>('/api/internal/weeks/create', { method: 'POST', body: JSON.stringify(input) }).then((r) => r.week);
+
+export const rescheduleAdminWeekClient = (input: { weekId: string; opensAt?: string; submissionDeadlineAt?: string; reason: string }) =>
+  adminRequest('/api/internal/weeks/reschedule', { method: 'POST', body: JSON.stringify(input) });
+
+export const generateAdminWeek = (input: { weekId: string; divisionId?: string }) =>
+  adminRequest<{ weekId: string; provider: string; results: Array<Record<string, unknown>> }>('/api/internal/weeks/generate', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+
+export const publishAdminWeek = (weekId: string) =>
+  adminRequest<{ weekId: string; published: string[]; held: Array<{ projectId: string; reason: string }>; skipped?: string }>('/api/internal/weeks/publish', {
+    method: 'POST',
+    body: JSON.stringify({ weekId }),
+  });

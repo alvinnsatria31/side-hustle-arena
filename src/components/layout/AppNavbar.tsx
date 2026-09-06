@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Bell, LogOut, UserRound } from 'lucide-react';
+import { Bell, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AvatarBadge } from '@/components/arena/AvatarBadge';
-import { useParticipant } from '@/features/arena/participant';
+import { useIsAdmin, useParticipant } from '@/features/arena/participant';
 import { getNotifications } from '@/lib/arena-client';
 import { cn } from '@/lib/cn';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
@@ -28,6 +28,7 @@ const APP_BASE = '/app';
 export function AppNavbar() {
   const pathname = usePathname();
   const user = useParticipant();
+  const isAdmin = useIsAdmin();
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -131,6 +132,15 @@ export function AppNavbar() {
             </div>
           </div>
           <div className="my-1 h-px bg-sk-border" />
+          {isAdmin && (
+            <Link
+              href="/app/admin"
+              role="menuitem"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
+            >
+              <ShieldCheck size={15} aria-hidden /> Admin
+            </Link>
+          )}
           <Link
             href="/app/profile"
             role="menuitem"

@@ -59,3 +59,19 @@ export async function requireArenaAdmin(request: Request, scope: ArenaAdminScope
   if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase()) && !hasAllowedMutationOrigin(request)) deny();
   return { actorSubject: admin.actorSubject };
 }
+
+/**
+ * Scopes for a subject the caller has already resolved from the session.
+ *
+ * The signed-in chrome renders on every protected page and only needs to know
+ * whether to show the console entrance, so it must not pay for a second
+ * session read — and a malformed `ARENA_ADMIN_ROLES` should hide the entrance
+ * rather than take down every page that renders the navbar.
+ */
+export function arenaAdminScopesFor(authSubject: string): ArenaAdminScope[] {
+  try {
+    return subjectScopes(authSubject);
+  } catch {
+    return [];
+  }
+}
