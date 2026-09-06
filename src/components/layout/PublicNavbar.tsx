@@ -7,6 +7,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
+import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
 import { cn } from '@/lib/cn';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
@@ -23,8 +24,13 @@ const NAV_LINKS = NAV_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanne
 /**
  * Floating glass navbar. More transparent at top; slightly smaller and
  * more opaque on scroll (approved navbar motion).
+ *
+ * `user` comes from the layout, which reads the shared Sekolah Karir session on
+ * the server. It matters that this is resolved before paint rather than fetched
+ * after it: a participant who is already signed in must never be shown "Masuk",
+ * not even for the frame it would take a client-side check to come back.
  */
-export function PublicNavbar() {
+export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,17 +79,28 @@ export function PublicNavbar() {
         </ul>
 
         <div className="ml-auto hidden items-center gap-3 lg:flex">
-          <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
-            Masuk
-          </Link>
-          {isCvScannerEnabled() ? (
-            <ButtonLink href="/cv-scanner" size="sm">
-              Scan CV Gratis
-            </ButtonLink>
+          {user ? (
+            <>
+              <ButtonLink href="/app" size="sm">
+                Buka Arena
+              </ButtonLink>
+              <PublicUserMenu user={user} />
+            </>
           ) : (
-            <ButtonLink href="/arena" size="sm">
-              Masuk Arena
-            </ButtonLink>
+            <>
+              <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
+                Masuk
+              </Link>
+              {isCvScannerEnabled() ? (
+                <ButtonLink href="/cv-scanner" size="sm">
+                  Scan CV Gratis
+                </ButtonLink>
+              ) : (
+                <ButtonLink href="/arena" size="sm">
+                  Masuk Arena
+                </ButtonLink>
+              )}
+            </>
           )}
         </div>
 
@@ -116,13 +133,24 @@ export function PublicNavbar() {
               {link.label}
             </Link>
           ))}
-          <div className="mt-2 flex gap-2 border-t border-sk-border pt-3">
-            <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1">
-              Masuk
-            </ButtonLink>
-            <ButtonLink href={isCvScannerEnabled() ? '/cv-scanner' : '/arena'} size="sm" className="flex-1">
-              {isCvScannerEnabled() ? 'Scan CV Gratis' : 'Masuk Arena'}
-            </ButtonLink>
+          <div className="mt-2 flex items-center gap-2 border-t border-sk-border pt-3">
+            {user ? (
+              <>
+                <ButtonLink href="/app" size="sm" className="flex-1">
+                  Buka Arena
+                </ButtonLink>
+                <PublicUserMenu user={user} />
+              </>
+            ) : (
+              <>
+                <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1">
+                  Masuk
+                </ButtonLink>
+                <ButtonLink href={isCvScannerEnabled() ? '/cv-scanner' : '/arena'} size="sm" className="flex-1">
+                  {isCvScannerEnabled() ? 'Scan CV Gratis' : 'Masuk Arena'}
+                </ButtonLink>
+              </>
+            )}
           </div>
         </motion.div>
       )}
