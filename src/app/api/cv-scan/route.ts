@@ -13,7 +13,11 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// The Hobby plan caps a function at 60s and clamps anything larger, so asking
+// for more than this is a promise the platform will not keep. The analyzer
+// budgets against the same ceiling: 45s for the model call, leaving the rest
+// for extraction and the response.
+export const maxDuration = 60;
 
 /** Messages here are shown to the person who uploaded, so they are in Indonesian. */
 function fail(message: string, status: number, extra: Record<string, unknown> = {}) {
@@ -78,6 +82,12 @@ export async function POST(request: Request) {
     // A configuration mistake and a bad document fail very differently; only the
     // second is the uploader's problem, so keep them apart in the logs.
     console.error("CV scan failed:", error);
+    // A timeout is not a transient blip: the same CV will time out again, so
+    // "try again shortly" would send someone in a loop. Say what actually
+    // happened and what would change the outcome.
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return fail("Analisis memakan waktu terlalu lama. Coba CV yang lebih ringkas, atau ulangi beberapa saat lagi.", 504);
+    }
     const message = error instanceof Error && error.message.startsWith("Dokumen terlalu pendek")
       ? error.message
       : "Analisis gagal diselesaikan. Coba lagi sebentar lagi.";
