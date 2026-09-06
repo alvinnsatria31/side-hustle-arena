@@ -257,3 +257,61 @@ test("the release endpoint answers to the n8n admin token, never the worker toke
   process.env.INTERNAL_ADMIN_SCOPES = "weeks";
   assert.equal((await call("admin-secret")).status, 403);
 });
+
+test("the audit log is read-only, keyset-paged, and filterable", async () => {
+  reset();
+  // Capture the query the module builds without a live database.
+  const captured = {};
+  const chain = {
+    from: () => chain, where: (w) => { captured.where = w; return chain; },
+    orderBy: () => chain, limit: (n) => { captured.limit = n; return Promise.resolve(captured.rows ?? []); },
+    selectDistinct: () => chain,
+  };
+  const db = { select: () => chain, selectDistinct: () => chain };
+  const mocks = {
+    "@/server/db/client": { getDb: () => db },
+    "@/server/db/schema": { logs: { id: "id", createdAt: "createdAt", actorType: "actorType", actorSubject: "actorSubject", action: "action", entityType: "entityType", entityId: "entityId", metadata: "metadata" } },
+    "drizzle-orm": { and: (...a) => ({ and: a.filter(Boolean) }), desc: (c) => ({ desc: c }), eq: (c, v) => ({ eq: [c, v] }), ilike: (c, v) => ({ ilike: [c, v] }), lt: (c, v) => ({ lt: [c, v] }), or: (...a) => ({ or: a }) },
+  };
+  const audit = load("src/server/admin/audit.ts", mocks);
+
+  // Fetches limit+1 to know whether another page exists, and returns only limit.
+  captured.rows = Array.from({ length: 51 }, (_, i) => ({ id: `id-${i}`, createdAt: new Date(2026, 0, 1, 0, 0, i) }));
+  const page = await audit.listAuditLog({ q: "", limit: 50 });
+  assert.equal(captured.limit, 51, "must over-fetch by one to detect a next page");
+  assert.equal(page.entries.length, 50);
+  assert.equal(page.nextBefore, page.entries[49].createdAt.toISOString(), "nextBefore is the last row's timestamp, for keyset paging");
+
+  // A short page has no next cursor.
+  captured.rows = [{ id: "only", createdAt: new Date(2026, 0, 1) }];
+  assert.equal((await audit.listAuditLog({ q: "", limit: 50 })).nextBefore, null);
+
+  // The module exposes no writer at all — an editable audit trail is not one.
+  assert.equal(typeof audit.listAuditLog, "function");
+  assert.ok(!("writeAuditLog" in audit) && !("deleteAuditLog" in audit) && !("updateAuditLog" in audit));
+});
+
+test("reading the audit log requires only the overview scope, and offers no write verb", async () => {
+  reset();
+  const route = load("src/app/api/internal/admin/audit/route.ts", {
+    "@/server/admin/audit": {
+      auditQuery: { safeParse: () => ({ success: true, data: { q: "", limit: 50 } }) },
+      listAuditLog: async () => ({ entries: [], nextBefore: null }),
+      auditEntityTypes: async () => ["week", "project"],
+    },
+  });
+  assert.equal(typeof route.GET, "function");
+  assert.equal(route.POST, undefined, "the audit endpoint must not expose a mutation");
+  assert.equal(route.DELETE, undefined);
+
+  const get = (subject) => {
+    session = subject ? { authSubject: subject } : null;
+    return route.GET(new Request("https://arena.example.test/api/internal/admin/audit"));
+  };
+  process.env.ARENA_ADMIN_ROLES = JSON.stringify({ "sk-participant:viewer": ["overview"], "sk-participant:rewards-only": ["rewards"] });
+  assert.equal((await get("sk-participant:viewer")).status, 200);
+  // A scope that is not overview cannot read the trail...
+  assert.equal((await get("sk-participant:rewards-only")).status, 403);
+  // ...and neither can an anonymous caller.
+  assert.equal((await get(null)).status, 403);
+});

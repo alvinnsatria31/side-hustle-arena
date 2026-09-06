@@ -9,6 +9,7 @@ import {
   Gauge,
   Gift,
   Layers,
+  ListChecks,
   LogOut,
   Mail,
   ShieldAlert,
@@ -45,6 +46,7 @@ const GROUPS: Array<{ label: string | null; items: NavItem[] }> = [
       { label: 'Otomasi', href: '/app/admin/jobs', icon: Workflow, scope: 'overview' },
       { label: 'Review', href: '/app/admin/reviews', icon: ClipboardCheck, scope: 'reviews' },
       { label: 'Email', href: '/app/admin/email', icon: Mail, scope: 'notifications' },
+      { label: 'Audit Log', href: '/app/admin/audit', icon: ListChecks, scope: 'overview' },
     ],
   },
   {

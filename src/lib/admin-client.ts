@@ -13,6 +13,7 @@ import type {
 } from '@/server/admin/operations';
 import type { adminJobCatalogue, automationReadiness, listAutomationRuns } from '@/server/admin/jobs';
 import type { launchProjectRun } from '@/server/admin/launch';
+import type { listAuditLog } from '@/server/admin/audit';
 import type { listAdminDivisions, listAdminProjects } from '@/server/admin/content';
 import type { previewProject } from '@/server/generation/service';
 
@@ -40,6 +41,7 @@ export type AdminEmailDelivery = Omit<EmailOutboxRow, 'availableAt' | 'firstAtte
 export type AdminJob = ReturnType<typeof adminJobCatalogue>[number];
 export type AdminAutomationReadiness = ReturnType<typeof automationReadiness>;
 export type AdminLaunchResult = Serialized<Awaited<ReturnType<typeof launchProjectRun>>>;
+export type AdminAuditEntry = Serialized<Awaited<ReturnType<typeof listAuditLog>>['entries'][number]>;
 export type AdminJobResult = { job: string; done: boolean; detail: Record<string, unknown>; durationMs: number };
 export type AdminAutomationRun = Serialized<Awaited<ReturnType<typeof listAutomationRuns>>[number]>;
 export type AdminProjectRow = Serialized<Awaited<ReturnType<typeof listAdminProjects>>[number]>;
@@ -291,3 +293,10 @@ export const publishAdminWeek = (weekId: string) =>
     method: 'POST',
     body: JSON.stringify({ weekId }),
   });
+
+// ------------------------------------------------------------- audit log
+
+export const getAdminAudit = (params?: { q?: string; actorType?: string; entityType?: string; before?: string; limit?: number }) =>
+  adminRequest<{ entries: AdminAuditEntry[]; nextBefore: string | null; entityTypes?: string[] }>(
+    `/api/internal/admin/audit${qs({ ...params })}`,
+  );
