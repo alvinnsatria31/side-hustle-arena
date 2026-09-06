@@ -326,6 +326,35 @@ test('AI_CV_API_BASE_URL moves the scan to its own provider, key and all', () =>
   });
 });
 
+test("its own provider does not answer to the reviewer's provider flag", () => {
+  // AI_REVIEW_PROVIDER describes the reviewer. Once the scan has its own
+  // endpoint and key, that flag has no authority over it — requiring it anyway
+  // meant a fully configured scanner refused to run, indistinguishable from a
+  // provider outage.
+  const config = resolveCvProviderConfig({
+    AI_REVIEW_PROVIDER: 'stub',
+    AI_CV_API_BASE_URL: 'https://api.groq.com/openai/v1',
+    AI_CV_API_KEY: 'scan-key',
+    AI_CV_MODEL: 'openai/gpt-oss-120b',
+  });
+  assert.equal(config.baseUrl, 'https://api.groq.com/openai/v1');
+  assert.equal(config.model, 'openai/gpt-oss-120b');
+});
+
+test('borrowing the reviewer provider still respects its flag', () => {
+  // The coupling is correct in this direction: with no endpoint of its own the
+  // scan runs on the reviewer's provider, so the reviewer's flag governs.
+  assert.throws(
+    () => resolveCvProviderConfig({
+      AI_REVIEW_PROVIDER: 'stub',
+      AI_API_BASE_URL: 'https://reviewer.example/v1',
+      AI_API_KEY: 'reviewer-key',
+      AI_REVIEW_MODEL: 'reviewer-model',
+    }),
+    /not configured/i,
+  );
+});
+
 test('a scan endpoint without its own key is refused, never paired with the reviewer credential', () => {
   // Sending the reviewer's key to another company's endpoint would hand that
   // host a credential it was never meant to see.

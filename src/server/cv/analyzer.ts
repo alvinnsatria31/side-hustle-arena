@@ -166,7 +166,18 @@ export function resolveCvProviderConfig(env: NodeJS.ProcessEnv = process.env): C
   // The key must follow its own base URL: pairing one provider's endpoint with
   // another's credential leaks the key to a host that was never meant to see it.
   const apiKey = env.AI_CV_API_BASE_URL ? env.AI_CV_API_KEY : env.AI_API_KEY;
-  if (env.AI_REVIEW_PROVIDER !== "openai-compatible" || !baseUrl || !apiKey) {
+
+  // AI_REVIEW_PROVIDER describes the *reviewer's* provider. It governs this
+  // scan only while the scan is borrowing that provider; once AI_CV_API_BASE_URL
+  // names an endpoint of its own, the reviewer's flag has no authority over it.
+  // Requiring it regardless was a hidden coupling: a fully configured scanner
+  // still refused to run because an unrelated variable did not say the expected
+  // word, and the refusal looked identical to a provider outage.
+  const usingOwnProvider = Boolean(env.AI_CV_API_BASE_URL);
+  if (!usingOwnProvider && env.AI_REVIEW_PROVIDER !== "openai-compatible") {
+    throw new Error("CV scan provider is not configured.");
+  }
+  if (!baseUrl || !apiKey) {
     throw new Error("CV scan provider is not configured.");
   }
   const model = env.AI_CV_MODEL || env.AI_REVIEW_MODEL;
