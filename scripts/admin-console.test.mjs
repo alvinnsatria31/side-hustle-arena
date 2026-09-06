@@ -165,3 +165,95 @@ test("admin date inputs are read as Jakarta wall clock regardless of the browser
   assert.equal(toJakartaInput("2026-09-08T01:00:00.000Z"), "2026-09-08T08:00");
   assert.equal(toJakartaInput(null), "");
 });
+
+// The launch orchestration composes four existing operations; what matters is
+// the order, and that a failed step stops the ones that depend on it.
+function launchMocks(overrides = {}) {
+  return {
+    "@/server/db/client": { getDb: () => ({}) },
+    "@/server/db/schema": { projects: { weekId: {}, status: {}, previewStatus: {}, createdAt: {}, id: {}, title: {} }, weeks: {} },
+    "drizzle-orm": { and: () => {}, asc: () => {}, eq: () => {}, ne: () => {} },
+    "@/server/reviews/audit": { writeAudit: async () => {} },
+    "@/server/generation/ai-provider": { createGenerationProvider: () => null },
+    // launch.ts reaches content.ts by relative path, so the key must match the
+    // specifier as written rather than its alias form.
+    "./content": {
+      createAdminWeek: async ({ weekCode }) => { calls.push("create-week"); return { id: "week-1", weekCode, status: "DRAFT", opensAt: new Date() }; },
+    },
+    "@/server/generation/service": {
+      generateWeek: async () => { calls.push("generate"); return { weekId: "week-1", results: [{ divisionId: "d1", projectId: "p1" }] }; },
+      reviewProject: async () => { calls.push("approve"); return {}; },
+      publishWeek: async () => { calls.push("publish"); return { weekId: "week-1", published: ["p1"], held: [] }; },
+      ...overrides.generation,
+    },
+  };
+}
+
+test("an off-schedule release runs create, generate, approve and publish in order", async () => {
+  reset();
+  const mocks = launchMocks();
+  // The approve step reads pending projects straight from the database.
+  mocks["@/server/db/client"] = { getDb: () => ({
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [{ id: "p1", title: "Project" }] }) }) }),
+  }) };
+  const { launchProjectRun } = load("src/server/admin/launch.ts", mocks);
+  const result = await launchProjectRun({
+    opensAt: "2026-09-08T01:00:00.000Z", submissionDeadlineAt: "2026-09-12T16:59:00.000Z",
+    approve: true, publish: true, reason: "urgent", actorSubject: "sk-participant:admin",
+  });
+  assert.deepEqual(calls, ["create-week", "generate", "approve", "publish"]);
+  assert.deepEqual(result.steps.map(s => `${s.step}:${s.ok}`), ["week:true", "generate:true", "approve:true", "publish:true"]);
+  assert.equal(result.created, true);
+});
+
+test("generation failing outright stops the release before it approves or publishes", async () => {
+  reset();
+  // Both modules must share one ArenaDomainError class, or the `instanceof`
+  // guard inside launch.ts would treat a domain error as a programming fault
+  // and rethrow it.
+  const errors = load("src/server/arena/errors.ts");
+  const mocks = launchMocks({
+    generation: {
+      generateWeek: async () => {
+        calls.push("generate");
+        throw new errors.ArenaDomainError("WEEK_NOT_READY", "Register a validated library template first.");
+      },
+    },
+  });
+  mocks["@/server/arena/errors"] = errors;
+  const { launchProjectRun } = load("src/server/admin/launch.ts", mocks);
+  const result = await launchProjectRun({
+    opensAt: "2026-09-08T01:00:00.000Z", submissionDeadlineAt: "2026-09-12T16:59:00.000Z",
+    approve: true, publish: true, reason: "urgent", actorSubject: "sk-participant:admin",
+  });
+  assert.deepEqual(calls, ["create-week", "generate"], "nothing may be approved or published once generation failed");
+  assert.deepEqual(result.steps.map(s => `${s.step}:${s.ok}`), ["week:true", "generate:false"]);
+  assert.equal(result.steps.at(-1).detail.failed, "WEEK_NOT_READY");
+});
+
+test("the release endpoint answers to the n8n admin token, never the worker token", async () => {
+  reset();
+  const route = load("src/app/api/internal/admin/launch/route.ts", {
+    "@/server/admin/launch": {
+      launchSchema: { safeParse: () => ({ success: true, data: { approve: false, publish: false, reason: "n8n" } }) },
+      launchProjectRun: async ({ actorSubject }) => { calls.push(actorSubject); return { weekId: "w", weekCode: "ADHOC", created: true, steps: [] }; },
+    },
+  });
+  const call = token => route.POST(new Request("https://arena.example.test/api/internal/admin/launch", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ reason: "n8n" }),
+  }));
+
+  process.env.INTERNAL_AUTOMATION_TOKEN = "worker-secret";
+  process.env.INTERNAL_ADMIN_TOKEN = "admin-secret";
+  process.env.INTERNAL_ADMIN_SUBJECT = "service:n8n";
+  process.env.INTERNAL_ADMIN_SCOPES = "projects";
+  assert.equal((await call("worker-secret")).status, 403, "the shared worker token must never release a week");
+  assert.equal((await call("admin-secret")).status, 200);
+  assert.deepEqual(calls, ["service:n8n"], "the audit actor comes from configuration, never the payload");
+
+  // A token scoped to something else cannot release content either.
+  process.env.INTERNAL_ADMIN_SCOPES = "weeks";
+  assert.equal((await call("admin-secret")).status, 403);
+});

@@ -4,6 +4,9 @@ import { getDb } from "@/server/db/client";
 import { runs } from "@/server/db/schema";
 import { writeAudit } from "@/server/reviews/audit";
 import { JOBS, type JobName } from "@/server/scheduler/service";
+import { generationConfig } from "@/server/generation/core";
+import { createGenerationProvider } from "@/server/generation/ai-provider";
+import { createReviewProvider } from "@/server/reviews/model-router";
 import type { ArenaAdminScope } from "./auth";
 
 type Db = ReturnType<typeof getDb>;
@@ -48,8 +51,67 @@ export function isAdminJob(value: string): value is JobName {
   return Object.hasOwn(adminJobs, value);
 }
 
-export function adminJobCatalogue() {
-  return (Object.keys(adminJobs) as JobName[]).map((job) => ({ job, ...adminJobs[job] }));
+/**
+ * What each job would actually do right now.
+ *
+ * Every job here is self-gating and reports `skipped` rather than failing when
+ * its switch is off — correct behaviour for a timer, and invisible to an
+ * operator clicking a button and getting a shrug back. So the console reads
+ * the same configuration up front and says which jobs are inert, and why,
+ * before anyone runs one.
+ */
+export function automationReadiness(env: NodeJS.ProcessEnv = process.env) {
+  let generation: ReturnType<typeof generationConfig> | null = null;
+  let configError: string | null = null;
+  try {
+    generation = generationConfig(env);
+  } catch (error) {
+    configError = error instanceof Error ? error.message : String(error);
+  }
+  const reviewProvider = (() => {
+    try { return createReviewProvider("review").name; } catch { return null; }
+  })();
+  // Booleans only. Whether a secret is set is an operational fact the console
+  // needs; its value is not, and must never reach a browser.
+  const set = (key: string) => Boolean(env[key]?.trim());
+  return {
+    generationEnabled: generation?.enabled ?? false,
+    autoPublishEnabled: generation?.autoPublish ?? false,
+    previewHours: generation?.previewHours ?? null,
+    generationProvider: createGenerationProvider(env)?.name ?? null,
+    reviewProvider,
+    configError,
+    config: [
+      { key: "ARENA_ADMIN_SUBJECTS", set: set("ARENA_ADMIN_SUBJECTS") || set("ARENA_ADMIN_ROLES"), purpose: "Siapa yang boleh membuka konsol ini." },
+      { key: "INTERNAL_ADMIN_TOKEN", set: set("INTERNAL_ADMIN_TOKEN"), purpose: "Token n8n untuk memicu rilis di luar jadwal." },
+      { key: "INTERNAL_ADMIN_SCOPES", set: set("INTERNAL_ADMIN_SCOPES"), purpose: "Harus memuat `projects` agar n8n boleh merilis." },
+      { key: "CRON_SECRET", set: set("CRON_SECRET"), purpose: "Token n8n untuk job terjadwal." },
+      { key: "ARENA_EVAL_TOKEN", set: set("ARENA_EVAL_TOKEN"), purpose: "Autentikasi callback penilaian dari Hermes/n8n." },
+      { key: "AI_API_KEY", set: set("AI_API_KEY"), purpose: "Tanpa ini generator hanya memakai library dan review AI mati." },
+      { key: "ARENA_GENERATION_ENABLED", set: generation?.enabled ?? false, purpose: "Generasi otomatis mingguan. Rilis manual tidak butuh ini." },
+      { key: "ARENA_AUTO_PUBLISH_ENABLED", set: generation?.autoPublish ?? false, purpose: "Publikasi otomatis saat jadwal tiba." },
+    ],
+  };
+}
+
+export type AutomationReadiness = ReturnType<typeof automationReadiness>;
+
+/** Why a job would do nothing if it ran right now, or null when it is live. */
+function inertReason(job: JobName, readiness: AutomationReadiness): string | null {
+  if (job === "project-generate" && !readiness.generationEnabled) {
+    return "ARENA_GENERATION_ENABLED belum di-set, jadi job ini melaporkan “generation disabled”. Rilis manual dari panel di atas tidak terpengaruh.";
+  }
+  if (job === "project-drop" && !readiness.autoPublishEnabled) {
+    return "ARENA_AUTO_PUBLISH_ENABLED belum di-set, jadi publikasi otomatis mati. Publikasikan manual dari halaman Minggu.";
+  }
+  if (job === "reviews-run" && !readiness.reviewProvider) {
+    return "Provider AI review belum terkonfigurasi, jadi antrean review tidak akan jalan.";
+  }
+  return null;
+}
+
+export function adminJobCatalogue(readiness: AutomationReadiness = automationReadiness()) {
+  return (Object.keys(adminJobs) as JobName[]).map((job) => ({ job, ...adminJobs[job], inert: inertReason(job, readiness) }));
 }
 
 /**

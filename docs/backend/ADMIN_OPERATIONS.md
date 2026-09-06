@@ -43,3 +43,63 @@ entry and `/app/admin` redirects to `/app`. Copy the value from
 ## In progress
 
 Operational list endpoints, session-gated console, user status audit, reward queue/inventory controls, and final verification.
+
+## Console layout
+
+`/app/admin` is a left rail plus a canvas, not a page inside the participant
+shell. `AppChrome` drops the participant navbar and bottom tab bar under
+`/app/admin` — two navigations leading to different places is worse than one,
+and the tab bar covered the tables. `AdminSidebar` groups the sections
+(Konten, Operasi, Orang & Reward, Sistem) and filters them by the caller's
+scopes, the same way the guards do.
+
+## Off-schedule project release
+
+The weekly cycle assumes Monday: `prepareScheduledWeek` refuses to run outside
+the Sunday window, so "give participants something on Tuesday" had no path
+through the system. `POST /api/internal/admin/launch` (scope `projects`,
+`src/server/admin/launch.ts`) composes the steps that already existed:
+
+1. create the week for the chosen opening time, or reuse one still in
+   DRAFT/PREVIEW/SCHEDULED;
+2. generate one project per active division, using the configured model or the
+   curated library when no model is set;
+3. optionally approve — which is what skips the minimum preview interval;
+4. optionally publish, which opens the week.
+
+Every step reports rather than throws where the domain says "not yet": a
+release prepared for Tuesday cannot publish on Monday, and that is the correct
+answer to show an operator. Only a step that genuinely failed stops the ones
+that depend on it. Both `ADHOC_LAUNCH_STARTED` and `ADHOC_LAUNCH_FINISHED` are
+written to `audit.logs` with the actor the guard supplied.
+
+`ARENA_GENERATION_ENABLED` is deliberately **not** consulted here. That flag
+governs the unattended timer; gating the console behind it would mean the
+console could not be used to recover when the timer is off.
+
+### Driving it from n8n
+
+`n8n/arena-adhoc-launch-workflow.json` is a webhook (header-auth) plus a
+disabled Tuesday schedule, both calling the same endpoint. n8n needs no bespoke
+authentication: `requireArenaAdmin` already accepts `INTERNAL_ADMIN_TOKEN`, so
+set `ARENA_BASE_URL` and `ARENA_ADMIN_TOKEN` in n8n and give
+`INTERNAL_ADMIN_SCOPES` the `projects` scope. The token must not equal
+`INTERNAL_AUTOMATION_TOKEN` — equal values are denied outright. The workflow
+leaves `approve` false by default so unattended runs prepare a release for a
+human to approve.
+
+## Automation page
+
+`/app/admin/jobs` runs the same jobs `n8n/arena-trigger-workflow.json` fires on
+a timer, with an admin session instead of the cron secret, so an off-schedule
+tick never requires handing that token to a person. Each job is mapped to the
+scope that owns it in `src/server/admin/jobs.ts`; the `satisfies Record<JobName,
+…>` there is load-bearing, since a job added to the scheduler without a scope
+fails the build rather than reaching the console ungated.
+
+The page also reports readiness. Jobs are self-gating and report `skipped`
+rather than failing when their switch is off — correct for a timer, but a shrug
+to an operator who just clicked a button — so the console reads the same
+configuration up front and says which jobs are inert and why. The production
+checklist reports only whether each secret is **set**; values never reach a
+browser.

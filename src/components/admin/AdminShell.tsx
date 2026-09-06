@@ -1,54 +1,25 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Gauge, ShieldAlert, CalendarClock, ClipboardCheck, Users, Gift, Mail, RefreshCw, FolderKanban, Layers, Workflow } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
-import type { ArenaAdminScope } from '@/server/admin/auth';
 
-const NAV: Array<{ href: string; label: string; Icon: typeof Gauge; scope: ArenaAdminScope | null }> = [
-  { href: '/app/admin', label: 'Overview', Icon: Gauge, scope: null },
-  { href: '/app/admin/flags', label: 'Saklar Darurat', Icon: ShieldAlert, scope: 'projects' },
-  { href: '/app/admin/weeks', label: 'Minggu', Icon: CalendarClock, scope: 'weeks' },
-  { href: '/app/admin/projects', label: 'Project', Icon: FolderKanban, scope: 'projects' },
-  { href: '/app/admin/divisions', label: 'Divisi', Icon: Layers, scope: 'projects' },
-  { href: '/app/admin/jobs', label: 'Otomasi', Icon: Workflow, scope: 'overview' },
-  { href: '/app/admin/reviews', label: 'Review', Icon: ClipboardCheck, scope: 'reviews' },
-  { href: '/app/admin/users', label: 'Peserta', Icon: Users, scope: 'users' },
-  { href: '/app/admin/rewards', label: 'Reward', Icon: Gift, scope: 'rewards' },
-  { href: '/app/admin/email', label: 'Email', Icon: Mail, scope: 'notifications' },
-];
-
-/** `overview` scope gates the layout itself, so every admin sees every link they have a scope for. */
-export function AdminNav({ scopes }: { scopes: ArenaAdminScope[] }) {
-  const pathname = usePathname();
-  const items = NAV.filter((item) => item.scope === null || scopes.includes(item.scope));
+/**
+ * The canvas every console page sits on.
+ *
+ * Navigation lives in `AdminSidebar`, so this is only the page's own header
+ * and body. It is wider than a participant page because these are tables —
+ * the constraint that keeps prose readable makes a ten-column table scroll.
+ */
+export function AdminShell({ title, children, action, description }: { title: string; children: ReactNode; action?: ReactNode; description?: ReactNode }) {
   return (
-    <nav aria-label="Navigasi admin" className="mb-7 flex flex-wrap gap-x-5 gap-y-3 border-b border-sk-border pb-4 text-sm">
-      {items.map(({ href, label, Icon }) => {
-        const active = href === '/app/admin' ? pathname === href : pathname.startsWith(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={active ? 'page' : undefined}
-            className={`inline-flex items-center gap-2 py-1 font-semibold ${active ? 'text-sk-blue' : 'text-sk-muted hover:text-sk-blue'}`}
-          >
-            <Icon size={15} aria-hidden />
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
-export function AdminShell({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
-      <div className="mb-1 flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-extrabold text-sk-navy">{title}</h1>
+    <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold text-sk-navy">{title}</h1>
+          {description && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-sk-muted">{description}</p>}
+        </div>
         {action}
       </div>
       {children}

@@ -11,7 +11,8 @@ import type {
   listAdminUsers,
   listAdminWeeks,
 } from '@/server/admin/operations';
-import type { adminJobCatalogue, listAutomationRuns } from '@/server/admin/jobs';
+import type { adminJobCatalogue, automationReadiness, listAutomationRuns } from '@/server/admin/jobs';
+import type { launchProjectRun } from '@/server/admin/launch';
 import type { listAdminDivisions, listAdminProjects } from '@/server/admin/content';
 import type { previewProject } from '@/server/generation/service';
 
@@ -37,6 +38,8 @@ export type AdminEmailDelivery = Omit<EmailOutboxRow, 'availableAt' | 'firstAtte
   createdAt: string;
 };
 export type AdminJob = ReturnType<typeof adminJobCatalogue>[number];
+export type AdminAutomationReadiness = ReturnType<typeof automationReadiness>;
+export type AdminLaunchResult = Serialized<Awaited<ReturnType<typeof launchProjectRun>>>;
 export type AdminJobResult = { job: string; done: boolean; detail: Record<string, unknown>; durationMs: number };
 export type AdminAutomationRun = Serialized<Awaited<ReturnType<typeof listAutomationRuns>>[number]>;
 export type AdminProjectRow = Serialized<Awaited<ReturnType<typeof listAdminProjects>>[number]>;
@@ -211,7 +214,20 @@ export const cancelAdminEmailDelivery = (input: { deliveryId: string; reason: st
 // ------------------------------------------------------------- automation
 
 export const getAdminJobs = () =>
-  adminRequest<{ jobs: AdminJob[]; runs: AdminAutomationRun[] }>('/api/internal/admin/jobs');
+  adminRequest<{ jobs: AdminJob[]; readiness: AdminAutomationReadiness; runs: AdminAutomationRun[] }>('/api/internal/admin/jobs');
+
+/** The off-schedule release. Slow by nature: generation calls a model per division. */
+export const launchAdminProjectRun = (input: {
+  weekId?: string;
+  weekCode?: string;
+  title?: string;
+  opensAt?: string;
+  submissionDeadlineAt?: string;
+  divisionId?: string;
+  approve: boolean;
+  publish: boolean;
+  reason: string;
+}) => adminRequest<AdminLaunchResult>('/api/internal/admin/launch', { method: 'POST', body: JSON.stringify(input) });
 
 export const runAdminJobClient = (job: string) =>
   adminRequest<{ result: AdminJobResult }>('/api/internal/admin/jobs', {

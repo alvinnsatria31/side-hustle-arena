@@ -1,0 +1,94 @@
+{
+  "name": "Arena off-schedule project release",
+  "meta": {
+    "description": "Release a project outside the Monday cycle. Arena still owns generation, validation and publication; this workflow only says when, for which day, and how far to take it."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "arena-adhoc-launch",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "hook",
+      "name": "Someone asks for a release",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-720, 180],
+      "webhookId": "arena-adhoc-launch",
+      "notes": "Header auth is required. This webhook can start a live participant-facing week, so an unauthenticated URL would be a public publish button. Configure the credential in n8n; Arena never sees it."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * 2" }
+          ]
+        }
+      },
+      "id": "tuesday",
+      "name": "Tuesday 07:00 WIB",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-720, 400],
+      "disabled": true,
+      "notes": "Disabled by default. Enable only if a mid-week release becomes routine rather than exceptional — the Monday cycle stays the norm, and two unattended publishers competing for the same week is how duplicate releases happen."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the release request.\n//\n// Everything is optional except the reason: Arena derives its own defaults and\n// re-checks every guard, so this node never decides whether a release is\n// allowed — only what is being asked for.\n//\n// Times are Asia/Jakarta wall clock and are sent as explicit +07:00 instants,\n// because the workflow timezone and the Arena server timezone are not the same\n// thing and \"08:00\" alone would be ambiguous between them.\nconst body = $json.body ?? {};\n\nfunction wib(dayOffset, hour, minute) {\n  const now = new Date(Date.now() + 7 * 3600000);\n  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + dayOffset));\n  const date = day.toISOString().slice(0, 10);\n  return `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+07:00`;\n}\n\nconst opensAt = body.opensAt ?? wib(0, 8, 0);\nconst submissionDeadlineAt = body.submissionDeadlineAt ?? wib(4, 23, 59);\n\nreturn [{\n  json: {\n    opensAt,\n    submissionDeadlineAt,\n    // Approving skips Arena's minimum preview interval. Left false here on\n    // purpose: an unattended workflow should prepare the release and let a\n    // human approve, unless the caller explicitly asks otherwise.\n    approve: body.approve === true,\n    publish: body.publish === true,\n    ...(body.weekId ? { weekId: body.weekId } : {}),\n    ...(body.weekCode ? { weekCode: body.weekCode } : {}),\n    ...(body.title ? { title: body.title } : {}),\n    ...(body.divisionId ? { divisionId: body.divisionId } : {}),\n    reason: body.reason ?? 'Rilis di luar jadwal via n8n',\n  },\n}];"
+      },
+      "id": "plan",
+      "name": "What are we releasing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-440, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ARENA_BASE_URL }}/api/internal/admin/launch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.ARENA_ADMIN_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 300000,
+          "response": { "response": { "neverError": true, "fullResponse": true } }
+        }
+      },
+      "id": "launch",
+      "name": "Tell Arena to release it",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-180, 280],
+      "notes": "ARENA_ADMIN_TOKEN is INTERNAL_ADMIN_TOKEN, whose INTERNAL_ADMIN_SCOPES must include `projects`. It must not equal INTERNAL_AUTOMATION_TOKEN — Arena denies the request outright if they match. Five minutes because generation calls a model once per active division. neverError keeps a 4xx readable in the run log instead of aborting the branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Surface only what a human would act on.\n//\n// A step reporting `ok: false` is not necessarily a fault: a release prepared\n// for Tuesday cannot publish on Monday, and Arena says so rather than forcing\n// it. Publication being \"not due\" is the expected quiet case.\nconst out = [];\nfor (const item of $input.all()) {\n  const status = item.json.statusCode;\n  const data = item.json.body?.data;\n  const error = item.json.body?.error;\n\n  if (status !== 200 || !data) {\n    out.push({ json: { alert: true, status, code: error?.code ?? 'UNKNOWN', message: error?.message ?? 'Arena rejected the release.' } });\n    continue;\n  }\n\n  const problems = (data.steps ?? []).filter((step) => !step.ok);\n  out.push({\n    json: {\n      alert: problems.length > 0,\n      weekCode: data.weekCode,\n      created: data.created,\n      steps: (data.steps ?? []).map((step) => `${step.step}:${step.ok ? 'ok' : 'attention'}`).join(' '),\n      problems,\n    },\n  });\n}\nreturn out;"
+      },
+      "id": "summary",
+      "name": "Summarise the release",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [80, 280]
+    }
+  ],
+  "connections": {
+    "Someone asks for a release": { "main": [[{ "node": "What are we releasing", "type": "main", "index": 0 }]] },
+    "Tuesday 07:00 WIB": { "main": [[{ "node": "What are we releasing", "type": "main", "index": 0 }]] },
+    "What are we releasing": { "main": [[{ "node": "Tell Arena to release it", "type": "main", "index": 0 }]] },
+    "Tell Arena to release it": { "main": [[{ "node": "Summarise the release", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Jakarta" },
+  "pinData": {}
+}
