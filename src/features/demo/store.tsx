@@ -333,14 +333,16 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   const snapshot: CareerSnapshot = useMemo(
     () => ({
-      cvScore: state.cvScan.status === 'completed' ? MOCK_CV_SCORE : null,
+      // The real analysis carries its own score; MOCK_CV_SCORE is only the
+      // stand-in for a demo session that never ran one.
+      cvScore: state.cvScan.status === 'completed' ? (state.cvScan.result?.score ?? MOCK_CV_SCORE) : null,
       projectsCompleted: state.completedHistory.length,
       skillsProven: state.skillsProven,
       careerPoints: state.careerPoints,
       careerProgress: 72,
       level: state.careerPoints >= 400 ? 'Level 3 · Explorer' : 'Level 2 · Starter',
     }),
-    [state.cvScan.status, state.completedHistory.length, state.skillsProven, state.careerPoints],
+    [state.cvScan.status, state.cvScan.result, state.completedHistory.length, state.skillsProven, state.careerPoints],
   );
 
   const value = useMemo(
