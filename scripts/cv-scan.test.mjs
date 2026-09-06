@@ -197,6 +197,94 @@ test('the contentless e2e fixture is still refused by the extractor guard', asyn
   );
 });
 
+test('a generous model gets trimmed, not thrown away', async () => {
+  // Measured 1 run in 5 on gpt-oss-120b: asked for at most 6 skills, returned
+  // 7. Rejecting the whole analysis over one extra row is the wrong trade —
+  // the cap is a layout decision, not a validity one.
+  const analysis = await analyseCvText(CV_TEXT, CONFIG, transportReturning(reply({
+    skills: Array.from({ length: 9 }, (_, i) => ({ skill: `Skill ${i}`, level: 'cukup', note: 'Cukup terbukti.' })),
+    strengths: Array.from({ length: 7 }, (_, i) => `Kekuatan nomor ${i}.`),
+    qualityChecks: Array.from({ length: 6 }, (_, i) => ({ label: `Cek ${i}`, pass: true, note: 'Terpenuhi.' })),
+    impactExamples: Array.from({ length: 5 }, (_, i) => ({ before: `Baris asli ${i} yang panjang.`, after: `Baris ditulis ulang ${i}.` })),
+  })));
+
+  assert.equal(analysis.skills.length, 6);
+  assert.equal(analysis.strengths.length, 4);
+  assert.equal(analysis.qualityChecks.length, 4);
+  assert.equal(analysis.impactExamples.length, 2);
+  // Trimming keeps the front of the list, which is the model's own ordering.
+  assert.equal(analysis.skills[0].skill, 'Skill 0');
+});
+
+test('an empty required list is still refused', async () => {
+  // Trimming is generosity about too many, not about none: a result page with
+  // zero strengths is a broken page, so this stays a hard failure.
+  await assert.rejects(
+    analyseCvText(CV_TEXT, CONFIG, transportReturning(reply({ strengths: [] }))),
+    /invalid|too small|expected/i,
+  );
+});
+
+test('a runaway list is refused rather than silently truncated', async () => {
+  await assert.rejects(
+    analyseCvText(CV_TEXT, CONFIG, transportReturning(reply({
+      skills: Array.from({ length: 200 }, () => ({ skill: 'X', level: 'cukup', note: 'Catatan.' })),
+    }))),
+    /too big|invalid|expected/i,
+  );
+});
+
+test('one malformed reply is retried, and the second answer is used', async () => {
+  // ~1 real scan in 14 came back valid JSON of the wrong shape. A retry costs
+  // a few seconds out of a 45s budget and turns that into a non-event.
+  let calls = 0;
+  const flaky = async () => {
+    calls += 1;
+    const content = calls === 1 ? JSON.stringify(['not', 'an', 'object']) : JSON.stringify(reply());
+    return new Response(JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] }), { status: 200 });
+  };
+
+  const analysis = await analyseCvText(CV_TEXT, CONFIG, flaky);
+  assert.equal(calls, 2);
+  assert.equal(analysis.overallScore, 72);
+});
+
+test('two malformed replies give up rather than loop', async () => {
+  let calls = 0;
+  const broken = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ choices: [{ message: { content: '[]' }, finish_reason: 'stop' }] }), { status: 200 });
+  };
+
+  await assert.rejects(analyseCvText(CV_TEXT, CONFIG, broken));
+  assert.equal(calls, 2, 'exactly one retry, never an unbounded loop');
+});
+
+test('an exhausted quota is not retried', async () => {
+  // Hammering a 429 makes the quota worse and burns the caller's time budget.
+  let calls = 0;
+  const throttled = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: 'rate limited' }), { status: 429 });
+  };
+
+  await assert.rejects(analyseCvText(CV_TEXT, CONFIG, throttled), /429/);
+  assert.equal(calls, 1);
+});
+
+test('a spent time budget is not retried', async () => {
+  let calls = 0;
+  const slow = async () => {
+    calls += 1;
+    const error = new Error('The operation was aborted due to timeout');
+    error.name = 'TimeoutError';
+    throw error;
+  };
+
+  await assert.rejects(analyseCvText(CV_TEXT, CONFIG, slow), /timeout/i);
+  assert.equal(calls, 1);
+});
+
 // --- provider selection -----------------------------------------------------
 // The scan may run on a different provider than the Arena reviewer: the
 // reviewer grades in a background worker where thinking time is free, the scan

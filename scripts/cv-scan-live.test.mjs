@@ -49,7 +49,13 @@ test('CV Scanner: full chain against the live provider', { skip: LIVE ? false : 
   const config = resolveCvProviderConfig();
   console.log(`\nprovider: ${config.baseUrl}  model: ${config.model}\n`);
 
+  // A free-tier quota is measured in tokens per minute, and this suite spends
+  // two scans plus a route call in seconds. Pacing between fixtures keeps the
+  // run measuring the CV chain instead of measuring the provider's throttle.
+  let first = true;
   for (const [name, mime] of FIXTURES) {
+    if (!first) await new Promise((r) => setTimeout(r, 20_000));
+    first = false;
     await t.test(name, async () => {
       resetRateLimit();
       const bytes = await readFile(qaFile(name));

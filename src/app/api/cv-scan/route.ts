@@ -85,6 +85,14 @@ export async function POST(request: Request) {
     // A timeout is not a transient blip: the same CV will time out again, so
     // "try again shortly" would send someone in a loop. Say what actually
     // happened and what would change the outcome.
+    // The provider's quota is exhausted, not the visitor's fault and not
+    // permanent. 503 + Retry-After is the honest shape for "come back shortly".
+    if (typeof (error as { status?: number })?.status === "number" && (error as { status: number }).status === 429) {
+      return Response.json(
+        { error: { code: "CV_SCAN_BUSY", message: "Layanan analisis sedang penuh. Coba lagi beberapa menit lagi." } },
+        { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "120" } },
+      );
+    }
     if (error instanceof Error && error.name === "TimeoutError") {
       return fail("Analisis memakan waktu terlalu lama. Coba CV yang lebih ringkas, atau ulangi beberapa saat lagi.", 504);
     }

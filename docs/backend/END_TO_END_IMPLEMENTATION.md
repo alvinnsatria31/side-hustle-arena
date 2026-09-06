@@ -32,6 +32,108 @@ The implementation is ready for the following owner-operated gates; no credentia
 3. In a fresh incognito browser, log in on the main site, then open Arena through `/arena/enter`. Verify the participant identity, enrollment/workspace access, and a protected Arena API request without a second login.
 4. Sign out from Arena. Confirm the main site and a newly opened Arena page now both require sign-in. Repeat on a second browser/device. A host-only or `__Host-` main-site cookie is a stop condition: keep it host-only and implement the documented authorization-code/PKCE bridge rather than widening the cookie domain.
 
+## Completed 2026-09-07 (Arena lane): n8n Claim/Lease Grading Contract, Proven
+
+Handoff blocker 4. The live workflow still posts the old "verdict" payload at the new
+endpoint, and the migration could not start because **nothing had ever exercised the
+claim → complete/fail loop over its own routes** — every existing proof drove the
+in-process worker (`runOneReviewJob`) instead.
+
+`scripts/n8n-grading-contract.test.mjs` (`npm run test:n8n:contract`) now does. It calls
+the real route handlers with constructed `Request` objects, so the fail-closed bearer
+guard, the zod schemas and the services all run exactly as they do in production — while
+touching no live workflow and calling no external model. What it pins:
+
+- an absent or wrong token is refused (403), and a claim without `workerId` is a 400;
+- the claim is genuinely blind — rubric and extracted `sources`, no previous score;
+- evidence quoting text that is not in `sources` is refused, and so is evidence missing
+  its `[source-id]` anchor;
+- a refused output returns the job to `RETRY` with a backoff rather than burning it, and
+  the same job comes back on the next claim;
+- a confident, warning-free review does **not** wake the second judge (so the suite never
+  spends a live model call), the backend owns the weighted arithmetic, and replaying a
+  completed lease never creates a second review;
+- a worker-reported `fail` retries the job and leaves the participant's three review
+  attempts untouched, while a worker that no longer holds the lease is refused.
+
+Migration package for whoever edits the workflow: `docs/backend/N8N_GRADING_WORKFLOW.md`
+(the contract in operator language, including the three tokens that must not be shared
+across directions) and `n8n/arena-grading-workflow.json` (importable starting point:
+schedule → claim → blind prompt → model → shape/pre-check → complete or fail).
+
+**Honest limit:** that JSON has never been executed inside n8n — no non-production n8n
+instance is reachable from here. What is proven is the HTTP contract it targets. It is a
+draft to import into a staging n8n and run once before production is touched. The audit's
+own instruction stands: produce the migration package first, change the live workflow
+later.
+
+Two clock-skew traps were found and fixed while writing this: the Neon development
+database runs ~1.7s ahead of this machine, so a fixture that fast-forwards a backoff with
+`available_at = now()` is still in the future as far as the application's claim predicate
+is concerned. The suite pins such timestamps clearly into the past instead.
+
+Verification: `npm run test:n8n:contract` exit 0, 2/2. Fixture residue verified zero
+afterwards; 10 rows left by an earlier aborted run (2 weeks, 2 users, 2 events, 4
+deliveries, all inside the `E2E-N8N-%` / `e2e-n8n-%` stamp) were identified with a
+dry-run-first scoped script and purged, with nothing outside that scope touched.
+
+## Completed 2026-09-06 (Arena lane): Email Outbox Operator Console
+
+Handoff priority 3, the half about "coverage browser/API untuk antrean email held/failed
+dan rekonsiliasi". `flushPendingEmails` was a worker endpoint with no read surface, so
+nothing in the product could answer *what is stuck, and why*.
+
+**The buckets are derived, and that is the point.** `delivery_status` only stores
+PENDING/SENT/FAILED/SKIPPED, while what the worker actually does next also depends on
+`attempt_count`, `first_attempt_at` and the lease. `src/server/notifications/outbox-admin.ts`
+computes six buckets from those columns and imports `MAX_EMAIL_ATTEMPTS` from
+`outbox-policy.ts` rather than restating it, so the console cannot drift from `claimEmail`.
+
+Two different roads reach the terminal `held` bucket, and the test pins both:
+
+- attempts exhausted with no lease falls out of the claim predicate entirely — the worker
+  never selects the row again and reports nothing at all;
+- a closed idempotency window is still selectable, so the worker picks it up and parks it
+  as FAILED/`IDEMPOTENCY_WINDOW_EXPIRED` without sending.
+
+Surfaces added: `GET /api/internal/admin/email-outbox` (summary + rows),
+`POST /api/internal/admin/email-outbox/{requeue,cancel}`, and `/app/admin/email`. A new
+`notifications` admin scope gates all three; `ARENA_ADMIN_SUBJECTS` full admins get it
+automatically, scoped roles must be granted it.
+
+Deliberate constraints:
+
+- **The frozen `messageSnapshot` survives a requeue.** The Resend key is
+  `arena-email/<delivery id>`, so re-rendering the body would let one idempotency key stand
+  for two different messages. Requeue resets only the retry accounting, which also restarts
+  the clock that `IDEMPOTENCY_WINDOW_EXPIRED` rows tripped over.
+- **Neither action can race the flush worker.** Both lock the row and refuse while a lease
+  is still live; both refuse a delivered row outright.
+- **The rendered body is never selected.** An operator needs to know which message is stuck,
+  not to read a participant's mail.
+- Stale leases and `SENT`-without-receipt are reported as reconciliation work, not as
+  buckets — the second is an invariant breach to investigate, explicitly not to retry.
+
+### A real clock-skew bug found on the way
+
+`test:notifications` was recorded as 10/10 in the handoff but ran 6/10 on this machine.
+Not a regression from this work: the Neon development database's clock runs **~1.7s ahead**
+of the local machine, and four pre-existing tests timed themselves from
+`new Date(Date.now() + 1000)` while `available_at` is written by the *database* clock. With
+less margin than the skew, a claimable row looked like it was still backing off.
+
+Fixed at the cause rather than by widening the magic number: `fixture()` in
+`notification-outbox.test.mjs` now returns the row's own `available_at` and the four tests
+time themselves from it. Any machine whose clock disagrees with Neon now passes.
+
+Verification, all after the edits: `npm run test:notifications` exit 0, **15/15** (was 10
+tests, 4 of them failing here); `npm run typecheck` exit 0; `npm run lint` exit 0 with 0
+errors and 14 warnings; `npm run db:check` exit 0; `npm run build` exit 0 with
+`/app/admin/email` and both API routes registered. Fixture residue verified zero afterwards.
+
+Not covered yet: a Playwright pass over this page, and live Resend sending — still
+unauthorised, and `senderConfigured: false` is surfaced in the UI rather than hidden.
+
 ## Completed 2026-09-06: Pre-Production Browser E2E
 
 The stale browser placeholders for local Arena completion were replaced with active Playwright coverage. The suite now drives a participant through the real UI and development DB for browse/detail, enrollment/workspace, live COS upload/download, link submission, sealed local review, local finalization result, leaderboard, and milestone reward redemption.
@@ -399,4 +501,51 @@ change. Groq's free tier is the obvious candidate: OpenAI-compatible, no
 reasoning tokens, and fast enough that the 60s ceiling stops being the
 constraint at all.
 
-Until one of these lands, `NEXT_PUBLIC_CV_SCANNER_ENABLED` must stay unset.
+### CV Scanner: What Made It Work
+
+Option 2 landed. Groq's free tier, `openai/gpt-oss-120b`, measured on the same
+CV that took deepseek 90.7s:
+
+| | deepseek-v4-flash | gpt-oss-120b |
+|---|---|---|
+| route wall clock | 18-91s | **2.9-3.0s** |
+| reasoning tokens | 1,535-10,635 | 279 |
+| tokens per scan | ~12,800 | ~2,000 |
+| fits 60s ceiling | coin flip | yes, 30x under |
+
+Three things beyond the model swap were needed, each found by measuring rather
+than reading:
+
+**`reasoning_effort: "low"`.** Judging a CV is structured extraction, not a
+chain of deductions, so the thinking budget bought nothing: reasoning fell
+1,546 -> 279 tokens, the call 5.5s -> 4.5s, and the analysis stayed specific.
+It also halves tokens per scan, which doubles throughput against a per-minute
+quota.
+
+**Trim over-long lists instead of rejecting them.** The prompt asks for at most
+6 skills; 1 run in 5 returned 7, and the entire analysis was discarded over one
+extra row. Those caps are a layout decision, not a validity one. An empty
+required list is still refused, and a runaway 200-item list still fails.
+
+**Retry once on a malformed reply.** Roughly 1 scan in 14 returned valid JSON
+of the wrong top-level shape, and the next attempt was fine. A retry costs a
+few seconds out of 45. A 429, a timeout or an HTTP failure are not retried —
+those are states a second attempt only makes worse.
+
+#### The free tier's real ceiling
+
+Groq returns its limits in response headers. For this key and model:
+
+```
+x-ratelimit-limit-tokens   = 8000   per minute   <- the binding one
+x-ratelimit-limit-requests = 1000
+```
+
+At ~2,000 tokens per scan that is **roughly 4 scans per minute**, whatever the
+daily request count says. Beyond that the provider answers 429, which the route
+now maps to 503 with `Retry-After: 120` and an Indonesian message, rather than
+a generic failure. The in-process limiter (5 per IP per hour) is unchanged and
+still does not coordinate across instances.
+
+Four scans a minute is enough for a soft launch and is not enough for a
+campaign. Watch for 503s before advertising the feature.

@@ -21,6 +21,19 @@ const checkSchema = z.object({
   note: z.string().trim().min(4).max(220),
 });
 
+/**
+ * A list the UI renders at most `keep` of.
+ *
+ * The prompt asks for a limit and the model mostly obeys, but "at most 6 skills"
+ * is a request, not a guarantee: a measured 1 run in 5 returned 7 and the whole
+ * analysis was thrown away over one extra row. These caps exist to keep the
+ * result page tidy, not because a seventh skill is invalid — so trim to size
+ * rather than reject. `hardMax` still refuses a pathological payload.
+ */
+function boundedList<T extends z.ZodTypeAny>(item: T, keep: number, min = 1, hardMax = 40) {
+  return z.array(item).min(min).max(hardMax).transform((rows) => rows.slice(0, keep));
+}
+
 /** The model returns raw numbers and text; labels and weak-flags are ours. */
 const analysisSchema = z.object({
   overallScore: z.number().int().min(0).max(100),
@@ -31,30 +44,28 @@ const analysisSchema = z.object({
     impact: z.number().int().min(0).max(100),
     evidence: z.number().int().min(0).max(100),
   }),
-  strengths: z.array(z.string().trim().min(4).max(220)).min(1).max(4),
-  improvements: z.array(z.string().trim().min(4).max(220)).min(1).max(4),
-  skills: z
-    .array(
-      z.object({
-        skill: z.string().trim().min(1).max(60),
-        level: z.enum(["kuat", "cukup", "kurang", "belum"]),
-        note: z.string().trim().min(4).max(300),
-      }),
-    )
-    .min(1)
-    .max(6),
-  qualityChecks: z.array(checkSchema).min(1).max(4),
-  atsChecks: z.array(checkSchema).min(1).max(4),
+  strengths: boundedList(z.string().trim().min(4).max(220), 4),
+  improvements: boundedList(z.string().trim().min(4).max(220), 4),
+  skills: boundedList(
+    z.object({
+      skill: z.string().trim().min(1).max(60),
+      level: z.enum(["kuat", "cukup", "kurang", "belum"]),
+      note: z.string().trim().min(4).max(300),
+    }),
+    6,
+  ),
+  qualityChecks: boundedList(checkSchema, 4),
+  atsChecks: boundedList(checkSchema, 4),
   // Rewrites of the CV's own weak lines. Empty when every line already
   // quantifies its result — better to show nothing than to invent a weak line.
-  impactExamples: z
-    .array(
-      z.object({
-        before: z.string().trim().min(8).max(300),
-        after: z.string().trim().min(8).max(300),
-      }),
-    )
-    .max(2),
+  impactExamples: boundedList(
+    z.object({
+      before: z.string().trim().min(8).max(300),
+      after: z.string().trim().min(8).max(300),
+    }),
+    2,
+    0,
+  ),
 });
 
 export type CvAnalysis = z.infer<typeof analysisSchema>;
@@ -165,15 +176,12 @@ export function resolveCvProviderConfig(env: NodeJS.ProcessEnv = process.env): C
   return { baseUrl, apiKey, model };
 }
 
-export async function analyseCvText(
-  text: string,
-  config: CvProviderConfig = resolveCvProviderConfig(),
-  transport: typeof fetch = fetch,
+/** One request/parse cycle. Malformed output is the caller's to retry. */
+async function requestAnalysis(
+  trimmed: string,
+  config: CvProviderConfig,
+  transport: typeof fetch,
 ): Promise<CvAnalysis> {
-  const trimmed = text.trim();
-  if (trimmed.length < 120) {
-    throw new Error("Dokumen terlalu pendek untuk dianalisis — pastikan CV-nya berisi teks, bukan hasil scan gambar.");
-  }
   const response = await transport(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
@@ -183,13 +191,27 @@ export async function analyseCvText(
       model: config.model,
       response_format: { type: "json_object" },
       max_tokens: MAX_OUTPUT_TOKENS,
+      // Judging a CV is structured extraction, not a chain of deductions, so
+      // the deep-thinking budget buys nothing here. Measured on gpt-oss-120b:
+      // reasoning fell 1,546 -> 279 tokens and the whole call 5.5s -> 4.5s,
+      // with the analysis no less specific. Halving tokens per scan also
+      // doubles throughput against a per-minute token quota. Providers that do
+      // not support the field ignore it.
+      reasoning_effort: "low",
       messages: [
         { role: "system", content: INSTRUCTION },
         { role: "user", content: JSON.stringify({ curriculumVitae: trimmed.slice(0, MAX_TEXT_CHARS) }) },
       ],
     }),
   });
-  if (!response.ok) throw new Error(`AI provider request failed (${response.status}).`);
+  if (!response.ok) {
+    // A free-tier quota answers 429, and it is the one provider failure a
+    // visitor can do something about: waiting works, uploading a different CV
+    // does not. Carry the status so the route can say which is which.
+    const error = new Error(`AI provider request failed (${response.status}).`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
   const body = await response.text();
   if (body.length > 500_000) throw new Error("AI provider response too large.");
   const payload = JSON.parse(body) as {
@@ -200,6 +222,32 @@ export async function analyseCvText(
     throw new Error("AI provider returned incomplete output.");
   }
   return analysisSchema.parse(JSON.parse(choice.message.content));
+}
+
+export async function analyseCvText(
+  text: string,
+  config: CvProviderConfig = resolveCvProviderConfig(),
+  transport: typeof fetch = fetch,
+): Promise<CvAnalysis> {
+  const trimmed = text.trim();
+  if (trimmed.length < 120) {
+    throw new Error("Dokumen terlalu pendek untuk dianalisis — pastikan CV-nya berisi teks, bukan hasil scan gambar.");
+  }
+
+  try {
+    return await requestAnalysis(trimmed, config, transport);
+  } catch (error) {
+    // Retry only what a second roll of the dice can fix. Roughly 1 scan in 14
+    // came back shaped wrong — valid JSON, wrong top level — and the next
+    // attempt was fine. A refused request, an exhausted quota or a spent time
+    // budget are all states a retry would only make worse, so they rethrow.
+    const status = (error as { status?: number }).status;
+    const fatal =
+      typeof status === "number" ||
+      (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError"));
+    if (fatal) throw error;
+    return requestAnalysis(trimmed, config, transport);
+  }
 }
 
 /** Shape the validated analysis into what the result page already renders. */
