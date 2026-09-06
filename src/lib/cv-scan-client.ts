@@ -1,6 +1,7 @@
 'use client';
 
 import type { CvResult } from '@/types/cv';
+import type { CvSaveStatus } from '@/server/cv/history';
 
 /**
  * Browser side of the CV scan.
@@ -15,6 +16,11 @@ import type { CvResult } from '@/types/cv';
  */
 
 let pending: Promise<CvResult> | null = null;
+let lastSave: { analyzedAt: string; save: CvSaveStatus } | null = null;
+
+export function cvSaveStatus(analyzedAt: string): CvSaveStatus | null {
+  return lastSave?.analyzedAt === analyzedAt ? lastSave.save : null;
+}
 
 export class CvScanError extends Error {
   readonly status: number;
@@ -25,9 +31,10 @@ export class CvScanError extends Error {
   }
 }
 
-async function postScan(file: File): Promise<CvResult> {
+async function postScan(file: File, saveHistory: boolean): Promise<CvResult> {
   const body = new FormData();
   body.append('file', file);
+  if (saveHistory) body.append('saveHistory', 'true');
   let response: Response;
   try {
     response = await fetch('/api/cv-scan', { method: 'POST', body, credentials: 'same-origin', cache: 'no-store' });
@@ -35,19 +42,21 @@ async function postScan(file: File): Promise<CvResult> {
     throw new CvScanError('Koneksi terputus saat mengirim CV. Coba lagi.', 0);
   }
   const payload = (await response.json().catch(() => null)) as
-    | { data?: { result?: CvResult }; error?: { message?: string } }
+    | { data?: { result?: CvResult; save?: CvSaveStatus }; error?: { message?: string } }
     | null;
   if (!response.ok || payload?.error || !payload?.data?.result) {
     throw new CvScanError(payload?.error?.message ?? 'Analisis CV gagal. Coba lagi.', response.status);
   }
+  lastSave = { analyzedAt: payload.data.result.analyzedAt, save: payload.data.save ?? { status: 'not_requested' } };
   return payload.data.result;
 }
 
 /** Begin a scan and park it for the analyzing route to await. */
-export function startCvScan(file: File): Promise<CvResult> {
+export function startCvScan(file: File, saveHistory = false): Promise<CvResult> {
   // Swallow rejection here so parking an eventually-failed promise never
   // surfaces as an unhandled rejection; the awaiting page still sees it.
-  const request = postScan(file);
+  lastSave = null;
+  const request = postScan(file, saveHistory);
   request.catch(() => undefined);
   pending = request;
   return request;

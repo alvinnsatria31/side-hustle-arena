@@ -66,10 +66,10 @@ export default function LandingPage() {
               <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-sk-muted">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-sk-success" aria-hidden />
-                  12.400+ pengguna aktif
+                  Project mingguan untuk latihan
                 </span>
                 <span aria-hidden>·</span>
-                <span>Terintegrasi dengan Jobs</span>
+                <span>Pencocokan skill ke peran</span>
                 <span aria-hidden>·</span>
                 <span>Gratis untuk memulai</span>
               </div>
@@ -87,7 +87,7 @@ export default function LandingPage() {
                 style={{ background: 'radial-gradient(circle at 30% 30%, #4b8bff, #246BFD 60%, #1a56d6)' }}
               >
                 <CountUp to={72} className="font-mono text-[40px] tracking-[-0.02em] sm:text-[44px]" />
-                <span className="mt-1 font-mono text-[10px] tracking-[0.14em] opacity-85">CAREER SCORE</span>
+                <span className="mt-1 font-mono text-[10px] tracking-[0.14em] opacity-85">CONTOH SKOR</span>
               </div>
             </div>
 

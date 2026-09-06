@@ -24,8 +24,11 @@ async function fixture(t, options = {}) {
   });
   const input = { type: "RESULT_READY", userId: user.id, title: "Fixture", body: "<result>", actionUrl: "/app/profile", ...options };
   const event = await notify(input, db);
-  const [delivery] = await sql`select id from notifications.deliveries where event_id = ${event.eventId} and channel = 'EMAIL'`;
-  return { user, input, event, id: delivery.id };
+  const [delivery] = await sql`select id, available_at from notifications.deliveries where event_id = ${event.eventId} and channel = 'EMAIL'`;
+  // `available_at` is written by the database clock, which can run ahead of this
+  // machine's. Tests time themselves from the row itself so a skewed clock
+  // cannot make a claimable row look like it is still backing off.
+  return { user, input, event, id: delivery.id, availableAt: new Date(delivery.available_at) };
 }
 
 test("event and deliveries are atomic and duplicate product notices are suppressed", async (t) => {
@@ -42,7 +45,7 @@ test("event and deliveries are atomic and duplicate product notices are suppress
 
 test("failed email waits for backoff then retries identical payload and key", async (t) => {
   const row = await fixture(t);
-  let now = new Date(Date.now() + 1000);
+  let now = new Date(row.availableAt.getTime() + 1000);
   const sent = [];
   const sender = async (message, options) => {
     sent.push({ message, options });
@@ -60,7 +63,7 @@ test("failed email waits for backoff then retries identical payload and key", as
 
 test("concurrent claims are exclusive and expired leases recover with the same snapshot", async (t) => {
   const row = await fixture(t);
-  const now = new Date(Date.now() + 1000);
+  const now = new Date(row.availableAt.getTime() + 1000);
   const claims = await Promise.all([claimEmail(db, now, row.id), claimEmail(db, now, row.id)]);
   assert.equal(claims.filter(Boolean).length, 1);
   const first = claims.find(Boolean);
@@ -72,7 +75,7 @@ test("concurrent claims are exclusive and expired leases recover with the same s
 
 test("expired idempotency window holds for reconciliation without sending", async (t) => {
   const row = await fixture(t);
-  const now = new Date(Date.now() + 1000);
+  const now = new Date(row.availableAt.getTime() + 1000);
   await claimEmail(db, now, row.id);
   const result = await flushPendingEmails({ db, deliveryId: row.id, now: () => new Date(now.getTime() + 24 * 3600_000), sender: async () => { throw Error("must not send"); } });
   assert.equal(result.held, 1);
@@ -83,7 +86,7 @@ test("expired idempotency window holds for reconciliation without sending", asyn
 
 test("stale worker cannot acknowledge a reassigned lease", async (t) => {
   const row = await fixture(t);
-  const now = new Date(Date.now() + 1000);
+  const now = new Date(row.availableAt.getTime() + 1000);
   const result = await flushPendingEmails({ db, deliveryId: row.id, now: () => now, sender: async () => {
     await sql`update notifications.deliveries set lease_token = ${randomUUID()} where id = ${row.id}`;
     return { ok: true, id: "stale-receipt" };

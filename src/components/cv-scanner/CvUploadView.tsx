@@ -10,6 +10,7 @@ import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
 import { ANALYZE_COVERAGE } from '@/data/mock/cv';
 import { startCvScan } from '@/lib/cv-scan-client';
+import { CvHistoryView } from './CvHistoryView';
 
 const TRUST_POINTS = ['Gratis', 'Aman & Terenkripsi', 'Privat — tidak dibagikan'];
 
@@ -24,6 +25,7 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   // Absent when the selection was restored from stored state after a reload,
   // which is why the button asks for the file again in that case.
   const [rawFile, setRawFile] = useState<File | null>(null);
+  const [saveHistory, setSaveHistory] = useState(false);
 
   // Sync with the persisted demo state once it hydrates (and on external changes).
   useEffect(() => {
@@ -62,7 +64,7 @@ export function CvUploadView({ basePath }: { basePath: string }) {
     if (!rawFile) return;
     // Send the file before navigating: the analyzing route awaits this promise,
     // and a File cannot travel through the store to get there.
-    startCvScan(rawFile);
+    startCvScan(rawFile, saveHistory);
     dispatch({ type: 'CV_START' });
     router.push(`${basePath}/analyzing`);
   };
@@ -87,6 +89,11 @@ export function CvUploadView({ basePath }: { basePath: string }) {
 
       <motion.div initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15, ease: 'easeOut' }}>
         <FileDropzone file={file} error={error} onPick={handlePick} onRemove={handleRemove} />
+
+        <label className="mt-5 flex items-start gap-3 rounded-xl border border-sk-border bg-white p-4 text-[13px] leading-relaxed text-sk-body">
+          <input type="checkbox" checked={saveHistory} onChange={(event) => setSaveHistory(event.target.checked)} className="mt-1 h-4 w-4 accent-sk-blue" />
+          <span>Saya setuju menyimpan hasil analisis secara privat di akun saya (perlu masuk). Riwayat menyimpan 50 hasil terbaru, termasuk nama file dan cuplikan pada saran perbaikan; hasil lebih lama otomatis dihapus. File CV dan teks lengkapnya tidak disimpan di server.</span>
+        </label>
 
         {file && !error && (
           <motion.div
@@ -139,6 +146,7 @@ export function CvUploadView({ basePath }: { basePath: string }) {
           ))}
         </div>
       </motion.div>
+      <CvHistoryView basePath={basePath} />
     </div>
   );
 }

@@ -45,6 +45,13 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
       router.replace(`${basePath}/result`);
       return;
     }
+    // A failed scan stays on this page so the error is readable. (Redirecting
+    // on 'failed' flashed the error for a split second and bounced the visitor
+    // back to upload before they could read why it failed.)
+    if (state.cvScan.status === 'failed') {
+      setFailed(true);
+      return;
+    }
     if (state.cvScan.status !== 'file_selected' && state.cvScan.status !== 'analyzing') {
       router.replace(basePath);
       return;
@@ -110,12 +117,17 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
   if (!isCvScannerEnabled()) return <CvScannerClosed />;
 
   if (failed) {
+    const reason = state.cvScan.error;
     return (
       <div className="flex min-h-screen items-center justify-center bg-sk-bg px-6 pb-28 pt-24">
         <StateBox
           tone="error"
           title="Analisis gagal diproses."
-          description="Terjadi kendala saat memproses CV kamu. Coba lagi — kalau masih gagal, coba file lain atau format PDF."
+          description={
+            <>
+              {reason ?? 'Terjadi kendala saat memproses CV kamu.'} Kalau masih gagal, coba file lain atau format PDF.
+            </>
+          }
           primaryAction={{ label: 'Coba Lagi', href: basePath }}
           secondaryAction={{ label: 'Kembali ke Beranda', href: '/' }}
         />

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Gauge, ShieldAlert, CalendarClock, ClipboardCheck, Users, Gift, RefreshCw } from 'lucide-react';
+import { Gauge, ShieldAlert, CalendarClock, ClipboardCheck, Users, Gift, Mail, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import type { ArenaAdminScope } from '@/server/admin/auth';
 
@@ -14,6 +14,7 @@ const NAV: Array<{ href: string; label: string; Icon: typeof Gauge; scope: Arena
   { href: '/app/admin/reviews', label: 'Review', Icon: ClipboardCheck, scope: 'reviews' },
   { href: '/app/admin/users', label: 'Peserta', Icon: Users, scope: 'users' },
   { href: '/app/admin/rewards', label: 'Reward', Icon: Gift, scope: 'rewards' },
+  { href: '/app/admin/email', label: 'Email', Icon: Mail, scope: 'notifications' },
 ];
 
 /** `overview` scope gates the layout itself, so every admin sees every link they have a scope for. */

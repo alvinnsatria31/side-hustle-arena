@@ -27,16 +27,20 @@ export function normalizeCosEndpoint(endpoint: string, bucket: string): string {
   }
 }
 
+export function useLocalStoragePathStyle(endpoint: string, environment = process.env.APP_ENV): boolean {
+  return environment === 'development' && ['localhost', '127.0.0.1'].includes(new URL(endpoint).hostname);
+}
+
 export function getStorageClient() {
   if (!client) {
     const config = getStorageConfig();
     // Tencent COS speaks the S3 API with virtual-hosted style addressing.
-    // forcePathStyle must stay false, otherwise presigned URLs sign the
-    // wrong host and COS rejects them with SignatureDoesNotMatch.
+    // COS must retain virtual-host addressing; only local development S3
+    // emulators use path-style URLs (no wildcard localhost DNS required).
     client = new S3Client({
       region: config.region,
       endpoint: normalizeCosEndpoint(config.endpoint, config.bucket),
-      forcePathStyle: false,
+      forcePathStyle: useLocalStoragePathStyle(config.endpoint),
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
     });
   }

@@ -8,7 +8,6 @@ import { FilterChip } from '@/components/primitives/FilterChip';
 import { SearchInput } from '@/components/primitives/SearchInput';
 import { EmptyState } from '@/components/states/EmptyState';
 import { ProjectCard } from '@/components/arena/ProjectCard';
-import { mockProjects, RECOMMENDED_PROJECT_SLUG } from '@/data/mock/projects';
 import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
 
@@ -28,8 +27,8 @@ function timeToHours(estimate: string): number {
 interface ProjectBrowserProps {
   hrefPrefix?: string;
   showRecommended?: boolean;
-  /** Live data. Defaults to the mock catalog so (app) demo screens keep working until Phase 9b. */
-  projects?: ArenaProject[];
+  /** Explicit live catalog; a missing database catalog must never invent projects. */
+  projects: ArenaProject[];
   /** Live division names (without 'Semua'). Defaults to the mock groups. */
   groups?: string[];
   recommendedSlug?: string;
@@ -39,9 +38,9 @@ interface ProjectBrowserProps {
 export function ProjectBrowser({
   hrefPrefix = '/arena/projects',
   showRecommended = true,
-  projects = mockProjects,
+  projects,
   groups,
-  recommendedSlug = RECOMMENDED_PROJECT_SLUG,
+  recommendedSlug,
 }: ProjectBrowserProps) {
   const GROUPS = useMemo(() => ['Semua', ...(groups ?? [...FALLBACK_GROUPS].slice(1))], [groups]);
   const [query, setQuery] = useState('');

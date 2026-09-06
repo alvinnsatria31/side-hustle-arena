@@ -1,4 +1,5 @@
 export * from "./audit";
+export * from "./cv";
 export * from "./arena-core";
 export * from "./automation";
 export * from "./enums";

@@ -32,6 +32,68 @@ The implementation is ready for the following owner-operated gates; no credentia
 3. In a fresh incognito browser, log in on the main site, then open Arena through `/arena/enter`. Verify the participant identity, enrollment/workspace access, and a protected Arena API request without a second login.
 4. Sign out from Arena. Confirm the main site and a newly opened Arena page now both require sign-in. Repeat on a second browser/device. A host-only or `__Host-` main-site cookie is a stop condition: keep it host-only and implement the documented authorization-code/PKCE bridge rather than widening the cookie domain.
 
+## Completed 2026-09-07 (Arena lane): Public Showcase On Finalized Results
+
+The Weekly Spotlight was the last Arena surface still served from `src/data/mock` — it
+published **invented winners, participants and scores to every visitor**, statically
+prerendered. It now reads finalized results, and shows an honest empty state when there
+are none.
+
+`src/server/finalization/showcase-service.ts` reads `weekly_rankings` joined to
+`weeks.status = 'FINALIZED'` only. Both pages moved from static/SSG to dynamic, and
+`src/data/mock/showcase.ts` plus the now-orphaned `src/types/showcase.ts` were **deleted**
+rather than left behind, so a fabricated-winners dataset cannot quietly be re-imported.
+
+### What is published, and why only that
+
+PRD §103 publishes "final score, leaderboard and points" after finalization, and
+`listWeekLeaderboard` already puts name + project + division + score in public view. The
+spotlight is a richer read of those same already-public facts, plus the project's own
+brief, which is public on the project page.
+
+Deliberately **not** published, because nothing establishes them as public:
+
+- reviewer feedback and `reviews.summary` — written for the participant;
+- `skill_evidence.evidence_summary` — quotes the participant's own work (the skill
+  **name** is published, the summary is not);
+- submitted files, which have no permanent public URL by design.
+
+The mock's per-participant "Process" narrative and its fake "Output Preview" panel have no
+honest source — nobody records how a participant worked. Both are dropped rather than
+invented. **Open product decision:** a real case study needs participant consent and
+somewhere to write it. That is a product call, not a query, and it is not assumed here.
+
+Slugs are `` `${weekCode}-rank-${n}` `` — stable, shareable, and carrying no identity. A
+participant with no display name renders as "Peserta Arena"; an auth subject is an internal
+identifier and must never reach a public page, which the suite asserts directly.
+
+### A test-harness bug behind this repo's recurring fixture residue
+
+While verifying cleanup, the showcase suite leaked 5 weeks and 5 users despite passing.
+Cause: **`--test-force-exit` terminates the process while `t.after()` hooks are still
+deleting.** Rankings, reviews and versions were gone; weeks, divisions and users survived.
+Without the flag the same suite leaves zero rows.
+
+This is very likely the same mechanism behind the `E2E-FIN-*` residue that blocked
+finalization earlier — worth checking the other DB suites against.
+
+The two suites here take the two available fixes, and each is right for its own case:
+
+- `test:showcase` drops `--test-force-exit`; it opens no sockets and exits on its own.
+- `test:n8n:contract` **keeps** the flag — it hangs without it, on live HTTP keep-alive
+  sockets — and instead moves cleanup into the test body under `try/finally`, so deletion
+  completes before the runner is ever done. Verified: zero residue with the flag still on.
+
+Verification: `npm run test:showcase` exit 0, 6/6, zero residue; `npm run test:n8n:contract`
+re-run after the restructure, exit 0, 2/2, zero residue; `npm run typecheck` exit 0;
+`npm run lint` exit 0, 0 errors, 14 warnings; `npm run build` exit 0 with both showcase
+routes now dynamic (`ƒ`) rather than prerendered. Runtime smoke on a dev server: HTTP 200
+with "Belum ada minggu yang difinalisasi" and no trace of the old sample winners.
+
+Unknown slugs render the branded 404 UI with `noindex` but return HTTP 200 — the
+**pre-existing** Next-setup quirk already recorded in `FRONTEND_WIRING_9A.md`, unchanged by
+this work and affecting every route equally.
+
 ## Completed 2026-09-07 (Arena lane): n8n Claim/Lease Grading Contract, Proven
 
 Handoff blocker 4. The live workflow still posts the old "verdict" payload at the new

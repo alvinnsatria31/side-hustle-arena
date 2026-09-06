@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArenaApiError, type ArenaErrorCode } from './arena-client';
 import type { getOpsOverview } from '@/server/admin/overview';
+import type { EmailBucket, EmailOutboxRow, EmailOutboxSummary } from '@/server/notifications/outbox-admin';
 import type {
   listAdminInventory,
   listAdminRedemptions,
@@ -17,6 +18,16 @@ export type AdminReviewRow = Awaited<ReturnType<typeof listAdminReviews>>[number
 export type AdminRedemption = Awaited<ReturnType<typeof listAdminRedemptions>>[number];
 export type AdminInventory = Awaited<ReturnType<typeof listAdminInventory>>;
 export type AdminUser = Awaited<ReturnType<typeof listAdminUsers>>[number];
+/** Dates cross the wire as ISO strings; the page formats them itself. */
+export type AdminEmailDelivery = Omit<EmailOutboxRow, 'availableAt' | 'firstAttemptAt' | 'sentAt' | 'failedAt' | 'leaseExpiresAt' | 'createdAt'> & {
+  availableAt: string;
+  firstAttemptAt: string | null;
+  sentAt: string | null;
+  failedAt: string | null;
+  leaseExpiresAt: string | null;
+  createdAt: string;
+};
+export type { EmailBucket, EmailOutboxSummary };
 
 async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -168,3 +179,16 @@ export const createAdminInventoryPeriod = (input: {
     method: 'POST',
     body: JSON.stringify({ action: 'period', ...input }),
   });
+
+// ------------------------------------------------------------ email outbox
+
+export const getAdminEmailOutbox = (params?: { bucket?: EmailBucket; limit?: number; offset?: number }) =>
+  adminRequest<{ summary: EmailOutboxSummary; rows: AdminEmailDelivery[] }>(
+    `/api/internal/admin/email-outbox${qs({ ...params })}`,
+  );
+
+export const requeueAdminEmailDelivery = (input: { deliveryId: string; reason: string }) =>
+  adminRequest('/api/internal/admin/email-outbox/requeue', { method: 'POST', body: JSON.stringify(input) });
+
+export const cancelAdminEmailDelivery = (input: { deliveryId: string; reason: string }) =>
+  adminRequest('/api/internal/admin/email-outbox/cancel', { method: 'POST', body: JSON.stringify(input) });

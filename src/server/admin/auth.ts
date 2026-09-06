@@ -4,7 +4,7 @@ import { ArenaDomainError } from "@/server/arena/errors";
 import { getCurrentUser } from "@/server/auth/session";
 import { hasAllowedMutationOrigin } from "@/server/auth/origin";
 
-export const arenaAdminScopes = ["overview", "reviews", "weeks", "projects", "rewards", "users", "storage"] as const;
+export const arenaAdminScopes = ["overview", "reviews", "weeks", "projects", "rewards", "users", "storage", "notifications"] as const;
 export type ArenaAdminScope = (typeof arenaAdminScopes)[number];
 
 function deny(): never {

@@ -13,11 +13,12 @@ import { ProgressBar } from '@/components/primitives/ProgressBar';
 import { Tabs } from '@/components/primitives/Tabs';
 import { StateBox } from '@/components/primitives/StateBox';
 import { EvidenceRow } from '@/components/arena/EvidenceRow';
-import { RecommendedCard } from '@/components/arena/RecommendedCard';
+import { ButtonLink } from '@/components/primitives/Button';
 import { useDemo } from '@/features/demo/store';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
-import { RECOMMENDED_PROJECT_SLUG, getProject } from '@/data/mock/projects';
+import type { CvResult } from '@/types/cv';
+import { cvSaveStatus } from '@/lib/cv-scan-client';
 import { cn } from '@/lib/cn';
 
 const formatDateID = (iso: string) =>
@@ -59,22 +60,37 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
   const reduce = useReducedMotion();
   const { state } = useDemo();
   const [activeTab, setActiveTab] = useState('overview');
-  const project = getProject(RECOMMENDED_PROJECT_SLUG)!;
+  const [history, setHistory] = useState<{ checked: boolean; result: CvResult | null; error: string | null }>({ checked: false, result: null, error: null });
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('historyId');
+    if (!id) { setHistory({ checked: true, result: null, error: null }); return; }
+    const abort = new AbortController();
+    void fetch(`/api/cv-scan/history/${encodeURIComponent(id)}`, { cache: 'no-store', credentials: 'same-origin', signal: abort.signal })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(response.status === 401 ? 'Masuk untuk membuka hasil privat ini.' : payload.error?.message ?? 'Hasil tidak dapat dimuat.');
+        setHistory({ checked: true, result: payload.data.scan.result, error: null });
+      }).catch(error => { if (!abort.signal.aborted) setHistory({ checked: true, result: null, error: error.message }); });
+    return () => abort.abort();
+  }, []);
 
   // Direct visits without a completed demo scan get a calm recovery state.
   useEffect(() => {
-    if (state.cvScan.status === 'file_selected' || state.cvScan.status === 'analyzing') {
+    if (!new URLSearchParams(window.location.search).has('historyId') && (state.cvScan.status === 'file_selected' || state.cvScan.status === 'analyzing')) {
       router.replace(`${basePath}/analyzing`);
     }
-  }, [state.cvScan.status, router]);
+  }, [state.cvScan.status, router, basePath]);
 
   // After every hook: an early return above them would change hook order
   // between renders the moment the flag flips.
   if (!isCvScannerEnabled()) return <CvScannerClosed />;
+  if (!history.checked) return <p role="status" className="px-6 py-32 text-center text-sk-muted">Memuat hasil CV…</p>;
+  if (history.error) return <div className="px-6 py-32"><StateBox tone="error" title="Hasil belum dapat dibuka." description={history.error} primaryAction={{ label: 'Kembali ke riwayat', href: basePath }} /></div>;
 
   // Both conditions matter: a state persisted before the scanner had a backend
   // can be 'completed' with no analysis attached.
-  if (state.cvScan.status !== 'completed' || !state.cvScan.result) {
+  if (!history.result && (state.cvScan.status !== 'completed' || !state.cvScan.result)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-sk-bg px-6 pb-24 pt-24">
         <StateBox
@@ -90,7 +106,17 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
   // Everything below renders the analysis returned by /api/cv-scan. The guard
   // above means a missing result has already sent the visitor back to upload,
   // so nothing here falls back to sample data.
-  const result = state.cvScan.result;
+  const result = history.result ?? state.cvScan.result!;
+  const save = cvSaveStatus(result.analyzedAt);
+  const saveMessage = history.result || save?.status === 'saved'
+    ? 'Hasil ini tersimpan privat di akunmu. Kamu bisa menghapusnya dari riwayat.'
+    : save?.status === 'failed'
+      ? 'Analisis berhasil, tetapi hasil belum tersimpan di akun karena layanan riwayat bermasalah. Untuk menyimpan, coba scan ulang dengan persetujuan penyimpanan.'
+      : save?.status === 'sign_in_required'
+        ? 'Analisis berhasil, tetapi hasil belum tersimpan di akun. Masuk, lalu scan ulang dengan persetujuan penyimpanan.'
+        : save?.status === 'not_requested'
+          ? 'Hasil tidak disimpan di akun karena penyimpanan tidak dipilih.'
+          : 'Buka riwayat akun untuk mengecek hasil yang tersimpan.';
   const analyzedAt = result.analyzedAt ?? state.cvScan.completedAt ?? new Date().toISOString();
   const fileName = result.fileName;
 
@@ -221,7 +247,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
             </Entrance>
             <Entrance delay={0.1}>
               <h1 className="mb-2 mt-2.5 text-[30px] font-extrabold leading-[1.1] tracking-[-0.025em] text-sk-navy sm:text-[38px]">
-                CV kamu punya <span className="text-sk-blue">fondasi yang baik</span>. Tapi masih ada yang perlu diperkuat.
+                Ini hasil analisis <span className="text-sk-blue">CV kamu.</span>
               </h1>
             </Entrance>
             <Entrance delay={0.2}>
@@ -247,6 +273,8 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
             </div>
           </Entrance>
         </div>
+
+        <div className="mb-8 rounded-xl border border-sk-border bg-white p-4 text-sm text-sk-body"><p role="status">{saveMessage}</p><p className="mt-2 text-xs text-sk-muted">Hasil scan saat ini juga tersedia di browser ini. Hasil riwayat yang dibuka dari akun tidak disalin ke penyimpanan browser.</p><ButtonLink href={basePath} size="sm" variant="text">Buka riwayat / scan lagi</ButtonLink></div>
 
         {/* Metrics */}
         <StaggerGroup className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -289,7 +317,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
         </motion.div>
 
         {/* Recommendation bridge — CV Scanner never dead-ends */}
-        <RecommendedCard project={project} delay={0.1} hrefPrefix={hrefPrefix} />
+        <Card className="p-6"><h2 className="text-xl font-bold text-sk-navy">Bangun bukti skill lewat project nyata</h2><p className="mb-4 mt-2 text-sm text-sk-muted">Jelajahi project yang tersedia dan pilih yang sesuai dengan skill yang ingin kamu latih.</p><ButtonLink href={hrefPrefix}>Jelajahi Project</ButtonLink></Card>
       </div>
     </div>
   );
