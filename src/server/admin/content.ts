@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/server/db/client";
-import { divisions, projects, projectStatus, weekRules, weeks } from "@/server/db/schema";
+import { divisions, logs, projects, projectStatus, weekRules, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "@/server/reviews/audit";
 
@@ -97,8 +97,20 @@ export const divisionSchema = z.object({
   sortOrder: z.number().int().min(0).max(10000).default(0),
 });
 
+/**
+ * Divisions, each with the one fact that decides whether it can produce work.
+ *
+ * `contextFor` refuses to generate for a division with no frozen base rubric,
+ * and a fresh database has none — the core seed creates divisions and projects
+ * but never registers a library template. Without surfacing it here, the first
+ * symptom is a release failing at the generate step with a message about
+ * library templates, which reads like a bug rather than a setup step.
+ */
 export async function listAdminDivisions(db: Db = getDb()) {
-  return db.select().from(divisions).orderBy(asc(divisions.sortOrder), asc(divisions.name));
+  const rows = await db.select().from(divisions).orderBy(asc(divisions.sortOrder), asc(divisions.name));
+  const frozen = await db.select({ entityId: logs.entityId }).from(logs).where(eq(logs.action, "generation.rubric-frozen"));
+  const ready = new Set(frozen.map((row) => row.entityId));
+  return rows.map((division) => ({ ...division, hasBaseRubric: ready.has(division.id) }));
 }
 
 export async function createAdminDivision(input: z.infer<typeof divisionSchema> & { actorSubject: string; db?: Db }) {

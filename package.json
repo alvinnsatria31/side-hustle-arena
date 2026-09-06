@@ -36,7 +36,8 @@
     "test:arena:core": "node --test scripts/arena-core-api.test.mjs scripts/arena-core-seed.test.mjs scripts/arena-core-live.test.mjs",
     "test:arena:submissions": "node --test scripts/arena-submission.test.mjs scripts/arena-submission-schema.test.mjs",
     "test:sso:local": "node --test scripts/db-sso-integration.test.mjs",
-    "test:db:local": "node --test scripts/db-live-constraints.test.mjs"
+    "test:db:local": "node --test scripts/db-live-constraints.test.mjs",
+    "db:bootstrap:library": "node --import ./scripts/node-test-hooks.mjs scripts/bootstrap-generation-library.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1125.0",

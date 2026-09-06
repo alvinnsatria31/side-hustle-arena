@@ -103,6 +103,19 @@ export default function AdminDivisionsPage() {
         dilewati minggu berikutnya, tanpa menyentuh project yang sudah terbit.
       </p>
 
+      {divisions.data?.some((division) => division.isActive && !division.hasBaseRubric) && (
+        <div className="mb-5 border-l-2 border-sk-warning bg-sk-warning-tint p-4 text-sm leading-relaxed text-sk-body">
+          <p className="font-bold text-sk-navy">Sebagian divisi belum punya base rubric.</p>
+          <p className="mt-1">
+            Generator menolak jalan untuk divisi tanpa base rubric, jadi rilis akan gagal di langkah
+            generate. Base rubric terbentuk saat satu project yang sudah terbit didaftarkan sebagai
+            library template. Jalankan{' '}
+            <code className="font-mono text-xs">node scripts/bootstrap-generation-library.mjs</code>{' '}
+            sekali terhadap database ini untuk mendaftarkannya.
+          </p>
+        </div>
+      )}
+
       <Card className="overflow-x-auto p-0">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="bg-sk-bg text-xs text-sk-muted">
@@ -111,6 +124,7 @@ export default function AdminDivisionsPage() {
               <th className="p-4">Slug</th>
               <th className="p-4">Deskripsi</th>
               <th className="p-4">Status</th>
+              <th className="p-4">Base rubric</th>
               <th className="p-4 text-right">Urutan</th>
               <th className="p-4 text-right">Aksi</th>
             </tr>
@@ -122,6 +136,9 @@ export default function AdminDivisionsPage() {
                 <td className="p-4 font-mono text-[11px] text-sk-muted">{division.slug}</td>
                 <td className="max-w-md p-4 text-xs text-sk-body">{division.description ?? '—'}</td>
                 <td className="p-4"><Badge variant={division.isActive ? 'mint' : 'slate'}>{division.isActive ? 'AKTIF' : 'NONAKTIF'}</Badge></td>
+                <td className="p-4">
+                  <Badge variant={division.hasBaseRubric ? 'mint' : 'amber'}>{division.hasBaseRubric ? 'SIAP' : 'BELUM'}</Badge>
+                </td>
                 <td className="p-4 text-right text-xs tabular-nums text-sk-muted">{division.sortOrder}</td>
                 <td className="p-4 text-right">
                   <Button size="sm" variant="ghost" onClick={() => openEdit(division)}>Ubah</Button>
@@ -129,7 +146,7 @@ export default function AdminDivisionsPage() {
               </tr>
             ))}
             {divisions.data?.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-sm text-sk-muted">Belum ada divisi.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-sm text-sk-muted">Belum ada divisi.</td></tr>
             )}
           </tbody>
         </table>
