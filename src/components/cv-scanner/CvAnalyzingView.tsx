@@ -7,7 +7,10 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Check, CircleDashed } from 'lucide-react';
 import { StateBox } from '@/components/primitives/StateBox';
 import { useDemo } from '@/features/demo/store';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { CvScannerClosed } from './CvScannerClosed';
 import { MOCK_ANALYZE_STEPS } from '@/data/mock/cv';
+import { clearCvScan, pendingCvScan } from '@/lib/cv-scan-client';
 import { cn } from '@/lib/cn';
 
 const TOTAL_MS = 5_200; // ~3–6s approved window
@@ -38,41 +41,73 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
         dispatch({ type: 'CV_START' });
       }
     }
-    // Invalid entry (no file in demo state) → back to upload.
-    if (state.cvScan.status !== 'file_selected' && state.cvScan.status !== 'analyzing' && state.cvScan.status !== 'completed') {
-      router.replace(basePath);
-      return;
-    }
     if (state.cvScan.status === 'completed') {
       router.replace(`${basePath}/result`);
+      return;
+    }
+    if (state.cvScan.status !== 'file_selected' && state.cvScan.status !== 'analyzing') {
+      router.replace(basePath);
       return;
     }
 
     // QA affordance for the simulated-failure error state (?demo-fail=1).
     const demoFail = new URLSearchParams(window.location.search).get('demo-fail') === '1';
+    const scan = pendingCvScan();
+    // Reaching this route without a scan in flight means the page was reloaded
+    // or opened directly: the File is gone, so the upload step has to happen again.
+    if (!scan && !demoFail) {
+      router.replace(basePath);
+      return;
+    }
+
+    let cancelled = false;
+    let raf = 0;
+    // The ring tracks elapsed time only as far as CEILING; the last stretch
+    // belongs to the response, so the bar never claims to be finished before
+    // the analysis is.
+    const CEILING = 92;
     const duration = reduce ? 1_200 : TOTAL_MS;
     const start = performance.now();
-    let raf = 0;
 
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      // Ease-out so the ring decelerates into 100.
       const eased = 1 - Math.pow(1 - t, 2.2);
-      setProgress(Math.round(eased * 100));
-      if (t < 1) {
-        raf = requestAnimationFrame(tick);
-      } else if (demoFail) {
-        setFailed(true);
-        dispatch({ type: 'CV_FAIL' });
-      } else {
-        dispatch({ type: 'CV_COMPLETE' });
-        router.replace(`${basePath}/result`);
-      }
+      setProgress(Math.round(eased * CEILING));
+      if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+
+    const settle = async () => {
+      try {
+        if (demoFail) throw new Error('Simulasi kegagalan analisis (demo-fail).');
+        const result = await scan!;
+        if (cancelled) return;
+        setProgress(100);
+        clearCvScan();
+        dispatch({ type: 'CV_COMPLETE', result });
+        router.replace(`${basePath}/result`);
+      } catch (error) {
+        if (cancelled) return;
+        clearCvScan();
+        setFailed(true);
+        dispatch({
+          type: 'CV_FAIL',
+          message: error instanceof Error ? error.message : 'Analisis CV gagal. Coba lagi.',
+        });
+      }
+    };
+    void settle();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.cvScan.status]);
+
+  // After every hook: an early return above them would change hook order
+  // between renders the moment the flag flips.
+  if (!isCvScannerEnabled()) return <CvScannerClosed />;
 
   if (failed) {
     return (

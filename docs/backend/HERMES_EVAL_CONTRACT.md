@@ -1,5 +1,7 @@
 # Kontrak grading Hermes/n8n → Arena
 
+> Koreksi audit 2026-09-06: workflow live sudah menunjuk endpoint Arena, tetapi payload masih kontrak lama. Contoh evidence bebas di bawah adalah historis dan **tidak valid** untuk validator production sekarang. Evidence harus berbentuk `[source-id] kutipan persis` (minimal 12 karakter) dari snapshot `input.sources`. Workflow baru sebaiknya claim job lebih dulu, menilai input blind yang dikembalikan, lalu complete lease yang sama. Second judge tetap membutuhkan konfigurasi AI di Arena bila routing memerlukannya. Lihat [audit VPS terbaru](VPS_INTEGRATION_AUDIT_2026-09-06.md) sebelum mengubah workflow.
+
 Dokumen ini menjelaskan persis apa yang harus dikirim workflow n8n agar hasil
 penilaiannya diterima Arena. Ditulis untuk orang yang mengedit workflow-nya,
 bukan untuk yang membaca kode Arena.
@@ -123,6 +125,24 @@ Empat hal, dan semuanya di luar repo ini:
 
 Catatan penting: import workflow ke n8n masuk dalam keadaan **tidak aktif**, dan
 container perlu di-restart setelahnya.
+
+## Kunci AI: dua jalur, dua rumah
+
+Kunci model live ada di VPS ini. Yang perlu disalin dari VPS ke env Arena
+(Vercel production / `.env` lokal) — jangan commit:
+
+```
+AI_REVIEW_PROVIDER=openai-compatible
+AI_API_BASE_URL=<base URL chat-completions yang dipakai n8n>
+AI_API_KEY=<kunci yang dipakai n8n>
+AI_REVIEW_MODEL=…  AI_VALIDATOR_MODEL=…  AI_JUDGE_MODEL=…  AI_GENERATION_MODEL=…
+```
+
+- **Jalur A (Hermes grading, keputusan saat ini):** kunci tetap di VPS dalam
+  n8n; Arena cuma butuh `ARENA_EVAL_TOKEN` untuk menerima webhook di atas.
+- **Jalur B (worker internal Arena `POST /api/internal/reviews/run` + generator
+  Senin):** butuh salinan `AI_API_*` di atas. Tanpa itu worker gagal tertutup
+  dan generator jalan library-only (tetap jujur di log cron).
 
 ## Yang belum bisa diaudit
 

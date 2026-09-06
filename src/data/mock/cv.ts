@@ -71,7 +71,7 @@ export const MOCK_ATS_CHECKS: CheckItem[] = [
 export const MOCK_IMPACT_EXAMPLES = [
   {
     before: 'Membuat laporan penjualan bulanan untuk tim marketing.',
-    after: 'Membangun laporan penjualan bulanan yang dipakai 3 tim dan memotong waktu rekap manual 6 jam → 45 menit.',
+    after: 'Membangun laporan penjualan bulanan yang dipakai 3 tim dan memotong waktu rekap manual 6 jam menjadi 45 menit.',
   },
   {
     before: 'Membantu input data dan administrasi.',

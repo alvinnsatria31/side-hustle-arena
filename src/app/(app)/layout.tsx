@@ -1,7 +1,8 @@
 import { ProtectedAppChrome } from "@/components/layout/AppChrome";
 import { requireCurrentUser } from "@/server/auth";
+import { ParticipantProvider } from "@/features/arena/participant";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await requireCurrentUser();
-  return <ProtectedAppChrome>{children}</ProtectedAppChrome>;
+  const user = await requireCurrentUser();
+  return <ParticipantProvider user={user}><ProtectedAppChrome>{children}</ProtectedAppChrome></ParticipantProvider>;
 }

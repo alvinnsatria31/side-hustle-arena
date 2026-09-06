@@ -77,5 +77,35 @@ be an improvement rather than a formality.
 - `COOKIE_DOMAIN=sekolahkarir.id`.
 - `ARENA_ORIGIN=https://arena.sekolahkarir.id` (the config refuses anything else
   in production).
+- `SK_AUTH_ORIGIN` points at the host that actually serves the gate —
+  `https://www.sekolahkarir.id`. The apex only 308-redirects there, so it works
+  but costs a hop; unset, the config defaults to `www`.
 - The main site keeps serving `/arena` and `/arena/enter`. Those are this app's
   front door, not leftovers from the previous Arena.
+
+## Why sign-in does not read the bridge's configuration
+
+`getAuthConfig()` once parsed everything in one schema — sign-in origins, the
+mutation allowlist, and the dormant bridge's `ARENA_SSO_CLIENT_ID` /
+`ARENA_SSO_CLIENT_SECRET`. Those last two are deliberately unset, so the parser
+threw on every call, and `/auth/login` — which never reads them — answered 500.
+The login button was dead in production: every entry point funnels through that
+route, so nobody could sign in at all.
+
+The configuration is now split by concern in `src/server/auth/config-core.ts`,
+one parser per caller:
+
+| Caller | Reads |
+|---|---|
+| `/auth/login`, `/auth/logout`, `cookies.ts` | `getAuthConfig()` — `ARENA_ORIGIN`, `SK_AUTH_ORIGIN` |
+| `origin.ts` (every state-changing route) | `getArenaMutationOrigins()` — `ARENA_ALLOWED_ORIGINS` |
+| `sso-client.ts` (dormant) | `getSsoBridgeConfig()` — the client credentials |
+
+A misconfigured value now disables the thing it configures and nothing else. The
+bridge can stay unconfigured forever without touching sign-in.
+
+`ARENA_ALLOWED_ORIGINS` is the real control on cross-origin writes, not defence
+in depth: `sk_participant` is scoped to the registrable domain, so SameSite=Lax
+still sends it on a request from a sibling host. Production accepts only
+`ARENA_ORIGIN` and `SK_AUTH_ORIGIN` there — first-party origins already trusted
+with the shared session — and refuses anything else.

@@ -5,15 +5,18 @@ import {
   enrollments,
   pointAccounts,
   pointLedger,
+  projectSkills,
+  projects,
   reviewJobs,
   reviews,
+  skillEvidence,
   submissionVersions,
   submissions,
   weeklyRankings,
   weeks,
 } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { notifyBestEffort } from "@/server/notifications/service";
+import { notify } from "@/server/notifications/service";
 import { crossedThresholds, getLifetimePoints } from "@/server/rewards/milestones";
 import { catalog } from "@/server/db/schema";
 import { writeAudit } from "@/server/reviews/audit";
@@ -139,6 +142,14 @@ export async function finalizeWeek(input: {
 }): Promise<{ weekId: string; ranked: number; pointsAwarded: number }> {
   const now = input.now ?? new Date();
   const db = input.db ?? getDb();
+  return db.transaction(async (tx) => finalizeWeekInTransaction({ ...input, now, db: tx }));
+}
+
+async function finalizeWeekInTransaction(input: {
+  weekId: string; actorSubject: string; now: Date; db: Db;
+}): Promise<{ weekId: string; ranked: number; pointsAwarded: number }> {
+  const { db, now } = input;
+  await db.select({ id: weeks.id }).from(weeks).where(eq(weeks.id, input.weekId)).for("update");
   const week = await findWeek(db, { weekId: input.weekId });
   if (week.status === "FINALIZED") {
     const existing = await db.select().from(weeklyRankings).where(eq(weeklyRankings.weekId, week.id));
@@ -155,12 +166,16 @@ export async function finalizeWeek(input: {
     .innerJoin(submissionVersions, eq(reviewJobs.submissionVersionId, submissionVersions.id))
     .innerJoin(submissions, eq(submissionVersions.submissionId, submissions.id))
     .where(and(eq(submissions.weekId, week.id), inArray(reviewJobs.status, ["PENDING", "PROCESSING", "RETRY"])));
-  const unresolved = await db
-    .select({ id: reviews.id })
+  const weekReviews = await db
+    .select({ id: reviews.id, versionId: reviews.submissionVersionId, status: reviews.status })
     .from(reviews)
     .innerJoin(submissionVersions, eq(reviews.submissionVersionId, submissionVersions.id))
     .innerJoin(submissions, eq(submissionVersions.submissionId, submissions.id))
-    .where(and(eq(submissions.weekId, week.id), eq(reviews.status, "NEEDS_RESOLUTION")));
+    .where(eq(submissions.weekId, week.id))
+    .orderBy(desc(reviews.runNumber));
+  const latestRuns = new Map<string, typeof weekReviews[number]>();
+  for (const review of weekReviews) if (!latestRuns.has(review.versionId)) latestRuns.set(review.versionId, review);
+  const unresolved = [...latestRuns.values()].filter((review) => review.status === "NEEDS_RESOLUTION");
   if (openJobs.length > 0 || unresolved.length > 0) {
     throw new ArenaDomainError("WEEK_NOT_READY", "Pending reviews or unresolved disagreements must be resolved first.", {
       openJobs: openJobs.length,
@@ -169,6 +184,16 @@ export async function finalizeWeek(input: {
   }
 
   const ranked = rankFinalists(await collectEligibleFinalists(db, week.id));
+  // Canonical slugs for inbox deep links (stable across weeks, unlike UUIDs in
+  // the address bar — matches the history links in the participant dashboard).
+  const slugByProject = new Map<string, string>();
+  if (ranked.length > 0) {
+    const slugRows = await db
+      .select({ id: projects.id, slug: projects.slug })
+      .from(projects)
+      .where(inArray(projects.id, [...new Set(ranked.map((finalist) => finalist.projectId))]));
+    for (const row of slugRows) slugByProject.set(row.id, row.slug);
+  }
   let pointsAwarded = 0;
   for (const finalist of ranked) {
     await db
@@ -227,33 +252,61 @@ export async function finalizeWeek(input: {
       .update(enrollments)
       .set({ status: "COMPLETED", completedAt: now })
       .where(eq(enrollments.id, finalist.enrollmentId));
+    // Skill evidence: one row per project skill, scored at the final score and
+    // traceable to the review row. Unique (review, skill) + on-conflict-ignore
+    // keeps idempotent re-finalize safe; the participant reader only serves
+    // evidence whose ranking survived (voids delete the ranking row).
+    const [reviewRow] = await db
+      .select({ summary: reviews.summary })
+      .from(reviews)
+      .where(eq(reviews.id, finalist.reviewId));
+    const skillRows = await db
+      .select({ skillId: projectSkills.skillId })
+      .from(projectSkills)
+      .where(eq(projectSkills.projectId, finalist.projectId));
+    if (skillRows.length > 0) {
+      await db
+        .insert(skillEvidence)
+        .values(
+          skillRows.map((skill) => ({
+            userId: finalist.userId,
+            weekId: week.id,
+            projectId: finalist.projectId,
+            reviewId: finalist.reviewId,
+            skillId: skill.skillId,
+            score: finalist.finalScore.toFixed(2),
+            evidenceSummary: reviewRow?.summary ?? null,
+          })),
+        )
+        .onConflictDoNothing({ target: [skillEvidence.reviewId, skillEvidence.skillId] });
+    }
     // Best-effort inbox notices (PRD §36). Gated on a fresh award so an
     // idempotent re-finalize never double-notifies.
     if (ledgerRows.length > 0) {
       const previousLifetime = (await getLifetimePoints(finalist.userId, db)) - finalist.points;
-      await notifyBestEffort({
+      await notify({
         type: "RESULT_READY",
         userId: finalist.userId,
         weekId: week.id,
         title: `Hasil minggu ini: peringkat #${finalist.rank}`,
         body: `Skor akhirmu ${finalist.finalScore.toFixed(0)}/100. Lihat papan peringkat buat detailnya.`,
-        actionUrl: "/app/arena",
-      });
-      await notifyBestEffort({
+        actionUrl: `/app/arena/result/${slugByProject.get(finalist.projectId) ?? finalist.projectId}`,
+      }, db);
+      await notify({
         type: "POINTS_AWARDED",
         userId: finalist.userId,
         weekId: week.id,
         title: `+${finalist.points} poin masuk`,
         body: `Peringkat #${finalist.rank} minggu ${week.weekCode}. Poin nggak kedaluwarsa — kumpulin buat ditukar reward.`,
         actionUrl: "/app/profile",
-      });
+      }, db);
       // Milestone nudge: newly-crossed catalog thresholds only.
       const activeCosts = (
         await db.select({ pointsCost: catalog.pointsCost }).from(catalog).where(eq(catalog.isActive, true))
       ).map((row) => row.pointsCost);
       const crossed = crossedThresholds(previousLifetime, finalist.points, activeCosts);
       for (const threshold of crossed) {
-        await notifyBestEffort({
+        await notify({
           type: "MILESTONE_REACHED",
           userId: finalist.userId,
           weekId: week.id,
@@ -303,21 +356,25 @@ export async function voidEnrollment(input: {
   const week = (await db.select().from(weeks).where(eq(weeks.id, enrollment.weekId)))[0];
   if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Arena week not found.");
 
-  await db.update(enrollments).set({ status: "VOIDED", updatedAt: now }).where(eq(enrollments.id, enrollment.id));
-  await db
+  // One transaction: a crash between the ledger insert and the account update
+  // must not leave the balance behind the ledger (same atomicity rule as
+  // finalizeWeek — the ledger/account pair always moves together).
+  return db.transaction(async (tx) => {
+  await tx.update(enrollments).set({ status: "VOIDED", updatedAt: now }).where(eq(enrollments.id, enrollment.id));
+  await tx
     .update(submissions)
     .set({ status: "VOIDED", updatedAt: now })
     .where(eq(submissions.enrollmentId, enrollment.id));
 
   let pointsRevoked = 0;
   const ranking = (
-    await db
+    await tx
       .select()
       .from(weeklyRankings)
       .where(and(eq(weeklyRankings.weekId, week.id), eq(weeklyRankings.userId, enrollment.userId)))
   )[0];
   if (ranking && ranking.pointsAwarded > 0) {
-    const reversal = await db
+    const reversal = await tx
       .insert(pointLedger)
       .values({
         userId: enrollment.userId,
@@ -333,7 +390,7 @@ export async function voidEnrollment(input: {
       .returning({ id: pointLedger.id });
     if (reversal.length > 0) {
       pointsRevoked = ranking.pointsAwarded;
-      await db
+      await tx
         .insert(pointAccounts)
         .values({ userId: enrollment.userId, balance: 0, lifetimeEarned: 0, lifetimeSpent: pointsRevoked })
         .onConflictDoUpdate({
@@ -344,10 +401,21 @@ export async function voidEnrollment(input: {
           },
         });
     }
-    await db.delete(weeklyRankings).where(eq(weeklyRankings.id, ranking.id));
+    await tx.delete(weeklyRankings).where(eq(weeklyRankings.id, ranking.id));
   }
+  // Skill evidence is only served through a surviving ranking row, but remove
+  // the rows outright so a voided enrollment leaves zero residue.
+  await tx
+    .delete(skillEvidence)
+    .where(
+      and(
+        eq(skillEvidence.userId, enrollment.userId),
+        eq(skillEvidence.weekId, week.id),
+        eq(skillEvidence.projectId, enrollment.projectId),
+      ),
+    );
 
-  await writeAudit(db, {
+  await writeAudit(tx, {
     actorType: "ADMIN",
     actorSubject: input.actorSubject,
     action: "FRAUD_VOID",
@@ -356,4 +424,5 @@ export async function voidEnrollment(input: {
     metadata: { reason: input.reason, pointsRevoked, weekFinalized: week.status === "FINALIZED" },
   });
   return { enrollmentId: enrollment.id, pointsRevoked };
+  });
 }

@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Check, FileText, UploadCloud, X } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import { cn } from '@/lib/cn';
-import { CV_ACCEPTED_TYPES, CV_MAX_SIZE_MB } from '@/data/mock/cv';
+import { CV_ACCEPTED_EXTENSIONS, CV_MAX_SIZE_BYTES, CV_MAX_SIZE_MB } from '@/lib/cv-scan-limits';
 
 export interface SelectedFile {
   name: string;
@@ -17,7 +17,8 @@ export type DropzoneError = 'type' | 'size' | null;
 interface FileDropzoneProps {
   file: SelectedFile | null;
   error: DropzoneError;
-  onPick: (file: SelectedFile, error: DropzoneError) => void;
+  /** `raw` is the File itself, which the caller needs to upload; it is absent when a selection is restored from stored state. */
+  onPick: (file: SelectedFile, error: DropzoneError, raw: File) => void;
   onRemove: () => void;
   compact?: boolean;
 }
@@ -28,8 +29,8 @@ function formatSize(bytes: number): string {
 
 function validateFile(f: File): DropzoneError {
   const ext = `.${f.name.split('.').pop()?.toLowerCase()}`;
-  if (!CV_ACCEPTED_TYPES.includes(ext)) return 'type';
-  if (f.size > CV_MAX_SIZE_MB * 1024 * 1024) return 'size';
+  if (!(CV_ACCEPTED_EXTENSIONS as readonly string[]).includes(ext)) return 'type';
+  if (f.size > CV_MAX_SIZE_BYTES) return 'size';
   return null;
 }
 
@@ -43,7 +44,7 @@ export function FileDropzone({ file, error, onPick, onRemove, compact }: FileDro
   const reduce = useReducedMotion();
 
   const acceptFile = useCallback(
-    (f: File) => onPick({ name: f.name, size: f.size }, validateFile(f)),
+    (f: File) => onPick({ name: f.name, size: f.size }, validateFile(f), f),
     [onPick],
   );
 

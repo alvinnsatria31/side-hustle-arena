@@ -154,7 +154,7 @@ test("internal worker auth is fail-closed and timing-safe", () => {
 test("stub provider is deterministic, labeled, and evidence-backed", async () => {
   const stub = new models.StubReviewProvider();
   assert.equal(stub.name, "stub-dev-v1");
-  assert.equal(models.PROMPT_VERSION, "arena-reviewer-v1");
+  assert.equal(models.PROMPT_VERSION, "arena-reviewer-v2-evidence");
   const call = {
     profile: "review",
     model: stub.name,

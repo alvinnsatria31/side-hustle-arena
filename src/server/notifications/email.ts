@@ -11,6 +11,7 @@
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 export interface EmailMessage {
+  from?: string;
   to: string;
   subject: string;
   html: string;
@@ -24,7 +25,7 @@ export type EmailResult =
 
 export async function sendArenaEmail(
   message: EmailMessage,
-  options: { apiKey?: string; from?: string; fetcher?: typeof fetch } = {},
+  options: { apiKey?: string; from?: string; fetcher?: typeof fetch; idempotencyKey?: string } = {},
 ): Promise<EmailResult> {
   const apiKey = options.apiKey ?? process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -35,9 +36,10 @@ export async function sendArenaEmail(
   try {
     const response = await (options.fetcher ?? fetch)(RESEND_ENDPOINT, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json",
+        ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}) },
       body: JSON.stringify({
-        from: options.from ?? process.env.ARENA_FROM_EMAIL ?? "Side-Hustle Arena <noreply@sekolahkarir.id>",
+        from: message.from ?? options.from ?? process.env.ARENA_FROM_EMAIL ?? "Side-Hustle Arena <noreply@sekolahkarir.id>",
         to: [message.to],
         subject: message.subject,
         html: message.html,
@@ -50,7 +52,8 @@ export async function sendArenaEmail(
       return { ok: false, error: `Resend HTTP ${response.status}` };
     }
     const payload = (await response.json().catch(() => null)) as { id?: string } | null;
-    return { ok: true, id: payload?.id };
+    if (!payload?.id || typeof payload.id !== "string") return { ok: false, error: "RESEND_RECEIPT_MISSING" };
+    return { ok: true, id: payload.id };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
   }

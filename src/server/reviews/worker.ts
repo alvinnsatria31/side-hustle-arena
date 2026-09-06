@@ -1,8 +1,8 @@
 import "server-only";
 import { getDb } from "@/server/db/client";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { claimReviewJob, completeReviewJob, type CompletedReview } from "./queue-service";
-import { StubReviewProvider } from "./model-router";
+import { claimReviewJob, completeReviewJob, failReviewJob, type CompletedReview } from "./queue-service";
+import { createReviewProvider, StubReviewProvider } from "./model-router";
 
 /**
  * Local development worker: claims one job and completes it with the
@@ -37,4 +37,20 @@ export async function runOneReviewJob(input: {
     now,
     db,
   });
+}
+
+export async function runConfiguredReviewJob(): Promise<CompletedReview | null> {
+  const provider = createReviewProvider('review');
+  const workerId = `arena-worker:${crypto.randomUUID()}`;
+  const claimed = await claimReviewJob(workerId);
+  if (!claimed) return null;
+  try {
+    const primary = await provider.review({ profile: 'review', model: process.env.AI_REVIEW_MODEL ?? provider.name, input: claimed.input });
+    return await completeReviewJob({ jobId: claimed.jobId, workerId, output: primary, model: process.env.AI_REVIEW_MODEL ?? provider.name });
+  } catch (error) {
+    if (!(error instanceof ArenaDomainError) || error.code === 'REVIEW_PROVIDER_FAILED') {
+      await failReviewJob({ jobId: claimed.jobId, workerId, code: 'REVIEW_PROVIDER_FAILED', message: 'Configured review provider failed; retry scheduled.' });
+    }
+    throw error;
+  }
 }

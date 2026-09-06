@@ -64,11 +64,22 @@ export const reviewScores = arena.table("review_scores", {
   maxScore: numeric("max_score").notNull(),
   weightedScore: numeric("weighted_score").notNull(),
   feedback: text("feedback"),
+  evidence: jsonb("evidence"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("review_scores_review_id_rubric_criterion_id_unique").on(table.reviewId, table.rubricCriterionId),
   check("review_scores_valid_values_check", sql`${table.rawScore} >= 0 AND ${table.maxScore} > 0 AND ${table.weightedScore} >= 0`),
 ]);
+
+export const reviewArtifacts = arena.table("review_artifacts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionVersionId: uuid("submission_version_id").notNull().references(() => submissionVersions.id),
+  sourceId: text("source_id").notNull(),
+  kind: text("kind").notNull(),
+  sha256: text("sha256").notNull(),
+  extractedText: text("extracted_text").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [unique("review_artifacts_version_source_unique").on(table.submissionVersionId, table.sourceId)]);
 
 export const reviewOverrides = arena.table("review_overrides", {
   id: uuid("id").defaultRandom().primaryKey(),

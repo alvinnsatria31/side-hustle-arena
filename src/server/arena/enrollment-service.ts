@@ -92,7 +92,11 @@ export async function selectArenaProject({ userId, projectId, now = new Date() }
   }
 }
 
-export async function getCurrentArenaEnrollment({ userId, now = new Date() }: { userId: string; now?: Date }) {
+export async function getCurrentArenaEnrollment({ userId, projectId, now = new Date() }: { userId: string; projectId?: string; now?: Date }) {
+  if (projectId) {
+    const row = (await getDb().select().from(enrollments).where(and(eq(enrollments.userId, userId), eq(enrollments.projectId, projectId))))[0];
+    return row ? toEnrollment(row) : null;
+  }
   const week = await findCurrentWeek(getDb(), now);
   const enrollment = await existingEnrollmentForWeek(userId, week.id);
   return enrollment ? toEnrollment(enrollment) : null;

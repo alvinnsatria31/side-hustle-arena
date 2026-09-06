@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getArenaCallbackUri, getAuthConfig } from "./config";
+import { getArenaCallbackUri, getSsoBridgeConfig } from "./config";
 
 const exchangeSchema = z.object({
   subject: z.string().uuid(),
@@ -15,7 +15,7 @@ const exchangeSchema = z.object({
 const introspectionSchema = z.object({ active: z.boolean(), subject: z.string().uuid().optional(), expiresAt: z.string().datetime().optional() });
 
 async function canonicalPost(path: string, body: unknown) {
-  const config = getAuthConfig();
+  const config = getSsoBridgeConfig();
   const response = await fetch(new URL(path, config.canonicalOrigin), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer " + config.clientSecret },
@@ -28,7 +28,7 @@ async function canonicalPost(path: string, body: unknown) {
 }
 
 export async function exchangeArenaCode(code: string, codeVerifier: string) {
-  const config = getAuthConfig();
+  const config = getSsoBridgeConfig();
   return exchangeSchema.parse(await canonicalPost("/api/sso/arena/token", {
     clientId: config.clientId,
     code,

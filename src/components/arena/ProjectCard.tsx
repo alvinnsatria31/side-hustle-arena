@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { SkillChip } from '@/components/primitives/SkillChip';
 import { DifficultyBadge, DeadlineBadge, TimeBadge } from './ProjectBadges';
@@ -72,7 +71,6 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
         )}
         <span className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-sk-blue">
           Lihat Detail
-          <ArrowRight size={13} aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5" />
         </span>
       </div>
     </motion.article>

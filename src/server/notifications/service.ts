@@ -1,8 +1,9 @@
 import "server-only";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { deliveries, enrollments, events, users } from "@/server/db/schema";
-import { sendArenaEmail } from "./email";
+import { deliveries, enrollments, events, users, weeks } from "@/server/db/schema";
+import { ArenaDomainError } from "@/server/arena/errors";
+export { flushPendingEmails } from "./outbox";
 import type { notificationChannel, notificationType } from "@/server/db/schema";
 
 type Db = ReturnType<typeof getDb>;
@@ -16,7 +17,8 @@ export interface NotifyInput {
   title: string;
   body: string;
   actionUrl?: string | null;
-  /** Defaults to IN_APP (synchronous inbox). Other channels land PENDING for a future sender. */
+  dedupeKey?: string;
+  /** Transactional notices queue EMAIL too; point/milestone nudges remain inbox-only. */
   channels?: NotificationChannel[];
 }
 
@@ -26,29 +28,28 @@ export interface NotifyInput {
  * complete synchronously; external channels stay PENDING until a sender
  * (Resend/WA/Discord worker) claims them.
  */
-export async function notify(input: NotifyInput, db: Db = getDb()): Promise<{ eventId: string }> {
-  const channels = input.channels?.length ? [...new Set(input.channels)] : (["IN_APP"] as NotificationChannel[]);
-  const [event] = await db
-    .insert(events)
-    .values({
-      type: input.type,
-      userId: input.userId,
-      weekId: input.weekId ?? null,
-      title: input.title,
-      body: input.body,
-      actionUrl: input.actionUrl ?? null,
-    })
-    .returning({ id: events.id });
-  const now = new Date();
-  await db.insert(deliveries).values(
-    channels.map((channel) => ({
-      eventId: event.id,
-      channel,
-      status: (channel === "IN_APP" ? "SENT" : "PENDING") as "SENT" | "PENDING",
-      sentAt: channel === "IN_APP" ? now : null,
-    })),
-  );
-  return { eventId: event.id };
+export async function notify(input: NotifyInput, db: Db = getDb()): Promise<{ eventId: string; created: boolean }> {
+  const emailTypes: NotificationType[] = ["PROJECT_DROP", "DEADLINE_REMINDER", "SUBMISSION_RECEIVED", "SUBMISSION_ACCESS_FAILED", "RESULT_READY", "REWARD_REDEEMED", "REWARD_FULFILLED"];
+  const channels = input.channels?.length ? [...new Set(input.channels)]
+    : (["IN_APP", ...(emailTypes.includes(input.type) ? ["EMAIL"] : [])] as NotificationChannel[]);
+  // Nested transactions become savepoints inside submit/finalize/reward writes.
+  return db.transaction(async (tx) => {
+    const [event] = await tx.insert(events).values({
+        type: input.type, userId: input.userId, weekId: input.weekId ?? null,
+        title: input.title, body: input.body, actionUrl: input.actionUrl ?? null, dedupeKey: input.dedupeKey ?? null,
+      }).onConflictDoNothing({ target: events.dedupeKey }).returning({ id: events.id });
+    if (!event) {
+      const [existing] = await tx.select({ id: events.id }).from(events).where(eq(events.dedupeKey, input.dedupeKey!));
+      return { eventId: existing.id, created: false };
+    }
+    const now = new Date();
+    await tx.insert(deliveries).values(channels.map((channel) => ({
+        eventId: event.id, channel,
+        status: (channel === "IN_APP" ? "SENT" : "PENDING") as "SENT" | "PENDING",
+        sentAt: channel === "IN_APP" ? now : null,
+      })));
+    return { eventId: event.id, created: true };
+  });
 }
 
 /**
@@ -65,30 +66,40 @@ export async function notifyBestEffort(input: NotifyInput, db?: Db): Promise<voi
 }
 
 /**
- * Week broadcast for scheduler-owned types (PROJECT_DROP Monday,
- * DEADLINE_REMINDER Friday). Called by Hermes/cron via the internal API —
- * there is no in-app scheduler yet. One event per enrolled user; failures
- * are per-user best-effort and never abort the broadcast.
+ * Bounded, repeatable broadcast. Project drops include historical Arena
+ * participants; reminders target only this week's unfinished enrollments.
  */
 export async function broadcastWeekNotification(
-  input: { type: "PROJECT_DROP" | "DEADLINE_REMINDER"; weekId: string; title: string; body: string; actionUrl?: string | null },
+  input: { type: "PROJECT_DROP" | "DEADLINE_REMINDER"; weekId: string; title: string; body: string; actionUrl?: string | null; now?: Date },
   db: Db = getDb(),
-): Promise<{ notified: number }> {
+): Promise<{ notified: number; failed: number; alreadyNotified: number; batchFull: boolean }> {
+  const now = input.now ?? new Date();
+  const [week] = await db.select().from(weeks).where(eq(weeks.id, input.weekId));
+  if (!week || week.status !== "OPEN" || now < week.opensAt || now >= week.submissionDeadlineAt) {
+    throw new ArenaDomainError("WEEK_NOT_READY", "Notifications require an open week within its submission window.");
+  }
+  const prefix = `${input.type}:${input.weekId}:`;
   const rows = await db
-    .select({ userId: enrollments.userId })
+    .selectDistinct({ userId: enrollments.userId })
     .from(enrollments)
-    .where(eq(enrollments.weekId, input.weekId));
-  const uniqueUsers = [...new Set(rows.map((row) => row.userId))];
-  let notified = 0;
-  for (const userId of uniqueUsers) {
+    .innerJoin(users, eq(users.id, enrollments.userId))
+    .where(and(eq(users.status, "ACTIVE"), ne(enrollments.status, "VOIDED"),
+      input.type === "DEADLINE_REMINDER" ? and(eq(enrollments.weekId, input.weekId), eq(enrollments.status, "ACTIVE")) : undefined,
+      sql`not exists (select 1 from ${events} where ${events.dedupeKey} = ${prefix} || ${enrollments.userId}::text)`))
+    .orderBy(asc(enrollments.userId)).limit(100);
+  let notified = 0; let failed = 0; let alreadyNotified = 0;
+  for (const { userId } of rows) {
     try {
-      await notify({ type: input.type, userId, weekId: input.weekId, title: input.title, body: input.body, actionUrl: input.actionUrl ?? null }, db);
-      notified += 1;
+      const result = await notify({ type: input.type, userId, weekId: input.weekId, title: input.title, body: input.body,
+        actionUrl: input.actionUrl ?? null, dedupeKey: `${prefix}${userId}` }, db);
+      if (result.created) notified++;
+      else alreadyNotified++;
     } catch (error) {
+      failed++;
       console.error(`[notifications] broadcast ${input.type} failed for user:`, error);
     }
   }
-  return { notified };
+  return { notified, failed, alreadyNotified, batchFull: rows.length === 100 };
 }
 
 export interface InboxItem {
@@ -161,59 +172,4 @@ export async function markAllNotificationsRead(userId: string, db: Db = getDb())
     .where(and(eq(events.userId, userId), isNull(events.readAt)))
     .returning({ id: events.id });
   return { marked: updated.length };
-}
-
-/**
- * Flush queued EMAIL deliveries (called by Hermes/cron — no in-app
- * scheduler yet). Each delivery resolves exactly once: SENT with the
- * provider id, FAILED with the reason (retried next flush), or SKIPPED
- * when the user has no email on file. A failed send costs a resend click,
- * never the underlying reward/entitlement.
- */
-export async function flushPendingEmails(
-  input: { limit?: number; db?: Db } = {},
-): Promise<{ sent: number; failed: number; skipped: number }> {
-  const db = input.db ?? getDb();
-  const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
-  const pending = await db
-    .select({
-      deliveryId: deliveries.id,
-      title: events.title,
-      body: events.body,
-      email: users.emailCache,
-    })
-    .from(deliveries)
-    .innerJoin(events, eq(deliveries.eventId, events.id))
-    .leftJoin(users, eq(events.userId, users.id))
-    .where(and(eq(deliveries.channel, "EMAIL"), eq(deliveries.status, "PENDING")))
-    .orderBy(desc(deliveries.createdAt))
-    .limit(limit);
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
-  for (const row of pending) {
-    if (!row.email) {
-      await db.update(deliveries).set({ status: "SKIPPED", errorCode: "NO_EMAIL_ON_FILE" }).where(eq(deliveries.id, row.deliveryId));
-      skipped += 1;
-      continue;
-    }
-    const result = await sendArenaEmail({ to: row.email, subject: row.title, html: `<p>${row.body}</p>`, text: row.body });
-    if (result.ok && !result.skipped) {
-      await db
-        .update(deliveries)
-        .set({ status: "SENT", providerReference: result.id ?? null, sentAt: new Date(), errorCode: null })
-        .where(eq(deliveries.id, row.deliveryId));
-      sent += 1;
-    } else if (result.ok) {
-      // No key configured: leave PENDING (not skipped, not failed) so a
-      // future configured flush still delivers it.
-    } else {
-      await db
-        .update(deliveries)
-        .set({ status: "FAILED", errorCode: result.error.slice(0, 100), failedAt: new Date() })
-        .where(eq(deliveries.id, row.deliveryId));
-      failed += 1;
-    }
-  }
-  return { sent, failed, skipped };
 }

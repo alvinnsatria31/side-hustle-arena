@@ -19,9 +19,10 @@ import { buildBlindReviewerInput, buildImprovementFeedback, type BlindRubricCrit
 import { validateReviewerOutput } from "./validator";
 import { computeWeightedScore, secondJudgeDisagrees } from "./scorer";
 import { needsSecondJudge, REVIEW_CONFIDENCE_MIN } from "./judge-router";
-import { PROMPT_VERSION, StubReviewProvider, type ReviewProvider } from "./model-router";
+import { PROMPT_VERSION, createReviewProvider, type ReviewProvider } from "./model-router";
 import { reviewerOutputSchema, type ReviewerOutput } from "./review-schema";
 import { writeAudit } from "./audit";
+import { ensureReviewSources } from "./artifacts";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -70,6 +71,7 @@ export async function claimReviewJob(
   workerId: string,
   now: Date = new Date(),
   db: Db = getDb(),
+  targetJobId?: string,
 ): Promise<ClaimedJob | null> {
   const leaseExpiresAt = new Date(now.getTime() + JOB_LEASE_SECONDS * 1000);
   // SELECT FOR UPDATE SKIP LOCKED + UPDATE in one transaction: exactly one
@@ -82,9 +84,10 @@ export async function claimReviewJob(
         .where(
           and(
             or(
-              and(eq(reviewJobs.status, "PENDING"), lte(reviewJobs.availableAt, now)),
-              and(inArray(reviewJobs.status, ["PROCESSING", "RETRY"]), lte(reviewJobs.leaseExpiresAt, now)),
+              and(inArray(reviewJobs.status, ["PENDING", "RETRY"]), lte(reviewJobs.availableAt, now)),
+              and(eq(reviewJobs.status, "PROCESSING"), lte(reviewJobs.leaseExpiresAt, now)),
             ),
+            targetJobId ? eq(reviewJobs.id, targetJobId) : undefined,
             lt(reviewJobs.attemptCount, MAX_JOB_ATTEMPTS),
           ),
         )
@@ -109,7 +112,13 @@ export async function claimReviewJob(
   });
   if (!claimed) return null;
 
-  const input = await buildJobInput(db, claimed.submissionVersionId);
+  let input: Awaited<ReturnType<typeof buildJobInput>>;
+  try {
+    input = await buildJobInput(db, claimed.submissionVersionId);
+  } catch {
+    await failReviewJob({ jobId: claimed.id, workerId, code: 'ARTIFACT_EXTRACTION_FAILED', message: 'Artifact could not be extracted. Retry or inspect the submission.', now, db });
+    throw new ArenaDomainError('REVIEW_PROVIDER_FAILED', 'Submission artifact extraction failed.');
+  }
   await writeAudit(db, {
     actorType: "AUTOMATION",
     actorSubject: workerId,
@@ -190,9 +199,11 @@ async function buildJobInput(db: Db, versionId: string) {
       };
     }),
   );
+  const sources = process.env.APP_ENV !== 'development' || process.env.AI_REVIEW_PROVIDER === 'openai-compatible'
+    ? await ensureReviewSources(db, version, items) : undefined;
   return {
     attemptNumber: version.reviewAttemptNumber,
-    blind: buildBlindReviewerInput({
+    blind: { ...buildBlindReviewerInput({
       attemptNumber: version.reviewAttemptNumber ?? 0,
       projectTitle: project.title,
       divisionName: division.name,
@@ -200,16 +211,16 @@ async function buildJobInput(db: Db, versionId: string) {
       explanation: version.explanation,
       notes: version.notes,
       items: blindItems,
-    }),
+    }), sources },
   };
 }
 
 function getJudgeProvider(): ReviewProvider {
-  // Dev/test only until a real provider key is provisioned (see .env.example AI_*).
-  if ((process.env.APP_ENV ?? "") !== "development") {
+  try {
+    return createReviewProvider('judge');
+  } catch {
     throw new ArenaDomainError("REVIEW_PROVIDER_FAILED", "No review provider is configured for this environment.");
   }
-  return new StubReviewProvider({ confidence: 0.82 });
 }
 
 export interface CompletedReview {
@@ -232,16 +243,17 @@ export async function completeReviewJob(input: {
   workerId: string;
   output: unknown;
   judgeProvider?: ReviewProvider;
+  model?: string;
   now?: Date;
   db?: Db;
 }): Promise<CompletedReview> {
-  const { jobId, workerId, judgeProvider = getJudgeProvider() } = input;
+  const { jobId, workerId } = input;
   const now = input.now ?? new Date();
   const db = input.db ?? getDb();
 
   const job = (await db.select().from(reviewJobs).where(eq(reviewJobs.id, jobId)))[0];
   if (!job) throw new ArenaDomainError("REVIEW_JOB_NOT_FOUND", "Review job not found.");
-  if (job.lockedBy !== workerId || !job.leaseExpiresAt || job.leaseExpiresAt <= now || job.status === "COMPLETED" || job.status === "FAILED") {
+  if (job.lockedBy !== workerId || !job.leaseExpiresAt || job.leaseExpiresAt <= now || job.status !== "PROCESSING") {
     throw new ArenaDomainError("REVIEW_JOB_UNAVAILABLE", "Review job is not leased to this worker.");
   }
 
@@ -258,7 +270,8 @@ export async function completeReviewJob(input: {
     maxScore: Number(criterion.maxScore),
     reviewInstruction: criterion.reviewInstruction,
   }));
-  const validation = validateReviewerOutput(input.output, blindRubric);
+  const jobInput = await buildJobInput(db, job.submissionVersionId);
+  const validation = validateReviewerOutput(input.output, blindRubric, jobInput.blind.sources);
   if (!validation.ok) {
     await handleInvalidOutput(db, job, workerId, validation.errors, now);
     throw new ArenaDomainError("REVIEW_VALIDATION_FAILED", `Review output failed validation: ${validation.errors[0]}`, {
@@ -269,36 +282,35 @@ export async function completeReviewJob(input: {
   const { aiScore, rows } = computeWeightedScore(primary.criteria, blindRubric);
 
   // Second-judge routing (PRD §27): independent blind re-review, server-side.
-  const hasUnextractedFiles = items.some((item) => item.itemType === "FILE");
+  const hasUnextractedFiles = items.some((item) => item.itemType === "FILE") && !jobInput.blind.sources;
   const routing = needsSecondJudge({
     confidence: primary.confidence,
     warningCount: validation.warnings.length,
     hasUnextractedFiles,
   });
   let judgeScore: number | null = null;
+  let judgeEvidence: unknown = null;
   let disagrees = false;
   if (routing.needed) {
-    const judgeInput = await buildJobInput(db, job.submissionVersionId);
+    const judgeProvider = input.judgeProvider ?? getJudgeProvider();
     const judgeOutput = await judgeProvider.review({
       profile: "judge",
       model: judgeProvider.name,
-      input: judgeInput.blind,
+      input: jobInput.blind,
     });
-    const judgeValidation = validateReviewerOutput(judgeOutput, blindRubric);
+    const judgeValidation = validateReviewerOutput(judgeOutput, blindRubric, jobInput.blind.sources);
+    if (!judgeValidation.ok) {
+      await handleInvalidOutput(db, job, workerId, judgeValidation.errors, now);
+      throw new ArenaDomainError("REVIEW_VALIDATION_FAILED", "Second judge output failed validation.");
+    }
     if (judgeValidation.ok) {
+      judgeEvidence = judgeValidation.output;
       judgeScore = computeWeightedScore(judgeValidation.output.criteria, blindRubric).aiScore;
       disagrees = secondJudgeDisagrees(aiScore, judgeScore);
     }
   }
 
   const status = disagrees ? "NEEDS_RESOLUTION" : "COMPLETED_HIDDEN";
-  const existingRuns = await db
-    .select({ runNumber: reviews.runNumber })
-    .from(reviews)
-    .where(eq(reviews.submissionVersionId, job.submissionVersionId))
-    .orderBy(desc(reviews.runNumber))
-    .limit(1);
-  const runNumber = (existingRuns[0]?.runNumber ?? 0) + 1;
 
   // Post-lock improvement feedback (PRD §28, §29): previous attempt comparison
   // only, never fed back into scoring.
@@ -323,7 +335,19 @@ export async function completeReviewJob(input: {
     }
   }
 
-  const [review] = await db
+  return db.transaction(async (tx) => {
+  // Recheck the lease under lock after the model call; expired workers cannot
+  // publish over a newer claimant or create duplicate review runs.
+  const lockedJob = (await tx.select().from(reviewJobs).where(eq(reviewJobs.id, jobId)).for("update"))[0];
+  if (!lockedJob || lockedJob.status !== "PROCESSING" || lockedJob.lockedBy !== workerId ||
+      !lockedJob.leaseExpiresAt || lockedJob.leaseExpiresAt <= (input.now ?? new Date()) ||
+      lockedJob.attemptCount !== job.attemptCount) {
+    throw new ArenaDomainError("REVIEW_JOB_UNAVAILABLE", "Review lease changed before completion.");
+  }
+  const existingRuns = await tx.select({ runNumber: reviews.runNumber }).from(reviews)
+    .where(eq(reviews.submissionVersionId, job.submissionVersionId)).orderBy(desc(reviews.runNumber)).limit(1);
+  const runNumber = (existingRuns[0]?.runNumber ?? 0) + 1;
+  const [review] = await tx
     .insert(reviews)
     .values({
       submissionVersionId: job.submissionVersionId,
@@ -335,12 +359,12 @@ export async function completeReviewJob(input: {
       strengths: primary.strengths,
       improvements: primary.priorityImprovements,
       reviewConfidence: primary.confidence.toFixed(4),
-      reviewModel: workerId === "local-dev-worker" ? "stub-dev-v1" : "external-worker",
+      reviewModel: input.model ?? (workerId === "local-dev-worker" ? "stub-dev-v1" : "external-worker"),
       promptVersion: PROMPT_VERSION,
       reviewedAt: now,
     })
     .returning();
-  await db.insert(reviewScores).values(
+  await tx.insert(reviewScores).values(
     rows.map((row) => ({
       reviewId: review.id,
       rubricCriterionId: row.rubricCriterionId,
@@ -348,17 +372,18 @@ export async function completeReviewJob(input: {
       maxScore: row.maxScore.toFixed(2),
       weightedScore: row.weightedScore.toFixed(2),
       feedback: primary.criteria.find((criterion) => criterion.criterionId === row.rubricCriterionId)?.issues.join(" ") ?? null,
+      evidence: primary.criteria.find((criterion) => criterion.criterionId === row.rubricCriterionId)?.evidence ?? [],
     })),
   );
-  await db
+  await tx
     .update(submissionVersions)
     .set({ reviewStatus: "COMPLETED" })
     .where(eq(submissionVersions.id, job.submissionVersionId));
-  await db
+  await tx
     .update(reviewJobs)
     .set({ status: "COMPLETED", lastErrorCode: null, lastErrorMessage: null, updatedAt: now })
     .where(eq(reviewJobs.id, jobId));
-  await writeAudit(db, {
+  await writeAudit(tx, {
     actorType: "AUTOMATION",
     actorSubject: workerId,
     action: disagrees ? "REVIEW_NEEDS_RESOLUTION" : "REVIEW_COMPLETED",
@@ -373,6 +398,8 @@ export async function completeReviewJob(input: {
       judgeReason: routing.reason,
       judgeScore,
       disagrees,
+      judgeEvidence,
+      sourceHashes: jobInput.blind.sources?.map((source) => ({ id: source.id, sha256: source.sha256 })),
     },
   });
   return {
@@ -384,6 +411,7 @@ export async function completeReviewJob(input: {
     status,
     secondJudge: { ran: routing.needed, reason: routing.reason, disagrees },
   };
+  });
 }
 
 async function findPreviousAttemptReview(

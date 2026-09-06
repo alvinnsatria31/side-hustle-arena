@@ -1,0 +1,26 @@
+import { z } from "zod";
+import { arenaData, arenaError } from "@/server/arena/http";
+import { requireArenaAdmin } from "@/server/admin/auth";
+import { fulfillRedemption, reverseRedemption } from "@/server/rewards/redemption-service";
+
+const fulfillSchema = z.object({ reference: z.string().trim().min(1).max(1000) });
+const reverseSchema = z.object({ reason: z.string().trim().min(1).max(1000), fulfilledPolicy: z.literal("REFUND_POINTS_KEEP_FULFILLED_STOCK").optional() });
+export async function POST(request: Request, context: { params: Promise<{ id: string; action: string }> }) {
+  try {
+    const { actorSubject } = await requireArenaAdmin(request, "rewards");
+    const { id, action } = await context.params;
+    if (!z.string().uuid().safeParse(id).success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
+    const body = await request.json().catch(() => null);
+    if (action === "fulfill") {
+      const parsed = fulfillSchema.safeParse(body);
+      if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
+      return arenaData({ done: await fulfillRedemption({ ...parsed.data, redemptionId: id, actorSubject }) });
+    }
+    if (action === "reverse") {
+      const parsed = reverseSchema.safeParse(body);
+      if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
+      return arenaData({ done: await reverseRedemption({ ...parsed.data, redemptionId: id, actorSubject }) });
+    }
+    return arenaData({ reason: "UNKNOWN_ACTION" }, 404);
+  } catch (error) { return arenaError(error); }
+}

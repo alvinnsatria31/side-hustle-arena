@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { getProjectId, PROJECT_SLUG, PROJECT_TITLE } from "./fixture-db";
+import {
+  ensureMilestoneReward,
+  finalizeSubmittedFixture,
+  getFixtureSubmissionReviewState,
+  getProjectId,
+  PROJECT_SLUG,
+  PROJECT_TITLE,
+  WEEK_CODE,
+} from "./fixture-db";
 import { expect, test } from "./test-fixtures";
 
 const WORKSPACE = `/app/arena/workspace/${PROJECT_SLUG}`;
@@ -29,7 +37,7 @@ const MANDATORY_REVIEW_ITEMS = [
   "Insight mudah dipahami",
 ];
 
-/** Enrol through the API — see the `test.fail` case for why not through the UI. */
+/** Enrol through the API (fast path); the UI enrol case is covered separately. */
 async function enrolViaApi(page: Page, projectId: string) {
   const response = await page.request.post("/api/arena/enrollments", {
     headers: { origin, "content-type": "application/json" },
@@ -40,16 +48,6 @@ async function enrolViaApi(page: Page, projectId: string) {
 
 function isVisible(locator: Locator) {
   return locator.first().isVisible().catch(() => false);
-}
-
-/** Step transitions remount their subtree, so a button can vanish mid-click. */
-async function clickIfPresent(locator: Locator) {
-  try {
-    await locator.first().click({ timeout: 5_000 });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -184,6 +182,52 @@ test.describe.serial("Arena end-to-end", () => {
     if (corsReady) await expect(page.getByText("deliverable.pdf")).toBeVisible();
   });
 
+  test("a local AI review produces sealed feedback before finalization", async ({ page, db }) => {
+    await finalizeSubmittedFixture(db, { finalize: false });
+
+    const state = await getFixtureSubmissionReviewState(db);
+    expect(state.submissionStatus).toBe("REVIEWED_HIDDEN");
+    expect(state.reviewStatus).toBe("COMPLETED_HIDDEN");
+    expect(Number(state.finalScore)).toBeGreaterThan(0);
+
+    await page.goto(`/app/arena/result/${PROJECT_SLUG}`);
+    await expect(page.getByRole("heading", { name: "Feedback belum bisa dibuka." })).toBeVisible();
+    await expect(page.getByText("Jatah review kepakai 1/3")).toBeVisible();
+  });
+
+  test("the sealed result unseals after local finalization", async ({ page, db }) => {
+    await finalizeSubmittedFixture(db, { finalize: true });
+
+    await page.goto(`/app/arena/result/${PROJECT_SLUG}`);
+    await expect(page.getByRole("heading", { name: "Great work." })).toBeVisible();
+    await expect(page.getByText("Peringkat #1").first()).toBeVisible();
+    await expect(page.getByText("+300")).toBeVisible();
+
+    await page.goto(SUBMISSION);
+    await expect(page.getByText("FINAL", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Lihat Result" })).toBeVisible();
+  });
+
+  test("the leaderboard reflects the finalized submission", async ({ page }) => {
+    await page.goto("/app/arena/leaderboard");
+    await expect(page.getByRole("heading", { name: WEEK_CODE })).toBeVisible();
+    const board = page.getByRole("table");
+    await expect(board.getByRole("cell", { name: "#1" })).toBeVisible();
+    await expect(board.getByText("E2E", { exact: true })).toBeVisible();
+    await expect(board.getByText(PROJECT_TITLE)).toBeVisible();
+    await expect(board.getByRole("cell", { name: "+300" })).toBeVisible();
+  });
+
+  test("a milestone reward can be redeemed", async ({ page, db }) => {
+    await ensureMilestoneReward(db);
+
+    await page.goto("/app/profile#rewards");
+    await page.getByRole("button", { name: "Klaim reward" }).click();
+    await expect(page.getByText("Reward berhasil diklaim.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Sudah diklaim")).toBeVisible();
+    await expect(page.getByText("Menunggu")).toBeVisible();
+  });
+
   test("the submitted file downloads through a signed grant", async ({ page }) => {
     test.skip(!corsReady, CORS_REASON);
     await page.goto(SUBMISSION);
@@ -209,17 +253,5 @@ test.describe("Arena end-to-end: not yet coverable", () => {
   // site would issue, so everything downstream of the cookie is the real path.
   test.fixme("signing in on the main site and arriving through /arena/enter", async () => {});
 
-  // The review provider is still `stub-dev-v1`; no real model or Hermes worker
-  // is wired up, so there is nothing honest to assert.
-  test.fixme("an AI review produces scores and feedback", async () => {});
-
-  // Finalization runs on a Friday scheduler that is not live; triggering it by
-  // hand would test the harness, not the product.
-  test.fixme("the sealed result unseals after finalization", async () => {});
-
-  // Leaderboard is API-only; the user-facing page still renders mock data.
-  test.fixme("the leaderboard reflects the finalized submission", async () => {});
-
-  // Rewards/milestone APIs exist but no redemption flow is wired to a UI.
-  test.fixme("a milestone reward can be redeemed", async () => {});
+  test.fixme("real external AI review produces scores and feedback", async () => {});
 });

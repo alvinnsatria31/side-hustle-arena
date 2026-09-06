@@ -55,16 +55,54 @@ test("defaults revalidation to 60 seconds and rejects insecure production origin
     canonicalOrigin: "https://workspace.sekolahkarir.id",
     clientId: "arena",
     clientSecret: "a".repeat(32),
-    allowedOrigins: ["https://arena.sekolahkarir.id"],
   };
 
-  assert.equal(config.parseArenaAuthConfig(valid, "production").introspectionIntervalSeconds, 60);
+  assert.equal(config.parseArenaSsoBridgeConfig(valid, "production").introspectionIntervalSeconds, 60);
   assert.throws(
-    () => config.parseArenaAuthConfig({ ...valid, arenaOrigin: "http://arena.sekolahkarir.id" }, "production"),
+    () => config.parseArenaSsoBridgeConfig({ ...valid, arenaOrigin: "http://arena.sekolahkarir.id" }, "production"),
     /invalid/i,
   );
   assert.throws(
-    () => config.parseArenaAuthConfig({ ...valid, introspectionIntervalSeconds: 0 }, "production"),
+    () => config.parseArenaSsoBridgeConfig({ ...valid, introspectionIntervalSeconds: 0 }, "production"),
+    /invalid/i,
+  );
+});
+
+test("signing in never depends on the dormant SSO bridge credentials", () => {
+  // The regression that took production down: /auth/login called a parser that
+  // demanded ARENA_SSO_CLIENT_ID/SECRET, which the deployment deliberately does
+  // not set, so the login button returned 500 and nobody could sign in.
+  const signIn = config.parseArenaAuthConfig(
+    { arenaOrigin: "https://arena.sekolahkarir.id", canonicalOrigin: "https://www.sekolahkarir.id" },
+    "production",
+  );
+  assert.equal(signIn.canonicalOrigin, "https://www.sekolahkarir.id");
+  assert.throws(
+    () => config.parseArenaSsoBridgeConfig(
+      { arenaOrigin: "https://arena.sekolahkarir.id", canonicalOrigin: "https://www.sekolahkarir.id" },
+      "production",
+    ),
+    /invalid/i,
+  );
+});
+
+test("allows writes only from the Arena and the main site it trusts", () => {
+  const base = { arenaOrigin: "https://arena.sekolahkarir.id", canonicalOrigin: "https://www.sekolahkarir.id" };
+
+  assert.deepEqual(
+    config.parseArenaMutationOrigins({ ...base, allowedOrigins: ["https://arena.sekolahkarir.id"] }, "production"),
+    ["https://arena.sekolahkarir.id"],
+  );
+  // The value the deployment actually carried; it must configure, not crash.
+  assert.deepEqual(
+    config.parseArenaMutationOrigins(
+      { ...base, allowedOrigins: ["https://arena.sekolahkarir.id", "https://www.sekolahkarir.id"] },
+      "production",
+    ),
+    ["https://arena.sekolahkarir.id", "https://www.sekolahkarir.id"],
+  );
+  assert.throws(
+    () => config.parseArenaMutationOrigins({ ...base, allowedOrigins: ["https://evil.example"] }, "production"),
     /invalid/i,
   );
 });

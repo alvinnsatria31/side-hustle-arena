@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import {
   ARENA_FEATURES,
@@ -39,7 +39,7 @@ export async function getOpsOverview(db: Db = getDb()) {
       : [],
     db.select({ slug: catalog.slug, isActive: catalog.isActive }).from(catalog),
     db.execute(sql`select status, count(*)::int as n from rewards.redemptions group by status`),
-    db.select({ action: logs.action, entityType: logs.entityType, actorType: logs.actorType, createdAt: logs.createdAt })
+    db.select({ action: logs.action, entityType: logs.entityType, actorType: logs.actorType, actorSubject: logs.actorSubject, entityId: logs.entityId, createdAt: logs.createdAt })
       .from(logs).orderBy(desc(logs.createdAt)).limit(20),
     getReviewQueueDepth(db),
   ]);
@@ -48,7 +48,7 @@ export async function getOpsOverview(db: Db = getDb()) {
   );
   const first = (rows: unknown) => (rows as Array<{ n: number }>)[0]?.n ?? 0;
   return {
-    week: week ? { weekCode: week.weekCode, status: week.status, deadlineAt: week.submissionDeadlineAt } : null,
+    week: week ? { id: week.id, weekCode: week.weekCode, status: week.status, deadlineAt: week.submissionDeadlineAt } : null,
     enrollments: first(enrollmentCount),
     versions: first(versionCount),
     queue: queueDepth,
@@ -79,14 +79,15 @@ export async function setArenaFeatureFlag(input: {
     throw new ArenaDomainError("VALIDATION_ERROR", "Flag changes require an actor.");
   }
   const key = input.key as ArenaFeatureKey;
-  await db
+  return db.transaction(async (tx) => {
+  await tx
     .insert(featureFlags)
     .values({ key, maintenanceMode: input.closed, message: input.message ?? null })
     .onConflictDoUpdate({
       target: featureFlags.key,
       set: { maintenanceMode: input.closed, message: input.message ?? null, updatedAt: new Date() },
     });
-  await writeAudit(db, {
+  await writeAudit(tx, {
     actorType: "ADMIN",
     actorSubject: input.actorSubject,
     action: "FEATURE_FLAG_SET",
@@ -95,4 +96,5 @@ export async function setArenaFeatureFlag(input: {
     metadata: { closed: input.closed, message: input.message ?? null },
   });
   return { key, closed: input.closed };
+  });
 }

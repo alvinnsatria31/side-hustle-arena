@@ -8,18 +8,24 @@ interface LoginModalProps {
   onClose: () => void;
   /** Where to continue after the demo session is established. */
   continueTo?: string;
-  /** Overrides the default navigation (e.g. to also enroll into the project). */
-  onContinue?: () => void;
 }
 
 /**
  * Approved login-required modal: fade + 8px lift, no scale.
  * The visual shell remains; authentication starts the server-side SSO flow.
+ *
+ * There is no post-login callback: `establish` hands the browser to the SSO
+ * route, so this component's page never resumes. Anything that must happen
+ * after login belongs on the `returnTo` page.
  */
-export function LoginModal({ open, onClose, continueTo, onContinue }: LoginModalProps) {
+export function LoginModal({ open, onClose, continueTo }: LoginModalProps) {
   const establish = () => {
     onClose();
     const returnTo = continueTo?.startsWith('/app') ? continueTo : '/app';
+    // A full document navigation, not router.push: /auth/login is a route
+    // handler that redirects to another origin (the main site's gate), which a
+    // client-side navigation cannot follow.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign('/auth/login?returnTo=' + encodeURIComponent(returnTo));
   };
 

@@ -41,6 +41,28 @@ test("VPS webhook reports delivery failure instead of throwing", async () => {
   }
 });
 
+test("VPS webhook refuses bearer delivery over non-legacy plain HTTP", async () => {
+  const savedToken = process.env.VPS_WEBHOOK_TOKEN;
+  const savedBase = process.env.VPS_WEBHOOK_BASE_URL;
+  try {
+    process.env.VPS_WEBHOOK_TOKEN = "test-token";
+    process.env.VPS_WEBHOOK_BASE_URL = "http://example.com/webhook";
+    let called = false;
+    const result = await vps.sendVpsWebhook("arena-submit", {}, async () => {
+      called = true;
+      throw new Error("must not be called");
+    });
+    assert.equal(result.ok, false);
+    assert.equal(called, false, "token must never leave over plain HTTP to a custom host");
+    assert.match(result.error ?? "", /HTTPS/);
+  } finally {
+    if (savedToken === undefined) delete process.env.VPS_WEBHOOK_TOKEN;
+    else process.env.VPS_WEBHOOK_TOKEN = savedToken;
+    if (savedBase === undefined) delete process.env.VPS_WEBHOOK_BASE_URL;
+    else process.env.VPS_WEBHOOK_BASE_URL = savedBase;
+  }
+});
+
 test("email sender distinguishes skipped (no key) from sent and failed", async () => {
   const saved = process.env.RESEND_API_KEY;
   try {

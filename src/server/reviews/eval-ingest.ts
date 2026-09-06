@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { reviewJobs } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { claimReviewJob, completeReviewJob } from "@/server/reviews/queue-service";
+import { claimReviewJob, completeReviewJob, failReviewJob } from "@/server/reviews/queue-service";
 import type { ReviewerOutput } from "@/server/reviews/review-schema";
 import { writeAudit } from "@/server/reviews/audit";
 
@@ -35,18 +35,18 @@ export async function ingestExternalReview(input: {
   )[0];
   if (!pending) return { reviewId: "", runNumber: 0, aiScore: 0, status: "COMPLETED", deduped: true };
   const job = (await db.select().from(reviewJobs).where(eq(reviewJobs.id, pending.id)))[0];
-  if (!job || job.status !== "PENDING") {
+  if (!job || job.status === "COMPLETED") {
     return { reviewId: "", runNumber: 0, aiScore: 0, status: job?.status ?? "UNKNOWN", deduped: true };
   }
   const workerId = `external-eval:${input.workerLabel}`.slice(0, 100);
-  const claimed = await claimReviewJob(workerId, now, db);
+  const claimed = await claimReviewJob(workerId, now, db, job.id);
   if (!claimed || claimed.jobId !== job.id) {
     // Lost the race to another worker — its completion wins; this delivery
     // is a safe no-op rather than a second opinion.
-    return { reviewId: "", runNumber: 0, aiScore: 0, status: "CLAIMED_ELSEWHERE", deduped: true };
+    throw new ArenaDomainError("REVIEW_JOB_UNAVAILABLE", "Review job is not available; retry delivery later.");
   }
   try {
-    const completed = await completeReviewJob({ jobId: job.id, workerId, output: input.output, now, db });
+    const completed = await completeReviewJob({ jobId: job.id, workerId, output: input.output, model: input.model, db });
     await writeAudit(db, {
       actorType: "AUTOMATION",
       actorSubject: workerId,
@@ -57,6 +57,9 @@ export async function ingestExternalReview(input: {
     });
     return { ...completed, deduped: false };
   } catch (error) {
+    if (!(error instanceof ArenaDomainError) || error.code === 'REVIEW_PROVIDER_FAILED') {
+      await failReviewJob({ jobId: job.id, workerId, code: 'REVIEW_PROVIDER_FAILED', message: 'External review failed; retry delivery.', db });
+    }
     if (error instanceof ArenaDomainError) throw error;
     throw new ArenaDomainError("REVIEW_PROVIDER_FAILED", "External review ingest failed.");
   }

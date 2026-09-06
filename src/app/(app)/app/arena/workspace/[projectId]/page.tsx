@@ -26,7 +26,7 @@ import {
   deleteSubmissionItem,
   finalizeUpload,
   formatBytes,
-  getCurrentEnrollment,
+  getMyEnrollmentForProject,
   getSubmission,
   getVisibleProjectDetail,
   getWeekCurrent,
@@ -254,17 +254,17 @@ export default function WorkspacePage() {
     (async () => {
       try {
         const detail = await getVisibleProjectDetail(params.projectId);
-        const enrollment = await getCurrentEnrollment();
+        const enrollment = await getMyEnrollmentForProject(detail.id, detail.slug);
         if (cancelled) return;
-        if (!enrollment || enrollment.projectId !== detail.id) {
+        if (!enrollment) {
           setProject(toLiveProject(detail));
           setProjectId(detail.id);
           setBoot('no-enrollment');
           return;
         }
         const [ws, sub, week] = await Promise.all([
-          getWorkspace(enrollment.id),
-          getSubmission(enrollment.id),
+          getWorkspace(enrollment.enrollmentId),
+          getSubmission(enrollment.enrollmentId),
           getWeekCurrent(),
         ]);
         if (cancelled) return;
@@ -276,7 +276,7 @@ export default function WorkspacePage() {
         }));
         setProject(live);
         setProjectId(detail.id);
-        setEnrollmentId(enrollment.id);
+        setEnrollmentId(enrollment.enrollmentId);
         setEnrollmentStatus(enrollment.status);
         setWeekCode(week.weekCode);
         setDeadline(deadlineLabel(week.submissionDeadlineAt));
@@ -318,7 +318,6 @@ export default function WorkspacePage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.projectId]);
 
   const savePatch = async (patch: WorkspacePatch, toastMsg?: string) => {
@@ -616,7 +615,7 @@ export default function WorkspacePage() {
       </ul>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button onClick={() => goStep('plan')}>Saya Paham, Mulai Rencanakan →</Button>
+        <Button onClick={() => goStep('plan')}>Saya Paham, Mulai Rencanakan</Button>
       </div>
     </div>
   );
@@ -718,7 +717,7 @@ export default function WorkspacePage() {
             setStep('work');
           }}
         >
-          Simpan Plan & Mulai Kerja →
+          Simpan Plan & Mulai Kerja
         </Button>
       </div>
     </div>
@@ -793,7 +792,7 @@ export default function WorkspacePage() {
       </label>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button onClick={() => goStep('review')}>Lanjut ke Review Checklist →</Button>
+        <Button onClick={() => goStep('review')}>Lanjut ke Review Checklist</Button>
         <Button
           variant="ghost"
           onClick={() => {
@@ -843,7 +842,7 @@ export default function WorkspacePage() {
 
       <div className="mt-7 flex flex-wrap items-center gap-2.5">
         <Button disabled={!allMandatory} onClick={() => goStep('submit')}>
-          Lanjut ke Submit →
+          Lanjut ke Submit
         </Button>
         {!allMandatory && (
           <span className="inline-flex items-center gap-1.5 text-[12px] text-sk-warning-ink">
@@ -1081,7 +1080,7 @@ export default function WorkspacePage() {
           }}
           className="min-w-[220px]"
         >
-          {phase === 'submitting' ? 'Mengirim submission…' : 'Submit Project →'}
+          {phase === 'submitting' ? 'Mengirim submission…' : 'Submit Project'}
         </Button>
         {phase === 'submitting' && (
           <span className="inline-flex items-center text-[12.5px] text-sk-muted">Memvalidasi link & deliverables…</span>

@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
+if (!process.env.SESSION_SECRET && process.env.SSESSION_SECRET) {
+  process.env.SESSION_SECRET = process.env.SSESSION_SECRET;
+}
 
 // Mutations are origin-checked against ARENA_ALLOWED_ORIGINS, which is
 // http://localhost:3001 in development — so E2E must drive that exact origin.
@@ -32,7 +38,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run dev",
+    command: "node scripts/playwright-dev-server.mjs",
     url: BASE_URL,
     reuseExistingServer: true,
     timeout: 180_000,

@@ -65,14 +65,14 @@ export function RecommendedCard({
             onClick={onCtaClick}
             className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-sk-md)] bg-white px-[22px] text-[13.5px] font-bold text-sk-blue shadow-md transition-transform duration-200 hover:-translate-y-px active:scale-[0.98]"
           >
-            {ctaLabel} →
+            {ctaLabel}
           </button>
         ) : (
           <Link
             href={to}
             className="inline-flex h-11 items-center gap-2 rounded-[var(--radius-sk-md)] bg-white px-[22px] text-[13.5px] font-bold text-sk-blue shadow-md transition-transform duration-200 hover:-translate-y-px active:scale-[0.98]"
           >
-            {ctaLabel} →
+            {ctaLabel}
           </Link>
         )}
       </div>

@@ -1,5 +1,20 @@
 # Side Hustle Arena — Backend Implementation Status
 
+> **Addendum 5 September 2026 (malam, working tree):** end-to-end wiring pass.
+> Pindah ke "sudah": `voidEnrollment` transaksional + hapus skill-evidence saat void;
+> writer `skill_evidence` saat finalisasi; magic-bytes di `finalizeArenaUpload`
+> (+ kasus spoof di attack suite); guard HTTPS hook VPS; `runProjectDrop` nyata
+> (prepare→generate→optional publish, `AiGenerationProvider` bila `AI_API_*`
+> diset, library-only bila tidak); cron `storage-cleanup`; migrasi 0007
+> teraplikasi di DB dev; kontrak double-take refuse dipulihkan;
+> enrollment history-aware di 3 halaman + CTA live tanpa DemoProvider; deep
+> link notifikasi pakai slug. Verifikasi: typecheck/lint/build bersih;
+> vps 7/7, pipeline 10/10, ranking 4/4, attack 7/7, upload 4/4, flow 1/1,
+> core 9/9, reviews 1/1, finalize 1/1, participant-auth 5/5, storage 2/2,
+> scheduler 3/3, transfer 6/6, db:local 1/1 (suite DB harus sekuensial).
+> Detail: `docs/backend/END_TO_END_IMPLEMENTATION.md`. Kunci AI live ada di
+> VPS Hermes — salin `AI_API_*` dari sana (lihat bagian handoff di dokumen itu).
+>
 > **Diperiksa:** 5 September 2026 · **HEAD:** `8c938d7` · 24 commit di `main`
 >
 > **Fase berjalan:** Phase 9c — alur peserta tuntas di browser; menyambungkan reviewer AI sungguhan adalah pekerjaan berikutnya.

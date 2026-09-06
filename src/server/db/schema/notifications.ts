@@ -1,4 +1,4 @@
-import { index, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./identity";
 import { weeks } from "./arena-core";
 import { deliveryStatus, notificationChannel, notificationType } from "./enums";
@@ -12,6 +12,7 @@ export const events = notifications.table("events", {
   title: text("title").notNull(),
   body: text("body").notNull(),
   actionUrl: text("action_url"),
+  dedupeKey: text("dedupe_key").unique("events_dedupe_key_unique"),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -27,8 +28,15 @@ export const deliveries = notifications.table("deliveries", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
   failedAt: timestamp("failed_at", { withTimezone: true }),
   errorCode: text("error_code"),
+  attemptCount: integer("attempt_count").default(0).notNull(),
+  availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+  firstAttemptAt: timestamp("first_attempt_at", { withTimezone: true }),
+  leaseToken: uuid("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  messageSnapshot: jsonb("message_snapshot").$type<{ from: string; to: string; subject: string; html: string; text: string }>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("deliveries_status_idx").on(table.status),
+  index("deliveries_email_queue_idx").on(table.channel, table.status, table.availableAt),
 ]);

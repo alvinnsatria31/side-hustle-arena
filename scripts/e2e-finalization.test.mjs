@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import nextEnv from "@next/env";
 import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { eq } from "drizzle-orm";
+import { logs } from "../src/server/db/schema/index.ts";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
@@ -72,7 +75,6 @@ async function cleanup() {
   // Inbox events (submit/finalize triggers) reference nothing: clear per week.
   await sql`delete from notifications.deliveries where event_id in (select id from notifications.events where week_id = ${weekId})`;
   await sql`delete from notifications.events where week_id = ${weekId}`;
-  await sql`delete from audit.logs where entity_type = 'feature_flag' and entity_id = 'arena-publish'`;
   // Milestone take fixtures (redemptions + temp SKU) reference users/catalog.
   await sql`delete from rewards.redemptions where user_id in (select user_id from arena.enrollments where week_id = ${weekId})`;
   await sql`delete from rewards.catalog where slug = ${MILE_SLUG}`;
@@ -86,10 +88,17 @@ async function cleanup() {
         for (const review of fetchedReviews) {
           await sql`delete from arena.review_scores where review_id = ${review.id}`;
           await sql`delete from arena.review_overrides where review_id = ${review.id}`;
+          // Finalization writes one row per project skill; this fixture maps no
+          // skills, but a void-less run on a skilled project would leave rows
+          // that block the reviews delete below.
+          await sql`delete from arena.skill_evidence where review_id = ${review.id}`;
           await sql`delete from audit.logs where entity_id = ${review.id}`;
         }
         await sql`delete from arena.reviews where submission_version_id = ${version.id}`;
         await sql`delete from arena.review_jobs where submission_version_id = ${version.id}`;
+        // Extracted artifacts hang off the version, not the review (0007), so
+        // they outlive the reviews and block the submission_versions delete.
+        await sql`delete from arena.review_artifacts where submission_version_id = ${version.id}`;
         await sql`delete from audit.logs where entity_id = ${version.id}`;
         await sql`delete from arena.submission_version_items where submission_version_id = ${version.id}`;
       }
@@ -196,11 +205,14 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
   assert.equal(overview.enrollments, 3);
   assert.equal(overview.flags.length, 4);
   assert.ok(overview.catalog.active >= 1, "seeded catalog SKU missing from overview");
-  const flagSet = await adminOps.setArenaFeatureFlag({ key: "arena-publish", closed: true, message: "E2E freeze", actorSubject: "e2e-admin" });
-  assert.deepEqual(flagSet, { key: "arena-publish", closed: true });
-  const flagAudit = await sql`select action from audit.logs where entity_type = 'feature_flag' and entity_id = 'arena-publish'`;
-  assert.ok(flagAudit.some((row) => row.action === "FEATURE_FLAG_SET"));
-  await adminOps.setArenaFeatureFlag({ key: "arena-publish", closed: false, message: null, actorSubject: "e2e-admin" });
+  const rollbackFlags = new Error("rollback fixture flag changes");
+  await assert.rejects(() => drizzle({ client: sql }).transaction(async (tx) => {
+    const flagSet = await adminOps.setArenaFeatureFlag({ key: "arena-publish", closed: true, message: "E2E freeze", actorSubject: `e2e-admin-${stamp}`, db: tx });
+    assert.deepEqual(flagSet, { key: "arena-publish", closed: true });
+    const flagAudit = await tx.select().from(logs).where(eq(logs.actorSubject, `e2e-admin-${stamp}`));
+    assert.ok(flagAudit.some((row) => row.action === "FEATURE_FLAG_SET"));
+    throw rollbackFlags;
+  }), (error) => error === rollbackFlags);
   await assert.rejects(
     () => adminOps.setArenaFeatureFlag({ key: "nope", closed: true, actorSubject: "e2e-admin" }),
     (error) => error?.code === "VALIDATION_ERROR",

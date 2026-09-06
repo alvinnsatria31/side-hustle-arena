@@ -17,7 +17,13 @@ export default async function ArenaBrowsePage() {
           Pilih satu project yang paling sesuai dengan skill yang ingin kamu bangun.
         </p>
       </Entrance>
-      <ProjectBrowser projects={projects} groups={groups} showRecommended={false} />
+      {projects.length === 0 ? (
+        <p role="status" className="border-y border-sk-border py-10 text-[14px] text-sk-muted">
+          Belum ada project yang dibuka. Project baru rilis setiap Senin — cek lagi nanti.
+        </p>
+      ) : (
+        <ProjectBrowser projects={projects} groups={groups} showRecommended={false} />
+      )}
     </div>
   );
 }

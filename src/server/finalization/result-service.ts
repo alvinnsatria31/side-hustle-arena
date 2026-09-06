@@ -26,8 +26,7 @@ import { ArenaDomainError } from "@/server/arena/errors";
  *   void) → `{ finalized: true, ranked: false }`.
  * - Masuk ranking → skor + rubrik + skills + poin dari baris final resmi.
  */
-export async function getArenaResult({ userId, enrollmentId }: { userId: string; enrollmentId: string }) {
-  const db = getDb();
+export async function getArenaResult({ userId, enrollmentId, db = getDb() }: { userId: string; enrollmentId: string; db?: ReturnType<typeof getDb> }) {
   const enrollment = (
     await db
       .select()
@@ -43,6 +42,15 @@ export async function getArenaResult({ userId, enrollmentId }: { userId: string;
     await db.select().from(submissions).where(eq(submissions.enrollmentId, enrollment.id))
   )[0];
 
+  if (week.status !== "FINALIZED" && week.status !== "ARCHIVED") {
+    return {
+      sealed: true as const,
+      weekStatus: week.status,
+      reviewAttemptsUsed: submission?.reviewAttemptsUsed ?? 0,
+      submissionStatus: submission?.status ?? "NONE",
+    };
+  }
+
   const rankRow = (
     await db
       .select()
@@ -51,13 +59,7 @@ export async function getArenaResult({ userId, enrollmentId }: { userId: string;
   )[0];
 
   if (!rankRow) {
-    if (week.status === "FINALIZED") return { sealed: false as const, finalized: true as const, ranked: false as const };
-    return {
-      sealed: true as const,
-      weekStatus: week.status,
-      reviewAttemptsUsed: submission?.reviewAttemptsUsed ?? 0,
-      submissionStatus: submission?.status ?? "NONE",
-    };
+    return { sealed: false as const, finalized: true as const, ranked: false as const };
   }
 
   const review = (await db.select().from(reviews).where(eq(reviews.id, rankRow.reviewId)))[0];
@@ -99,7 +101,7 @@ export async function getArenaResult({ userId, enrollmentId }: { userId: string;
     ranked: true as const,
     rank: rankRow.rank,
     weekCode: week.weekCode,
-    finalScore: Number(review.finalScore ?? rankRow.finalScore),
+    finalScore: Number(rankRow.finalScore),
     pointsAwarded: rankRow.pointsAwarded,
     summary: review.summary,
     strengths: asStrings(review.strengths),

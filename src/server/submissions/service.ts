@@ -3,6 +3,7 @@ import { ArenaDomainError } from "@/server/arena/errors";
 import { getDb } from "@/server/db/client";
 import {
   enrollments,
+  projects,
   projectSubmissionRequirements,
   submissionDraftItems,
   submissionVersionItems,
@@ -12,7 +13,7 @@ import {
   weekRules,
   weeks,
 } from "@/server/db/schema";
-import { createPresignedDownload, createPresignedUpload, createSubmissionObjectKey, deletePrivateObject, getStorageEnvironment, headPrivateObject } from "@/server/storage";
+import { createPresignedDownload, createPresignedUpload, createSubmissionObjectKey, deletePrivateObject, downloadObjectBytes, assertContentSignature, getStorageEnvironment, headPrivateObject } from "@/server/storage";
 import { assertArenaFeatureOpen } from "@/server/ops/feature-flags";
 import { notifyBestEffort } from "@/server/notifications/service";
 import { enqueueReviewJob } from "@/server/reviews/queue-service";
@@ -188,6 +189,19 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
     throw new ArenaDomainError("UPLOAD_VALIDATION_FAILED", "Uploaded object metadata did not match the upload intent.");
   }
 
+  // Magic-bytes admission check: the declared MIME/extension is not trusted on
+  // its own — a renamed executable must fail here, before the draft references
+  // it and long before a reviewer opens it. Failures delete the object so a
+  // spoofed upload can never be finalized on retry.
+  try {
+    const content = await downloadObjectBytes(intent.storageKey, { expectedSizeBytes: intent.expectedSizeBytes });
+    assertContentSignature(content.bytes, intent.expectedMimeType);
+  } catch (error) {
+    await deletePrivateObject(intent.storageKey).catch(() => undefined);
+    if (error instanceof ArenaDomainError) throw error;
+    return mapStorageError(error);
+  }
+
   return db.transaction(async (tx) => {
     const freshIntent = (await tx.update(uploadIntents).set({ consumedAt: now })
       .where(and(eq(uploadIntents.id, intent.id), isNull(uploadIntents.consumedAt), gt(uploadIntents.expiresAt, now))).returning())[0];
@@ -297,7 +311,12 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
   });
 
   // Best-effort inbox notice: must never break the submit itself (PRD §36).
-  const actionUrl = `/app/arena/submission/${context.enrollment.projectId}`;
+  // Canonical slug deep link — the detail route resolves slugs and UUIDs, but
+  // the slug is the stable, shareable form (matches EnrollmentCard links).
+  const projectSlug = (
+    await db.select({ slug: projects.slug }).from(projects).where(eq(projects.id, context.enrollment.projectId))
+  )[0]?.slug;
+  const actionUrl = `/app/arena/submission/${projectSlug ?? context.enrollment.projectId}`;
   if (result.version.accessStatus === "FAILED") {
     await notifyBestEffort({
       type: "SUBMISSION_ACCESS_FAILED",

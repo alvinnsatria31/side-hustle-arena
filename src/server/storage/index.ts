@@ -5,3 +5,4 @@ export * from "./object-key";
 export * from "./r2-client";
 export * from "./storage-client";
 export * from "./upload";
+export * from "./integrity";

@@ -7,10 +7,9 @@ import { catalog } from "@/server/db/schema";
  * Public reward catalog read model (PRD §35).
  *
  * Read-only: catalog rows seeded from the locked reward SKUs (the confirmed
- * `2,000 points → USD 20` SKU plus website-proven supporting SKUs). Redemption,
- * inventory locking, fulfillment, and reversal remain Phase 7 work — this
- * endpoint only exposes what is currently claimable so the frontend can render
- * the ladder without touching ledger writes.
+ * `2,000 points → USD 20` SKU plus website-proven supporting SKUs). This endpoint
+ * exposes active catalog entries. Live stock and spendable balance are checked
+ * transactionally by redemption-service at claim time.
  */
 export interface PublicCatalogItem {
   slug: string;

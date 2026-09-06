@@ -1,11 +1,16 @@
 import "server-only";
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { closeWeekForFinalization, finalizeWeek } from "@/server/finalization/service";
-import { flushPendingEmails } from "@/server/notifications/service";
+import { broadcastWeekNotification, flushPendingEmails } from "@/server/notifications/service";
+import { scheduledWeekNotices } from "@/server/notifications/schedule";
 import { cleanupExpiredArenaSessions } from "@/server/auth/session-retention";
+import { cleanupExpiredUploads } from "@/server/storage/cleanup";
+import { generateWeek, prepareScheduledWeek, publishWeek } from "@/server/generation/service";
+import { generationConfig } from "@/server/generation/core";
+import { createGenerationProvider } from "@/server/generation/ai-provider";
 
 const ACTOR = "scheduler";
 
@@ -77,34 +82,102 @@ export async function runEmailFlush(): Promise<JobResult> {
   return { job: "email-flush", done: true, detail: await flushPendingEmails({ limit: 100 }) };
 }
 
+/** Recover missed broadcasts from durable week state; events dedupe across ticks. */
+export async function runWeekNotifications(now = new Date()): Promise<JobResult> {
+  const open = await getDb().select().from(weeks).where(and(eq(weeks.status, "OPEN"),
+    lte(weeks.opensAt, now), gt(weeks.submissionDeadlineAt, now))).orderBy(asc(weeks.opensAt));
+  const results = [];
+  for (const week of open) {
+    for (const notice of scheduledWeekNotices(week, now)) {
+      try {
+        results.push({ weekId: week.id, type: notice.type, ...await broadcastWeekNotification({ ...notice, now }) });
+      } catch (error) {
+        if (!(error instanceof ArenaDomainError)) throw error;
+        results.push({ weekId: week.id, type: notice.type, failed: 1, message: error.message });
+      }
+    }
+  }
+  return { job: "week-notifications", done: results.every((result) => !result.failed && !("batchFull" in result && result.batchFull)), detail: { results } };
+}
+
 /** Drop auth sessions past the retention window (PRD §65 Authentication). */
 export async function runSessionCleanup(now = new Date()): Promise<JobResult> {
   return { job: "session-cleanup", done: true, detail: { deleted: await cleanupExpiredArenaSessions(now) } };
 }
 
-/**
- * PLACEHOLDER: Monday project drop.
- *
- * The weekly generator (Hermes generation, validation, anti-duplicate,
- * library/evergreen fallback, auto-publish — PRD §65 "Project Generation") does
- * not exist yet. This job reports that honestly instead of pretending a drop
- * happened, so a scheduled Monday that produced nothing is visible in the cron
- * log rather than silent. Replace the body when the generator lands.
- */
-export async function runProjectDrop(): Promise<JobResult> {
-  return {
-    job: "project-drop",
-    done: false,
-    detail: { notImplemented: "Weekly project generation is not built yet; publish next week's projects by hand." },
-  };
+const projectJobs = {
+  config: generationConfig,
+  prepare: prepareScheduledWeek,
+  provider: createGenerationProvider,
+  generate: generateWeek,
+  publish: publishWeek,
+  due: async (now: Date) => getDb().select({ id: weeks.id, weekCode: weeks.weekCode }).from(weeks)
+    .where(and(inArray(weeks.status, ["DRAFT", "PREVIEW", "SCHEDULED"]),
+      lte(weeks.opensAt, now), gt(weeks.submissionDeadlineAt, now)))
+    .orderBy(asc(weeks.opensAt)),
+};
+
+/** Prepare Sunday's preview. Publication is a separate, opening-time-gated job. */
+export async function runProjectGenerate(now = new Date(), deps = projectJobs): Promise<JobResult> {
+  const job = "project-generate";
+  if (!deps.config().enabled) return { job, done: false, detail: { skipped: "generation disabled" } };
+  const actor = { actorSubject: ACTOR, actorType: "AUTOMATION" as const };
+  try {
+    const prepared = await deps.prepare({ ...actor, now });
+    if (!("weekId" in prepared)) {
+      return { job, done: false, detail: { skipped: prepared.skipped } };
+    }
+    const provider = deps.provider() ?? undefined;
+    const generated = await deps.generate({ ...actor, weekId: prepared.weekId, provider, now });
+    return {
+      job, done: generated.results.length > 0 && generated.results.every((result) => !("failed" in result)),
+      detail: { weekId: prepared.weekId, created: prepared.created, provider: provider?.name ?? "library-only", results: generated.results },
+    };
+  } catch (error) {
+    if (error instanceof ArenaDomainError) {
+      return { job, done: false, detail: { failed: error.code, message: error.message } };
+    }
+    throw error;
+  }
+}
+
+/** Retry due weeks until publication succeeds or their submission deadline passes. */
+export async function runProjectDrop(now = new Date(), deps = projectJobs): Promise<JobResult> {
+  const job = "project-drop";
+  if (!deps.config().autoPublish) return { job, done: false, detail: { skipped: "auto-publish disabled; manual publication required" } };
+  const due = await deps.due(now);
+  if (!due.length) return { job, done: true, detail: { skipped: "no week due for publication" } };
+  const results = [];
+  let done = true;
+  for (const week of due) {
+    try {
+      const result = await deps.publish({ actorSubject: ACTOR, actorType: "AUTOMATION", weekId: week.id, now });
+      if ((!result.published.length && result.skipped !== "week already open") || result.held.length) done = false;
+      results.push({ ...result, weekId: week.id });
+    } catch (error) {
+      if (!(error instanceof ArenaDomainError)) throw error;
+      done = false;
+      results.push({ weekId: week.id, failed: error.code, message: error.message });
+    }
+  }
+  return { job, done, detail: { results } };
+}
+
+/** Delete expired, unreferenced upload intents past the grace period (live run, bounded). */
+export async function runStorageCleanup(): Promise<JobResult> {
+  const totals = await cleanupExpiredUploads({ dryRun: false, limit: 100 });
+  return { job: "storage-cleanup", done: true, detail: { ...totals } };
 }
 
 export const JOBS = {
   "week-close": runWeekClose,
   "week-finalize": runWeekFinalize,
   "email-flush": runEmailFlush,
+  "week-notifications": runWeekNotifications,
   "session-cleanup": runSessionCleanup,
+  "storage-cleanup": runStorageCleanup,
   "project-drop": runProjectDrop,
+  "project-generate": runProjectGenerate,
 } satisfies Record<string, (now?: Date) => Promise<JobResult>>;
 
 export type JobName = keyof typeof JOBS;

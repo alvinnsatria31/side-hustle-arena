@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Check, TriangleAlert } from 'lucide-react';
+import { Check, TriangleAlert } from 'lucide-react';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { Badge } from '@/components/primitives/Badge';
 import { Card, PanelHeading } from '@/components/primitives/Card';
@@ -15,18 +15,8 @@ import { StateBox } from '@/components/primitives/StateBox';
 import { EvidenceRow } from '@/components/arena/EvidenceRow';
 import { RecommendedCard } from '@/components/arena/RecommendedCard';
 import { useDemo } from '@/features/demo/store';
-import {
-  MOCK_CV_EVIDENCE,
-  MOCK_CV_FILE_NAME,
-  MOCK_CV_IMPROVEMENTS,
-  MOCK_CV_METRICS,
-  MOCK_CV_SCORE,
-  MOCK_CV_STRENGTHS,
-  MOCK_CV_STATUS,
-  MOCK_ATS_CHECKS,
-  MOCK_IMPACT_EXAMPLES,
-  MOCK_QUALITY_CHECKS,
-} from '@/data/mock/cv';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { CvScannerClosed } from './CvScannerClosed';
 import { RECOMMENDED_PROJECT_SLUG, getProject } from '@/data/mock/projects';
 import { cn } from '@/lib/cn';
 
@@ -78,7 +68,13 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
     }
   }, [state.cvScan.status, router]);
 
-  if (state.cvScan.status !== 'completed') {
+  // After every hook: an early return above them would change hook order
+  // between renders the moment the flag flips.
+  if (!isCvScannerEnabled()) return <CvScannerClosed />;
+
+  // Both conditions matter: a state persisted before the scanner had a backend
+  // can be 'completed' with no analysis attached.
+  if (state.cvScan.status !== 'completed' || !state.cvScan.result) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-sk-bg px-6 pb-24 pt-24">
         <StateBox
@@ -91,8 +87,12 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
     );
   }
 
-  const analyzedAt = state.cvScan.completedAt ?? new Date().toISOString();
-  const fileName = state.cvScan.fileName ?? MOCK_CV_FILE_NAME;
+  // Everything below renders the analysis returned by /api/cv-scan. The guard
+  // above means a missing result has already sent the visitor back to upload,
+  // so nothing here falls back to sample data.
+  const result = state.cvScan.result;
+  const analyzedAt = result.analyzedAt ?? state.cvScan.completedAt ?? new Date().toISOString();
+  const fileName = result.fileName;
 
   const tabItems = [
     {
@@ -103,7 +103,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
           <Card className="p-6">
             <PanelHeading pin="g">Yang sudah kuat</PanelHeading>
             <ul className="flex flex-col gap-3">
-              {MOCK_CV_STRENGTHS.map((s, i) => (
+              {result.strengths.map((s, i) => (
                 <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
                   <span aria-hidden className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-sk-success-tint text-sk-success">
                     <Check size={12} strokeWidth={3} />
@@ -116,18 +116,12 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
           <Card className="p-6">
             <PanelHeading pin="a">Yang perlu diperkuat</PanelHeading>
             <ul className="flex flex-col gap-3">
-              {MOCK_CV_IMPROVEMENTS.map((s, i) => (
+              {result.improvements.map((s, i) => (
                 <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
                   <span aria-hidden className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-sk-warning-wash text-sk-warning-ink">
                     <TriangleAlert size={11} strokeWidth={2.4} />
                   </span>
-                  {i === 2 ? (
-                    <span>
-                      <b>Data Analysis</b> disebut tetapi belum memiliki project evidence.
-                    </span>
-                  ) : (
-                    s
-                  )}
+                  {s}
                 </li>
               ))}
             </ul>
@@ -142,7 +136,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
         <Card className="p-6">
           <PanelHeading pin="b">Pemeriksaan kualitas CV</PanelHeading>
           <ul className="divide-y divide-dashed divide-sk-border">
-            {MOCK_QUALITY_CHECKS.map((item) => (
+            {result.qualityChecks.map((item) => (
               <CheckRow key={item.label} item={item} />
             ))}
           </ul>
@@ -156,7 +150,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
         <Card className="p-6">
           <PanelHeading pin="b">Kesiapan ATS (Applicant Tracking System)</PanelHeading>
           <ul className="divide-y divide-dashed divide-sk-border">
-            {MOCK_ATS_CHECKS.map((item) => (
+            {result.atsChecks.map((item) => (
               <CheckRow key={item.label} item={item} />
             ))}
           </ul>
@@ -168,15 +162,23 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
       label: 'Impact',
       content: (
         <div>
-          <p className="mb-5 max-w-[640px] text-[13.5px] leading-relaxed text-sk-muted">
-            Impact belum menggunakan angka. Bandingkan contoh di bawah — tambahkan metrik (persentase, jumlah, waktu) agar
-            pencapaianmu terasa nyata bagi recruiter.
-          </p>
-          <StaggerGroup className="grid gap-4 lg:grid-cols-3">
-            {MOCK_IMPACT_EXAMPLES.map((example, i) => (
-              <ImpactExample key={i} example={example} index={i} />
-            ))}
-          </StaggerGroup>
+          {result.impactExamples.length === 0 ? (
+            <p role="status" className="max-w-[640px] text-[13.5px] leading-relaxed text-sk-muted">
+              Pencapaian di CV kamu sudah terukur — tidak ada baris yang perlu ditulis ulang.
+            </p>
+          ) : (
+            <>
+              <p className="mb-5 max-w-[640px] text-[13.5px] leading-relaxed text-sk-muted">
+                Baris di bawah diambil dari CV kamu sendiri, lalu ditulis ulang dengan angka yang sudah ada di dokumenmu —
+                supaya pencapaiannya terbaca nyata oleh recruiter.
+              </p>
+              <StaggerGroup className="grid gap-4 lg:grid-cols-3">
+                {result.impactExamples.map((example, i) => (
+                  <ImpactExample key={i} example={example} index={i} />
+                ))}
+              </StaggerGroup>
+            </>
+          )}
         </div>
       ),
     },
@@ -187,7 +189,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
         <Card className="p-6">
           <PanelHeading pin="a">Bukti skill di CV kamu</PanelHeading>
           <div className="divide-y divide-dashed divide-sk-border">
-            {MOCK_CV_EVIDENCE.map((row) => (
+            {result.evidence.map((row) => (
               <EvidenceRow key={row.skill} skill={row.skill} level={row.level} note={row.note} />
             ))}
           </div>
@@ -235,11 +237,11 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
               <div className="relative z-[1]">
                 <div className="font-mono text-[10px] tracking-[0.15em] text-white/65">CV SCORE</div>
                 <div className="my-2 text-[72px] font-extrabold leading-none tracking-[-0.04em]">
-                  <CountUp to={MOCK_CV_SCORE} />
+                  <CountUp to={result.score} />
                   <small className="text-[22px] font-semibold text-white/55">/100</small>
                 </div>
                 <span className="inline-block rounded-full bg-sk-success/20 px-2.5 py-1 font-mono text-[11px] font-semibold text-[#5ae0a0]">
-                  {MOCK_CV_STATUS}
+                  {result.statusLabel}
                 </span>
               </div>
             </div>
@@ -248,7 +250,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
 
         {/* Metrics */}
         <StaggerGroup className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {MOCK_CV_METRICS.map((metric) => (
+          {result.metrics.map((metric) => (
             <StaggerItem
               key={metric.key}
               className={cn(

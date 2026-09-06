@@ -69,7 +69,6 @@ export default function ShowcasePage() {
                   </div>
                   <span className="mt-6 inline-flex items-center gap-1.5 text-[13.5px] font-bold text-white">
                     Baca case study
-                    <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">→</span>
                   </span>
                 </div>
                 <div className="rounded-[var(--radius-sk-2xl)] border border-white/15 bg-white/10 p-6 text-center backdrop-blur-md">
@@ -156,7 +155,7 @@ export default function ShowcasePage() {
               </h3>
             </div>
             <ButtonLink href="/arena/projects" size="lg">
-              Ikut Project Minggu Ini →
+              Ikut Project Minggu Ini
             </ButtonLink>
           </div>
         </Reveal>

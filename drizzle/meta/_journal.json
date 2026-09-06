@@ -50,6 +50,20 @@
       "when": 1788506540374,
       "tag": "0006_luxuriant_charles_xavier",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788616734431,
+      "tag": "0007_futuristic_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788640334496,
+      "tag": "0008_notification_outbox",
+      "breakpoints": true
     }
   ]
 }

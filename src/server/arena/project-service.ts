@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { divisions, projectRubricCriteria, projectSkills, projectSubmissionRequirements, projects, skills, weeks } from "../db/schema";
 import { ArenaDomainError } from "./errors";
@@ -88,7 +88,14 @@ export async function listVisibleArenaProjects(input: { now?: Date; divisionSlug
 }
 
 export async function getVisibleArenaProject({ slug, now = new Date() }: { slug: string; now?: Date }) {
-  const row = (await getVisibleProjectRows({ now, slug }))[0];
+  void now;
+  const identifiers = [eq(projects.slug, slug)];
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(slug)) identifiers.push(eq(projects.id, slug));
+  const row = (await getDb().select({ project: projects, division: divisions }).from(projects)
+    .innerJoin(divisions, eq(projects.divisionId, divisions.id))
+    .innerJoin(weeks, eq(projects.weekId, weeks.id))
+    .where(and(or(...identifiers), inArray(projects.status, ["PUBLISHED", "ARCHIVED"]),
+      inArray(weeks.status, ["OPEN", "CLOSED", "FINALIZING", "FINALIZED", "ARCHIVED"]))))[0];
   if (!row) throw new ArenaDomainError("PROJECT_NOT_FOUND", "Project not found.");
 
   const [projectSkillsRows, rubricRows, requirementRows] = await Promise.all([

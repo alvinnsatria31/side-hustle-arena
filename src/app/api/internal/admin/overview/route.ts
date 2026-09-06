@@ -1,5 +1,5 @@
 import { arenaData, arenaError } from "@/server/arena";
-import { requireAutomationWorker } from "@/server/reviews/internal-auth";
+import { requireArenaAdmin } from "@/server/admin/auth";
 import { getOpsOverview } from "@/server/admin/overview";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Read-only ops overview: week, queue, resolution backlog, flags, rewards, audit. */
 export async function GET(request: Request) {
   try {
-    requireAutomationWorker(request);
+    await requireArenaAdmin(request, "overview");
     return arenaData({ overview: await getOpsOverview() });
   } catch (error) {
     return arenaError(error);

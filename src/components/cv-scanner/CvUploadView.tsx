@@ -6,7 +6,10 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { FileDropzone, type DropzoneError, type SelectedFile } from '@/components/cv-scanner/FileDropzone';
 import { useDemo } from '@/features/demo/store';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { CvScannerClosed } from './CvScannerClosed';
 import { ANALYZE_COVERAGE } from '@/data/mock/cv';
+import { startCvScan } from '@/lib/cv-scan-client';
 
 const TRUST_POINTS = ['Gratis', 'Aman & Terenkripsi', 'Privat — tidak dibagikan'];
 
@@ -17,6 +20,10 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   const { state, dispatch } = useDemo();
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [error, setError] = useState<DropzoneError>(null);
+  // The File itself, kept out of the store because it cannot be serialised.
+  // Absent when the selection was restored from stored state after a reload,
+  // which is why the button asks for the file again in that case.
+  const [rawFile, setRawFile] = useState<File | null>(null);
 
   // Sync with the persisted demo state once it hydrates (and on external changes).
   useEffect(() => {
@@ -28,15 +35,17 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   }, [state.cvScan.status, state.cvScan.fileName, state.cvScan.fileSize]);
 
   const handlePick = useCallback(
-    (picked: SelectedFile, err: DropzoneError) => {
+    (picked: SelectedFile, err: DropzoneError, raw: File) => {
       if (err) {
         setError(err);
         setFile(null);
+        setRawFile(null);
         dispatch({ type: 'CV_CLEAR_FILE' });
         return;
       }
       setError(null);
       setFile(picked);
+      setRawFile(raw);
       dispatch({ type: 'CV_SET_FILE', fileName: picked.name, fileSize: picked.size });
     },
     [dispatch],
@@ -44,15 +53,23 @@ export function CvUploadView({ basePath }: { basePath: string }) {
 
   const handleRemove = () => {
     setFile(null);
+    setRawFile(null);
     setError(null);
     dispatch({ type: 'CV_CLEAR_FILE' });
   };
 
   const startAnalysis = () => {
-    if (!file) return;
+    if (!rawFile) return;
+    // Send the file before navigating: the analyzing route awaits this promise,
+    // and a File cannot travel through the store to get there.
+    startCvScan(rawFile);
     dispatch({ type: 'CV_START' });
     router.push(`${basePath}/analyzing`);
   };
+
+  // After every hook: an early return above them would change hook order
+  // between renders the moment the flag flips.
+  if (!isCvScannerEnabled()) return <CvScannerClosed />;
 
   return (
     <div>
@@ -78,13 +95,18 @@ export function CvUploadView({ basePath }: { basePath: string }) {
             transition={{ duration: 0.35, ease: 'easeOut' }}
             className="mt-5 flex flex-wrap gap-3"
           >
-            <Button size="lg" onClick={startAnalysis} className="min-w-[220px]">
-              Mulai Analisis →
+            <Button size="lg" onClick={startAnalysis} disabled={!rawFile} className="min-w-[220px]">
+              Mulai Analisis
             </Button>
             <Button size="lg" variant="ghost" onClick={handleRemove}>
               Ganti File
             </Button>
           </motion.div>
+        )}
+        {file && !error && !rawFile && (
+          <p role="status" className="mt-3 text-[13px] text-sk-muted">
+            Pilih ulang filenya untuk memulai analisis — browser tidak menyimpan isi file setelah halaman dimuat ulang.
+          </p>
         )}
 
         {file && !error && (

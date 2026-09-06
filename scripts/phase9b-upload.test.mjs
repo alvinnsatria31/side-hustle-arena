@@ -106,18 +106,23 @@ async function uploadBytes(intent, body, mime = "application/pdf") {
   assert.ok(put.ok, `COS PUT failed: HTTP ${put.status}`);
 }
 
+// Minimal bytes that pass the server magic-bytes admission check (%PDF-1.4
+// header + %%EOF trailer). Exactly 47 bytes — keep every sizeBytes below in
+// sync with this fixture.
+const MINIMAL_PDF = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF";
+
 test("upload flow: supported file accepted; type/size/key attacks rejected", async (t) => {
   const ids = await setup();
   t.after(async () => cleanup(ids));
   const { userA, enrollmentA, fileReqId } = ids;
 
-  const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "portfolio.pdf", mimeType: "application/pdf", sizeBytes: 9 } });
+  const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "portfolio.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [row] = await sql`select storage_key from arena.upload_intents where id = ${intent.intentId}`;
   orphanKeys.push(row.storage_key);
-  await uploadBytes(intent, "123456789");
+  await uploadBytes(intent, MINIMAL_PDF);
   const item = await submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: enrollmentA, intentId: intent.intentId });
   assert.equal(item.originalFilename, "portfolio.pdf");
-  assert.equal(item.fileSizeBytes, 9);
+  assert.equal(item.fileSizeBytes, 47);
 
   await rejectsWith(
     submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "evil.exe", mimeType: "application/x-msdownload", sizeBytes: 10 } }),
@@ -140,10 +145,10 @@ test("upload flow: sixth file rejected; incomplete upload never joins the draft"
   const { userA, enrollmentA, fileReqId } = ids;
 
   async function presignAndPut(filename) {
-    const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename, mimeType: "application/pdf", sizeBytes: 3 } });
+    const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename, mimeType: "application/pdf", sizeBytes: 47 } });
     const [r] = await sql`select storage_key from arena.upload_intents where id = ${intent.intentId}`;
     orphanKeys.push(r.storage_key);
-    await uploadBytes(intent, "abc");
+    await uploadBytes(intent, MINIMAL_PDF);
     return intent;
   }
 
@@ -194,10 +199,10 @@ test("upload flow: failed finalize retries clean; mixed files+links submit immut
   assert.equal(mid?.review_attempts_used ?? 0, 0);
 
   // Fresh intent succeeds; exactly one draft item exists (no duplicate).
-  const good = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "good.pdf", mimeType: "application/pdf", sizeBytes: 5 } });
+  const good = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "good.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [grow2] = await sql`select storage_key from arena.upload_intents where id = ${good.intentId}`;
   orphanKeys.push(grow2.storage_key);
-  await uploadBytes(good, "12345");
+  await uploadBytes(good, MINIMAL_PDF);
   await submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: enrollmentA, intentId: good.intentId });
   await submissionApi.addArenaSubmissionLink({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: linkReqId, url: "https://example.com/" } });
 
@@ -215,10 +220,10 @@ test("upload flow: failed finalize retries clean; mixed files+links submit immut
   await submissionApi.deleteArenaSubmissionItem({ userId: userA, enrollmentId: enrollmentA, itemId: fileItem.id });
   // Referenced object survives the draft delete (retention guard).
   await storageApi.headPrivateObject(grow2.storage_key);
-  const again = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "v2.pdf", mimeType: "application/pdf", sizeBytes: 4 } });
+  const again = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "v2.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [arow] = await sql`select storage_key from arena.upload_intents where id = ${again.intentId}`;
   orphanKeys.push(arow.storage_key);
-  await uploadBytes(again, "1234");
+  await uploadBytes(again, MINIMAL_PDF);
   await submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: enrollmentA, intentId: again.intentId });
   const second = await submissionApi.submitArenaSubmission({ userId: userA, enrollmentId: enrollmentA });
   assert.equal(second.version.reviewAttemptNumber, 2);
@@ -231,10 +236,10 @@ test("upload flow: foreign user cannot download or attach victim objects", async
   t.after(async () => cleanup(ids));
   const { userA, userB, enrollmentA, enrollmentB, fileReqId } = ids;
 
-  const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "secret.pdf", mimeType: "application/pdf", sizeBytes: 6 } });
+  const intent = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "secret.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [srow] = await sql`select storage_key from arena.upload_intents where id = ${intent.intentId}`;
   orphanKeys.push(srow.storage_key);
-  await uploadBytes(intent, "123456");
+  await uploadBytes(intent, MINIMAL_PDF);
   const item = await submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: enrollmentA, intentId: intent.intentId });
 
   await rejectsWith(
@@ -264,7 +269,7 @@ test("upload flow: foreign user cannot download or attach victim objects", async
   // The signature works; the same object without it stays private.
   const signedGet = await fetch(grant.url);
   assert.ok(signedGet.ok, `signed GET failed: HTTP ${signedGet.status}`);
-  assert.equal(await signedGet.text(), "123456");
+  assert.equal(await signedGet.text(), MINIMAL_PDF);
   const anonymousGet = await fetch(`${grantUrl.origin}${grantUrl.pathname}`);
   assert.equal(anonymousGet.ok, false, "object must not be publicly readable");
   assert.ok([401, 403, 404].includes(anonymousGet.status), `anonymous GET should be denied, got ${anonymousGet.status}`);

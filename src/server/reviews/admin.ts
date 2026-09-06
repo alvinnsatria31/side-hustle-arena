@@ -79,21 +79,22 @@ export async function overrideReview(
   if (!Number.isFinite(input.newScore) || input.newScore < 0 || input.newScore > 100) {
     throw new ArenaDomainError("VALIDATION_ERROR", "Override score must be between 0 and 100.");
   }
-  const review = (await db.select().from(reviews).where(eq(reviews.id, input.reviewId)))[0];
+  return db.transaction(async (tx) => {
+  const review = (await tx.select().from(reviews).where(eq(reviews.id, input.reviewId)).for("update"))[0];
   if (!review) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Review not found.");
   const previousScore = review.finalScore == null ? null : Number(review.finalScore);
-  await db.insert(reviewOverrides).values({
+  await tx.insert(reviewOverrides).values({
     reviewId: review.id,
     adminSubject: input.actorSubject,
     previousScore: previousScore?.toFixed(2) ?? null,
     newScore: input.newScore.toFixed(2),
     reason: input.reason,
   });
-  await db
+  await tx
     .update(reviews)
-    .set({ finalScore: input.newScore.toFixed(2), updatedAt: input.now ?? new Date() })
+    .set({ finalScore: input.newScore.toFixed(2), status: review.status === "NEEDS_RESOLUTION" ? "COMPLETED_HIDDEN" : review.status, updatedAt: input.now ?? new Date() })
     .where(eq(reviews.id, review.id));
-  await writeAudit(db, {
+  await writeAudit(tx, {
     actorType: "ADMIN",
     actorSubject: input.actorSubject,
     action: "REVIEW_OVERRIDE",
@@ -102,4 +103,5 @@ export async function overrideReview(
     metadata: { previousScore, newScore: input.newScore, reason: input.reason },
   });
   return { reviewId: review.id, previousScore, newScore: input.newScore };
+  });
 }

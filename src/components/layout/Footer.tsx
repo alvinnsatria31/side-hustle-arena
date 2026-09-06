@@ -1,12 +1,16 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
-const PRODUCT_LINKS = [
+const PRODUCT_LINKS_ALL = [
   { label: 'CV Scanner', href: '/cv-scanner' },
   { label: 'Side Hustle Arena', href: '/arena' },
   { label: 'Career Report', href: '/app/career-report' },
   { label: 'Jobs', href: '/app/jobs' },
 ];
+
+/** The CV Scanner stays out of navigation until its backend is switched on. */
+const PRODUCT_LINKS = PRODUCT_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
 
 const EXPLORE_LINKS = [
   { label: 'Project Minggu Ini', href: '/arena/projects' },

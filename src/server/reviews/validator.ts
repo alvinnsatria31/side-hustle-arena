@@ -1,5 +1,5 @@
 import { reviewerOutputSchema, type ReviewerOutput } from "./review-schema";
-import type { BlindRubricCriterion } from "./reviewer-input";
+import type { BlindRubricCriterion, ReviewSource } from "./reviewer-input";
 
 /**
  * Review validator (PRD §26): primary reviewer output is checked BEFORE it
@@ -24,6 +24,7 @@ export interface ValidationFailure {
 export function validateReviewerOutput(
   input: unknown,
   rubric: BlindRubricCriterion[],
+  sources?: ReviewSource[],
 ): ValidationSuccess | ValidationFailure {
   const parsed = reviewerOutputSchema.safeParse(input);
   if (!parsed.success) {
@@ -51,6 +52,16 @@ export function validateReviewerOutput(
     }
     if (criterion.evidence.length === 0) {
       errors.push(`missing evidence for ${rubricCriterion.name}`);
+    }
+    if (sources) {
+      for (const evidence of criterion.evidence) {
+        const match = /^\[([^\]]+)\]\s+([\s\S]+)$/.exec(evidence);
+        const source = sources.find((entry) => entry.id === match?.[1]);
+        const quote = match?.[2]?.trim();
+        if (!source || !quote || quote.length < 12 || !source.text.includes(quote)) {
+          errors.push(`unverifiable evidence for ${rubricCriterion.name}`);
+        }
+      }
     }
     if (criterion.confidence < 0.5) {
       warnings.push(`low criterion confidence (${criterion.confidence}) for ${rubricCriterion.name}`);

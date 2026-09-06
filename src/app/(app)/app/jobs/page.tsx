@@ -59,7 +59,7 @@ export default function JobsPage() {
             </div>
 
             <ButtonLink href={JOBS_PORTAL_URL} target="_blank" rel="noopener noreferrer" variant="white">
-              Lihat Lowongan yang Cocok →
+              Lihat Lowongan yang Cocok
             </ButtonLink>
             <p className="mt-3 font-mono text-[10.5px] tracking-[0.08em] text-white/55">
               Membuka jobs.sekolahkarir.id di tab baru

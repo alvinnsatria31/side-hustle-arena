@@ -166,8 +166,15 @@ test("week close and finalize are deadline-gated, review-gated, and idempotent",
   assert.equal(noop.detail.skipped, "no open week past its deadline");
 });
 
-test("maintenance jobs report counts and the unbuilt drop stays visible", async () => {
-  const flushed = await scheduler.runEmailFlush();
+test("maintenance jobs report counts and disabled generation stays visible", async () => {
+  const savedEmailKey = process.env.RESEND_API_KEY;
+  let flushed;
+  try {
+    delete process.env.RESEND_API_KEY;
+    flushed = await scheduler.runEmailFlush();
+  } finally {
+    if (savedEmailKey !== undefined) process.env.RESEND_API_KEY = savedEmailKey;
+  }
   assert.equal(flushed.done, true);
   for (const key of ["sent", "failed", "skipped"]) {
     assert.equal(typeof flushed.detail[key], "number", `email flush must report ${key}`);
@@ -176,8 +183,16 @@ test("maintenance jobs report counts and the unbuilt drop stays visible", async 
   const cleaned = await scheduler.runSessionCleanup();
   assert.equal(typeof cleaned.detail.deleted, "number");
 
-  // The generator does not exist; the job must say so rather than look successful.
-  const drop = await scheduler.runProjectDrop();
-  assert.equal(drop.done, false);
-  assert.match(String(drop.detail.notImplemented), /not built yet/i);
+  // Disabled automation must not create weeks, even on a scheduled tick.
+  const wednesday = new Date("2026-09-02T12:00:00+07:00");
+  const saved = process.env.ARENA_GENERATION_ENABLED;
+  try {
+    delete process.env.ARENA_GENERATION_ENABLED;
+    const generated = await scheduler.runProjectGenerate(wednesday);
+    assert.equal(generated.done, false);
+    assert.equal(generated.detail.skipped, "generation disabled");
+  } finally {
+    if (saved === undefined) delete process.env.ARENA_GENERATION_ENABLED;
+    else process.env.ARENA_GENERATION_ENABLED = saved;
+  }
 });

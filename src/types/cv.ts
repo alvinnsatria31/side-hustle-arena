@@ -19,6 +19,19 @@ export interface CvStrongPoint {
   text: string;
 }
 
+/** One pass/fail finding behind a metric. */
+export interface CvCheckItem {
+  label: string;
+  pass: boolean;
+  note: string;
+}
+
+/** A weak achievement line and the measurable rewrite of it. */
+export interface CvImpactExample {
+  before: string;
+  after: string;
+}
+
 export interface CvResult {
   score: number;
   statusLabel: string;
@@ -26,6 +39,12 @@ export interface CvResult {
   strengths: string[];
   improvements: string[];
   evidence: SkillEvidence[];
+  /** Findings behind the CV Quality score. */
+  qualityChecks: CvCheckItem[];
+  /** Findings behind the ATS Readiness score. */
+  atsChecks: CvCheckItem[];
+  /** Empty when nothing in the CV needed rewriting. */
+  impactExamples: CvImpactExample[];
   fileName: string;
   analyzedAt: string;
 }

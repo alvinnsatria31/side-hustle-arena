@@ -13,7 +13,7 @@ import { ErrorState } from '@/components/states/ErrorState';
 import {
   ArenaApiError,
   formatBytes,
-  getCurrentEnrollment,
+  getMyEnrollmentForProject,
   getDownloadGrant,
   getSubmission,
   getVisibleProjectDetail,
@@ -55,13 +55,13 @@ export default function SubmissionPage() {
     (async () => {
       try {
         const detail = await getVisibleProjectDetail(params.projectId);
-        const enrollment = await getCurrentEnrollment();
+        const enrollment = await getMyEnrollmentForProject(detail.id, detail.slug);
         if (cancelled) return;
-        if (!enrollment || enrollment.projectId !== detail.id) {
+        if (!enrollment) {
           setBoot('empty');
           return;
         }
-        const sub = await getSubmission(enrollment.id);
+        const sub = await getSubmission(enrollment.enrollmentId);
         if (cancelled) return;
         const hasContent =
           sub.items.length > 0 || Boolean(sub.explanation) || sub.status !== 'DRAFT';
@@ -71,7 +71,7 @@ export default function SubmissionPage() {
         }
         setSubmission(sub);
         setProjectTitle(detail.title);
-        setEnrollmentId(enrollment.id);
+        setEnrollmentId(enrollment.enrollmentId);
         setBoot('ready');
       } catch (err) {
         if (cancelled) return;
@@ -200,7 +200,7 @@ export default function SubmissionPage() {
 
           <div className="flex flex-wrap gap-3">
             {finalized ? (
-              <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result →</ButtonLink>
+              <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result</ButtonLink>
             ) : (
               <ButtonLink href="/app/arena" variant="ghost">
                 Kembali ke Arena
@@ -320,7 +320,7 @@ export default function SubmissionPage() {
             )}
             {finalized && (
               <ButtonLink href={`/app/arena/result/${params.projectId}`} size="sm" className="mt-5" fullWidth>
-                Buka Feedback →
+                Buka Feedback
               </ButtonLink>
             )}
           </Card>

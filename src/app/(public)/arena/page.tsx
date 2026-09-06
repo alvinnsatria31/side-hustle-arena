@@ -13,11 +13,15 @@ export const dynamic = 'force-dynamic';
 export default async function ArenaLandingPage() {
   // Live week/projects/divisions. Stat cards that have no backend source
   // (fake participant/completion counters) were removed, not faked.
+  //
+  // `home` is null before the first week exists. The page still has a job to do
+  // then — it is the public pitch for the Arena — so it renders with the
+  // week-dependent slots showing that nothing is scheduled yet.
   const home = await getPublicArenaHome();
   const stats = [
-    { key: 'projects', label: 'Project Minggu Ini', value: String(home.projectCount) },
-    { key: 'deadline', label: 'Deadline', value: home.deadline, small: true },
-    { key: 'divisions', label: 'Divisi Aktif', value: String(home.divisionCount) },
+    { key: 'projects', label: 'Project Minggu Ini', value: home ? String(home.projectCount) : '—' },
+    { key: 'deadline', label: 'Deadline', value: home ? home.deadline : 'Belum dijadwalkan', small: true },
+    { key: 'divisions', label: 'Divisi Aktif', value: home ? String(home.divisionCount) : '—' },
     { key: 'drop', label: 'Project Drop', value: 'Setiap Senin', small: true },
   ];
   return (
@@ -48,7 +52,7 @@ export default async function ArenaLandingPage() {
             <Entrance delay={0.42}>
               <div className="mb-8 flex flex-wrap gap-3">
                 <ButtonLink href="/arena/projects" size="lg">
-                  Lihat Project Minggu Ini →
+                  Lihat Project Minggu Ini
                 </ButtonLink>
                 <ButtonLink href="#cara-kerja" variant="ghost" size="lg">
                   Cara Kerjanya
@@ -67,10 +71,14 @@ export default async function ArenaLandingPage() {
 
           {/* Right: this week's drop preview */}
           <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[480px]">
-            <KanbanPreview projects={home.projects} weekLabel={home.weekLabel} total={home.projectCount} />
+            <KanbanPreview
+              projects={home?.projects ?? []}
+              weekLabel={home?.weekLabel ?? 'Belum ada minggu aktif'}
+              total={home?.projectCount ?? 0}
+            />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">
-                Lihat project terbaik minggu lalu → Weekly Spotlight
+                Lihat project terbaik minggu lalu — Weekly Spotlight
               </Link>
             </div>
           </Reveal>
@@ -79,7 +87,7 @@ export default async function ArenaLandingPage() {
         {/* How it works */}
         <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32">
           <Reveal className="mb-8 max-w-xl">
-            <Badge variant="slate">WEEK {home.weekNo}</Badge>
+            <Badge variant="slate">{home ? `WEEK ${home.weekNo}` : 'SEGERA'}</Badge>
             <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
               Lima langkah, satu minggu.
             </h2>
@@ -105,7 +113,7 @@ export default async function ArenaLandingPage() {
                 </h3>
               </div>
               <ButtonLink href="/arena/projects" variant="white" size="lg">
-                Pilih Project →
+                Pilih Project
               </ButtonLink>
             </div>
           </div>

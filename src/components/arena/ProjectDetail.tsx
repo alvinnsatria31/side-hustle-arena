@@ -9,8 +9,7 @@ import { Card } from '@/components/primitives/Card';
 import { Tabs } from '@/components/primitives/Tabs';
 import { LoginModal } from '@/components/layout/LoginModal';
 import { ResourceList } from '@/components/arena/KanbanPreview';
-import { useDemo } from '@/features/demo/store';
-import { ArenaApiError, getVisibleProject, selectProject } from '@/lib/arena-client';
+import { ArenaApiError, getCurrentEnrollment, getVisibleProject, selectProject } from '@/lib/arena-client';
 import { useToast } from '@/features/ui/toast';
 import type { ArenaProject } from '@/types/project';
 
@@ -20,10 +19,12 @@ const SAVED_KEY = 'sk-saved-projects';
 
 export function CtaActions({ slug }: { slug: string }) {
   const router = useRouter();
-  const { state, hydrated } = useDemo();
   const { showToast } = useToast();
   const [loginOpen, setLoginOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Live enrollment state: null while resolving (or anonymous). The label must
+  // reflect the server session, never the localStorage demo store.
+  const [enrolledHere, setEnrolledHere] = useState(false);
 
   useEffect(() => {
     try {
@@ -32,6 +33,21 @@ export function CtaActions({ slug }: { slug: string }) {
     } catch {
       /* ignore */
     }
+  }, [slug]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [enrollment, visible] = await Promise.all([getCurrentEnrollment(), getVisibleProject(slug)]);
+        if (!cancelled && enrollment && enrollment.projectId === visible.id) setEnrolledHere(true);
+      } catch {
+        if (!cancelled) setEnrolledHere(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const toggleSave = () => {
@@ -46,26 +62,12 @@ export function CtaActions({ slug }: { slug: string }) {
     }
   };
 
-  const enrollment = state.enrollment;
-  const enrolledHere = hydrated && enrollment?.projectSlug === slug;
   const [choosing, setChoosing] = useState(false);
 
   const choose = async () => {
-    if (!hydrated || choosing) return;
-    // Sign-in is decided by the server, never by the localStorage demo store:
-    // that store has no real user, so gating here showed the login modal to
-    // people who were already authenticated. An anonymous visitor on the public
-    // detail page still gets the modal — from the 401 handled below.
-    if (enrolledHere && enrollment && enrollment.status !== 'completed') {
-      if (enrollment.status === 'active') {
-        router.push(`/app/arena/workspace/${slug}`);
-        return;
-      }
-      if (enrollment.status === 'review_ready') {
-        router.push(`/app/arena/result/${slug}`);
-        return;
-      }
-      router.push(`/app/arena/submission/${slug}`);
+    if (choosing) return;
+    if (enrolledHere) {
+      router.push(`/app/arena/workspace/${slug}`);
       return;
     }
     // Phase 9b: live enroll dulu (session cookie → POST /api/arena/enrollments).
@@ -97,15 +99,7 @@ export function CtaActions({ slug }: { slug: string }) {
     }
   };
 
-  const primaryLabel = enrolledHere
-    ? enrollment?.status === 'active'
-      ? 'Lanjutkan Project'
-      : enrollment?.status === 'review_ready'
-        ? 'Lihat Feedback'
-        : enrollment?.status === 'completed'
-          ? 'Ambil Lagi'
-          : 'Lihat Submission'
-    : 'Pilih Project Ini';
+  const primaryLabel = enrolledHere ? 'Lanjutkan Project' : 'Pilih Project Ini';
 
   return (
     <>
@@ -121,15 +115,13 @@ export function CtaActions({ slug }: { slug: string }) {
           {saved ? 'Tersimpan' : 'Simpan untuk nanti'}
         </Button>
       </div>
+      {/* Login menyerahkan browser ke route SSO, jadi tidak ada callback yang
+          sempat jalan di halaman ini. Enrollment setelah login harus ditangani
+          di halaman tujuan `continueTo`. */}
       <LoginModal
         open={loginOpen}
         onClose={() => setLoginOpen(false)}
         continueTo={`/app/arena/workspace/${slug}`}
-        onContinue={() => {
-          // Setelah login, enroll beneran via API (bukan mock).
-          setLoginOpen(false);
-          void choose();
-        }}
       />
     </>
   );

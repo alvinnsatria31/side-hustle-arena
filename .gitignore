@@ -21,3 +21,15 @@ next-env.d.ts
 /blob-report/
 /e2e/.auth/
 /e2e/.artifacts/
+
+# Brainstorm visual companion
+.superpowers/
+
+# Vercel CLI link
+.vercel
+
+# Generated: code-graph tool output (AST/semantic caches, reports)
+/graphify-out/
+
+# Manual-QA fixtures, including a 21 MB oversize-upload sample
+/qa-files/

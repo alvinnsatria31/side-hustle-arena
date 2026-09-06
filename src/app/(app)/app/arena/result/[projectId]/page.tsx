@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Check, TriangleAlert } from 'lucide-react';
+import { Check, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card, PanelHeading } from '@/components/primitives/Card';
@@ -14,7 +14,7 @@ import { ProgressBar } from '@/components/primitives/ProgressBar';
 import { ErrorState } from '@/components/states/ErrorState';
 import {
   ArenaApiError,
-  getCurrentEnrollment,
+  getMyEnrollmentForProject,
   getResult,
   getVisibleProjectDetail,
   type ArenaResult,
@@ -30,7 +30,6 @@ export default function ProjectResultPage() {
   const [bootError, setBootError] = useState<string | null>(null);
   const [result, setResult] = useState<Ranked | null>(null);
   const [sealed, setSealed] = useState<Sealed | null>(null);
-  const [projectTitle, setProjectTitle] = useState('');
   const [projectCategory, setProjectCategory] = useState('');
   const [counted, setCounted] = useState(false);
 
@@ -39,15 +38,14 @@ export default function ProjectResultPage() {
     (async () => {
       try {
         const detail = await getVisibleProjectDetail(params.projectId);
-        const enrollment = await getCurrentEnrollment();
+        const enrollment = await getMyEnrollmentForProject(detail.id, detail.slug);
         if (cancelled) return;
-        if (!enrollment || enrollment.projectId !== detail.id) {
+        if (!enrollment) {
           setBoot('missing');
           return;
         }
-        const res = await getResult(enrollment.id);
+        const res = await getResult(enrollment.enrollmentId);
         if (cancelled) return;
-        setProjectTitle(detail.title);
         setProjectCategory(detail.division.name);
         if (res.sealed) {
           setSealed(res);
@@ -327,7 +325,7 @@ export default function ProjectResultPage() {
           Lihat Project Berikutnya
         </ButtonLink>
         <ButtonLink href="/app/career-report">
-          Lihat Career Report <ArrowRight size={15} aria-hidden />
+          Lihat Career Report
         </ButtonLink>
       </div>
     </div>

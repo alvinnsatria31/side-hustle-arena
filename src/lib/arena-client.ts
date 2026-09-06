@@ -236,8 +236,45 @@ export interface NotificationItem {
 
 /* ---------- Reads ---------- */
 
-export function getCurrentEnrollment(): Promise<ArenaEnrollment | null> {
-  return request<ArenaEnrollment | null>('/api/arena/enrollments/current');
+export function getCurrentEnrollment(projectId?: string): Promise<ArenaEnrollment | null> {
+  return request<ArenaEnrollment | null>(`/api/arena/enrollments/current${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`);
+}
+
+export interface MyEnrollment {
+  enrollmentId: string;
+  projectId: string;
+  status: string;
+}
+
+interface ParticipantHistoryRow {
+  id: string;
+  status: string;
+  project: { id: string; slug: string };
+}
+
+/**
+ * History-aware enrollment lookup (A08): the current-week endpoint answers
+ * most cases, but after the week rolls over the enrollment history in
+ * GET /api/arena/me is the stable source. 401 always propagates so pages can
+ * keep their signed-out state.
+ */
+export async function getMyEnrollmentForProject(projectId: string, projectSlug?: string): Promise<MyEnrollment | null> {
+  try {
+    const current = await getCurrentEnrollment(projectId);
+    if (current) return { enrollmentId: current.id, projectId: current.projectId, status: current.status };
+  } catch (error) {
+    if (error instanceof ArenaApiError && error.status === 401) throw error;
+  }
+  try {
+    const overview = await request<{ history: ParticipantHistoryRow[] }>('/api/arena/me');
+    const match = overview.history.find(
+      (row) => row.project.id === projectId || (projectSlug != null && row.project.slug === projectSlug),
+    );
+    if (match) return { enrollmentId: match.id, projectId: match.project.id, status: match.status };
+  } catch (error) {
+    if (error instanceof ArenaApiError && error.status === 401) throw error;
+  }
+  return null;
 }
 
 export function getWorkspace(enrollmentId: string): Promise<WorkspaceProgress | null> {

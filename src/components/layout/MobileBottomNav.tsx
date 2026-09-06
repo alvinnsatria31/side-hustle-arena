@@ -4,14 +4,18 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FileText, Home, Target, UserRound, Zap } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
-const TABS = [
+const TABS_ALL = [
   { label: 'Home', href: '/app', icon: Home },
   { label: 'Scan', href: '/app/cv-scanner', icon: FileText },
   { label: 'Arena', href: '/app/arena', icon: Zap },
   { label: 'Jobs', href: '/app/jobs', icon: Target },
   { label: 'Profile', href: '/app/profile', icon: UserRound },
 ];
+
+/** The CV Scanner stays out of navigation until its backend is switched on. */
+const TABS = TABS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
 
 /** Mobile bottom navigation — 44px+ touch targets. */
 export function MobileBottomNav() {

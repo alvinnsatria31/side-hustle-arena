@@ -27,6 +27,11 @@ const SUBJECT_C = `p4s-c-${stamp}`;
 const sql = postgres(process.env.DATABASE_URL, { max: 1 });
 const orphanKeys = [];
 
+// Minimal bytes that pass the server magic-bytes admission check (%PDF-1.4
+// header + %%EOF trailer). Exactly 47 bytes — keep success-path sizeBytes in
+// sync with this fixture. Mismatch/attack cases intentionally use other bytes.
+const MINIMAL_PDF = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF";
+
 // Shared handle: close once after every test in this file.
 after(async () => {
   await sql.end({ timeout: 5 });
@@ -224,6 +229,15 @@ test("phase 4S: finalize rejects foreign, double, expired, and mismatched upload
     "UPLOAD_VALIDATION_FAILED",
   );
 
+  // Spoofed content: byte count matches, but the bytes are not a PDF. The
+  // magic-bytes admission check must refuse and remove the object.
+  const spoof = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "evil.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
+  await fetch(spoof.uploadUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: "MZ" + "x".repeat(45) });
+  await rejectsWith(
+    submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: a.enrollment.id, intentId: spoof.intentId }),
+    "UPLOAD_VALIDATION_FAILED",
+  );
+
   // Expired intent cannot be finalized.
   const stale = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "s.pdf", mimeType: "application/pdf", sizeBytes: 5 } });
   await sql`update arena.upload_intents set expires_at = now() - interval '1 minute' where id = ${stale.intentId}`;
@@ -234,10 +248,10 @@ test("phase 4S: finalize rejects foreign, double, expired, and mismatched upload
   await sql`delete from arena.upload_intents where id = ${stale.intentId}`;
 
   // Double finalize: exactly one wins.
-  const twice = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "t.pdf", mimeType: "application/pdf", sizeBytes: 5 } });
+  const twice = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "t.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [trow] = await sql`select storage_key from arena.upload_intents where id = ${twice.intentId}`;
   orphanKeys.push(trow.storage_key);
-  await fetch(twice.uploadUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: "12345" });
+  await fetch(twice.uploadUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: MINIMAL_PDF });
   // Kill-switch closed: finalize and draft delete freeze, consuming nothing.
   const frozen = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "f.pdf", mimeType: "application/pdf", sizeBytes: 5 } });
   await sql`insert into ops.feature_flags (key, maintenance_mode, message) values ('arena-submissions', true, 'P4S maintenance')
@@ -263,10 +277,10 @@ test("phase 4S: finalize rejects foreign, double, expired, and mismatched upload
   await submissionApi.deleteArenaSubmissionItem({ userId: userA, enrollmentId: a.enrollment.id, itemId: item.id });
 
   // Double finalize, concurrent: atomic consume lets exactly one through.
-  const race = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "r.pdf", mimeType: "application/pdf", sizeBytes: 5 } });
+  const race = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: a.enrollment.id, input: { requirementId: fileReqId, filename: "r.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [rrow] = await sql`select storage_key from arena.upload_intents where id = ${race.intentId}`;
   orphanKeys.push(rrow.storage_key);
-  await fetch(race.uploadUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: "12345" });
+  await fetch(race.uploadUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: MINIMAL_PDF });
   const fr = await Promise.allSettled([
     submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: a.enrollment.id, intentId: race.intentId }),
     submissionApi.finalizeArenaUpload({ userId: userA, enrollmentId: a.enrollment.id, intentId: race.intentId }),

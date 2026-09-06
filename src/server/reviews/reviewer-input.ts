@@ -38,6 +38,14 @@ export interface BlindReviewerInput {
   explanation: string | null;
   notes: string | null;
   items: BlindVersionItem[];
+  sources?: ReviewSource[];
+}
+
+export interface ReviewSource {
+  id: string;
+  kind: string;
+  text: string;
+  sha256: string;
 }
 
 export function buildBlindReviewerInput(input: {

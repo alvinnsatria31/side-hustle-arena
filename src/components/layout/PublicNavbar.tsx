@@ -8,13 +8,17 @@ import { Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { cn } from '@/lib/cn';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
-const NAV_LINKS = [
+const NAV_LINKS_ALL = [
   { label: 'CV Scanner', href: '/cv-scanner' },
   { label: 'Side Hustle Arena', href: '/arena' },
   { label: 'Showcase', href: '/arena/showcase' },
   { label: 'Jobs', href: '/app/jobs' },
 ];
+
+/** The CV Scanner stays out of navigation until its backend is switched on. */
+const NAV_LINKS = NAV_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
 
 /**
  * Floating glass navbar. More transparent at top; slightly smaller and
@@ -72,9 +76,15 @@ export function PublicNavbar() {
           <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
             Masuk
           </Link>
-          <ButtonLink href="/cv-scanner" size="sm">
-            Scan CV Gratis
-          </ButtonLink>
+          {isCvScannerEnabled() ? (
+            <ButtonLink href="/cv-scanner" size="sm">
+              Scan CV Gratis
+            </ButtonLink>
+          ) : (
+            <ButtonLink href="/arena" size="sm">
+              Masuk Arena
+            </ButtonLink>
+          )}
         </div>
 
         <button
@@ -110,8 +120,8 @@ export function PublicNavbar() {
             <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1">
               Masuk
             </ButtonLink>
-            <ButtonLink href="/cv-scanner" size="sm" className="flex-1">
-              Scan CV Gratis
+            <ButtonLink href={isCvScannerEnabled() ? '/cv-scanner' : '/arena'} size="sm" className="flex-1">
+              {isCvScannerEnabled() ? 'Scan CV Gratis' : 'Masuk Arena'}
             </ButtonLink>
           </div>
         </motion.div>

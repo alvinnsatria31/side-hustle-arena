@@ -25,6 +25,18 @@ function baseUrl(): string {
   return (configured ?? "http://202.74.75.95/webhook").replace(/\/+$/, "");
 }
 
+/**
+ * Plain HTTP carries the webhook bearer token in cleartext. The legacy n8n box
+ * is HTTP-only, so its default host (plus loopback for local dev) stays
+ * grandfathered with a loud warning — but any *custom* base URL must be HTTPS
+ * when a token is configured, otherwise delivery is refused.
+ */
+function insecureHttpAllowed(url: URL): boolean {
+  if (url.protocol !== "http:") return true;
+  const host = url.hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "202.74.75.95";
+}
+
 /** Send one event, awaiting the result. Prefer notifyVps (fire-and-forget) at call sites. */
 export async function sendVpsWebhook(
   event: VpsWebhookEvent,
@@ -38,8 +50,22 @@ export async function sendVpsWebhook(
     console.warn(`[vps-webhook] VPS_WEBHOOK_TOKEN is not set — skipped "${event}".`);
     return { ok: false, skipped: true, error: "Webhook token not configured" };
   }
+  let url: URL;
   try {
-    const response = await fetcher(`${baseUrl()}/${event}`, {
+    url = new URL(`${baseUrl()}/${event}`);
+  } catch {
+    console.error(`[vps-webhook] ${event} misconfigured base URL.`);
+    return { ok: false, error: "Webhook base URL is invalid" };
+  }
+  if (url.protocol === "http:" && !insecureHttpAllowed(url)) {
+    console.error(`[vps-webhook] ${event} refused: webhook token requires an HTTPS base URL.`);
+    return { ok: false, error: "Webhook token requires an HTTPS base URL" };
+  }
+  if (url.protocol === "http:") {
+    console.warn(`[vps-webhook] ${event} uses plain HTTP to ${url.host} — migrate the n8n box to HTTPS.`);
+  }
+  try {
+    const response = await fetcher(url.toString(), {
       method: "POST",
       headers: { "X-Arena-Token": token, "Content-Type": "application/json" },
       body: JSON.stringify({ event, sent_at: new Date().toISOString(), ...payload }),

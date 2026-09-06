@@ -33,11 +33,16 @@ for (const fragment of [
   '"review_jobs_submission_version_id_unique" UNIQUE("submission_version_id")',
   '"reviews_submission_version_id_unique" UNIQUE("submission_version_id")',
   '"review_scores_review_id_rubric_criterion_id_unique" UNIQUE("review_id","rubric_criterion_id")',
+  '"review_artifacts_version_source_unique" UNIQUE("submission_version_id","source_id")',
   '"weekly_rankings_week_id_user_id_unique" UNIQUE("week_id","user_id")',
   '"weekly_rankings_week_id_rank_unique" UNIQUE("week_id","rank")',
   '"point_ledger_idempotency_key_unique" UNIQUE("idempotency_key")',
   '"redemptions_idempotency_key_unique" UNIQUE("idempotency_key")',
   '"runs_idempotency_key_unique" UNIQUE("idempotency_key")',
+  '"events_dedupe_key_unique" UNIQUE("dedupe_key")',
+  '"attempt_count" integer DEFAULT 0 NOT NULL',
+  '"lease_token" uuid',
+  '"message_snapshot" jsonb',
 ]) {
   assert.ok(sql.includes(fragment), `missing schema contract: ${fragment}`);
 }

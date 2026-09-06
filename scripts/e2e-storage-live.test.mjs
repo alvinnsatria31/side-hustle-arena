@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { randomUUID } from "node:crypto";
 import nextEnv from "@next/env";
 
 const { loadEnvConfig } = nextEnv;
@@ -40,7 +41,9 @@ test("live object-storage roundtrip: presign PUT → upload → HEAD → presign
     t.skip("No object-storage credentials in .env — see docs/backend/TENCENT_COS_SETUP.md");
     return;
   }
-  const key = `arena/development/e2e-${Date.now()}`;
+  // Staging keys are server-issued UUIDs (see createSubmissionObjectKey) —
+  // the presign endpoint refuses anything else, so the probe uses one too.
+  const key = `arena/development/${randomUUID()}`;
   const body = `arena e2e probe ${new Date().toISOString()}`;
 
   const uploadUrl = await createPresignedUpload({ storageKey: key, mimeType: "text/plain" });

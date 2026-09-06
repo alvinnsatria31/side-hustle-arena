@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Briefcase, TrendingUp } from 'lucide-react';
-import { Badge } from '@/components/primitives/Badge';
+import { Briefcase, TrendingUp } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
@@ -228,7 +227,7 @@ export default function CareerReportPage() {
                 profilmu.
               </p>
               <ButtonLink href="/app/jobs" className="w-full justify-center">
-                Lihat Lowongan yang Cocok →
+                Lihat Lowongan yang Cocok
               </ButtonLink>
             </Card>
           </Reveal>
@@ -240,7 +239,7 @@ export default function CareerReportPage() {
               <p className="mb-4 text-[12.5px] leading-relaxed text-sk-muted">
                 Lihat proses di balik project terbaik minggu ini untuk referensi standar kualitas.
               </p>
-              <ButtonLink href="/arena/showcase" variant="ghost" size="sm" iconRight={<ArrowRight size={14} aria-hidden />}>
+              <ButtonLink href="/arena/showcase" variant="ghost" size="sm">
                 Buka Weekly Spotlight
               </ButtonLink>
             </Card>

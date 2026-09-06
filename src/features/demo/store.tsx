@@ -10,9 +10,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { CvScanStatus } from '@/types/cv';
+import type { CvResult, CvScanStatus } from '@/types/cv';
 import type {
-  ChecklistState,
   PlanDraft,
   ProjectEnrollment,
   ProjectStatus,
@@ -43,6 +42,10 @@ export interface DemoState {
     fileSize: number | null;
     startedAt: string | null;
     completedAt: string | null;
+    /** The analysis returned by /api/cv-scan. Null until a scan succeeds. */
+    result: CvResult | null;
+    /** Why the last scan failed, shown on the result page. */
+    error: string | null;
   };
   recommendedProjectSlug: string;
   enrollment: ProjectEnrollment | null;
@@ -83,6 +86,8 @@ function initialState(): DemoState {
       fileSize: null,
       startedAt: null,
       completedAt: null,
+      result: null,
+      error: null,
     },
     recommendedProjectSlug: RECOMMENDED_PROJECT_SLUG,
     enrollment: null,
@@ -99,8 +104,8 @@ export type DemoAction =
   | { type: 'CV_SET_FILE'; fileName: string; fileSize: number }
   | { type: 'CV_CLEAR_FILE' }
   | { type: 'CV_START' }
-  | { type: 'CV_COMPLETE' }
-  | { type: 'CV_FAIL' }
+  | { type: 'CV_COMPLETE'; result: CvResult }
+  | { type: 'CV_FAIL'; message: string }
   | { type: 'CV_RESET' }
   | { type: 'ENROLL'; projectSlug: string }
   | { type: 'WS_SET_STEP'; step: WorkspaceStep }
@@ -132,6 +137,8 @@ function reducer(state: DemoState, action: DemoAction): DemoState {
           fileSize: action.fileSize,
           startedAt: null,
           completedAt: null,
+          result: null,
+          error: null,
         },
       };
 
@@ -139,23 +146,30 @@ function reducer(state: DemoState, action: DemoAction): DemoState {
     case 'CV_RESET':
       return {
         ...state,
-        cvScan: { status: 'idle', fileName: null, fileSize: null, startedAt: null, completedAt: null },
+        cvScan: { status: 'idle', fileName: null, fileSize: null, startedAt: null, completedAt: null, result: null, error: null },
       };
 
     case 'CV_START':
       return {
         ...state,
-        cvScan: { ...state.cvScan, status: 'analyzing', startedAt: new Date().toISOString() },
+        cvScan: { ...state.cvScan, status: 'analyzing', startedAt: new Date().toISOString(), result: null, error: null },
       };
 
     case 'CV_COMPLETE':
       return {
         ...state,
-        cvScan: { ...state.cvScan, status: 'completed', completedAt: new Date().toISOString() },
+        cvScan: {
+          ...state.cvScan,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          result: action.result,
+          fileName: action.result.fileName,
+          error: null,
+        },
       };
 
     case 'CV_FAIL':
-      return { ...state, cvScan: { ...state.cvScan, status: 'failed' } };
+      return { ...state, cvScan: { ...state.cvScan, status: 'failed', result: null, error: action.message } };
 
     case 'ENROLL': {
       // Starting a new project replaces a finished enrollment (history already recorded).

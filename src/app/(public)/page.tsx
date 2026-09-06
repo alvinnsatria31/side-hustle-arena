@@ -4,6 +4,7 @@ import { StatCard } from '@/components/primitives/StatCard';
 import { JourneyStrip } from '@/components/arena/HowItWorks';
 import { HERO_FLOAT_CARDS } from '@/data/mock/arena';
 import { cn } from '@/lib/cn';
+import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
 const HERO_LINES = ['Bangun Skill.', 'Buktikan Kemampuan.', 'Majukan Karirmu.'];
 const FLOAT_POSITIONS = [
@@ -50,10 +51,12 @@ export default function LandingPage() {
 
             <Entrance delay={0.55}>
               <div className="flex flex-wrap gap-3">
-                <ButtonLink href="/cv-scanner" size="lg">
-                  Scan CV Gratis →
-                </ButtonLink>
-                <ButtonLink href="/arena" variant="ghost" size="lg">
+                {isCvScannerEnabled() && (
+                  <ButtonLink href="/cv-scanner" size="lg">
+                    Scan CV Gratis
+                  </ButtonLink>
+                )}
+                <ButtonLink href="/arena" variant={isCvScannerEnabled() ? 'ghost' : 'primary'} size="lg">
                   Lihat Side Hustle Arena
                 </ButtonLink>
               </div>
@@ -128,10 +131,12 @@ export default function LandingPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <ButtonLink href="/cv-scanner" size="lg">
-                  Scan CV Gratis →
-                </ButtonLink>
-                <ButtonLink href="/arena/projects" variant="ghost" size="lg">
+                {isCvScannerEnabled() && (
+                  <ButtonLink href="/cv-scanner" size="lg">
+                    Scan CV Gratis
+                  </ButtonLink>
+                )}
+                <ButtonLink href="/arena/projects" variant={isCvScannerEnabled() ? 'ghost' : 'primary'} size="lg">
                   Lihat Project Minggu Ini
                 </ButtonLink>
               </div>

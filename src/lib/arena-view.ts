@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { projectSkills, skills } from "@/server/db/schema";
 import { getCurrentArenaWeek, getVisibleArenaProject, listActiveArenaDivisions, listVisibleArenaProjects } from "@/server/arena";
+import { ArenaDomainError } from "@/server/arena/errors";
 import type { ArenaProject, ProjectDifficulty } from "@/types/project";
 
 /**
@@ -92,9 +93,28 @@ export interface PublicArenaHome {
   projects: Array<{ slug: string; title: string; category: string }>;
 }
 
-export async function getPublicArenaHome(): Promise<PublicArenaHome> {
-  const [week, projects, divisions] = await Promise.all([
-    getCurrentArenaWeek(),
+/**
+ * Having no current week is an empty state, not a failure: it is what a fresh
+ * deployment looks like before the first week is created, and what a gap
+ * between an archived week and the next one would look like. A public page
+ * must render that, not throw.
+ *
+ * Only WEEK_NOT_FOUND is swallowed — a database outage still has to surface as
+ * an error rather than masquerading as "no projects this week".
+ */
+async function currentWeekOrNull() {
+  try {
+    return await getCurrentArenaWeek();
+  } catch (error) {
+    if (error instanceof ArenaDomainError && error.code === "WEEK_NOT_FOUND") return null;
+    throw error;
+  }
+}
+
+export async function getPublicArenaHome(): Promise<PublicArenaHome | null> {
+  const week = await currentWeekOrNull();
+  if (!week) return null;
+  const [projects, divisions] = await Promise.all([
     listVisibleArenaProjects(),
     listActiveArenaDivisions(),
   ]);
@@ -122,8 +142,11 @@ export interface PublicProjectList {
 }
 
 export async function getPublicProjects(): Promise<PublicProjectList> {
-  const [week, projects, divisions] = await Promise.all([
-    getCurrentArenaWeek(),
+  const week = await currentWeekOrNull();
+  // No week and "a week with nothing published yet" are the same thing to a
+  // browser page: an empty list. One code path covers both.
+  if (!week) return { groups: [], projects: [] };
+  const [projects, divisions] = await Promise.all([
     listVisibleArenaProjects(),
     listActiveArenaDivisions(),
   ]);
