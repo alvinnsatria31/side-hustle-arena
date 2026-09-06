@@ -16,6 +16,8 @@ process.env.SESSION_SECRET = SECRET;
 
 const tokenApi = await import("../src/server/auth/participant-token.ts");
 const sessionApi = await import("../src/server/auth/participant-provision.ts");
+const avatarApi = await import("../src/server/auth/avatar.ts");
+const { AVATARS, isValidAvatarId } = await import("../src/lib/avatars.ts");
 
 const stamp = Date.now();
 const PARTICIPANT_ID = `p-${stamp}`;
@@ -130,4 +132,45 @@ test("the Arena mirrors the participant once, follows profile changes, and honou
   await sql`update identity.users set status = 'SUSPENDED' where id = ${first.id}`;
   assert.equal(await sessionApi.provisionParticipant(claims), null);
   await sql`update identity.users set status = 'ACTIVE' where id = ${first.id}`;
+});
+
+test("a freshly mirrored participant has no avatar, which is what raises the picker", async () => {
+  await sql`delete from identity.users where auth_subject = ${`sk-participant:${PARTICIPANT_ID}`}`;
+  const fresh = await sessionApi.provisionParticipant(claims);
+  // Null, not the default: the app reads this to decide whether to ask, so
+  // defaulting the column here would silently skip the one step on arrival.
+  assert.equal(fresh.avatarId, null);
+});
+
+test("a picked avatar is stored, read back, and survives an ordinary sign-in", async () => {
+  const user = await sessionApi.provisionParticipant(claims);
+  const picked = AVATARS[3].id;
+  assert.ok(isValidAvatarId(picked));
+  assert.equal(await avatarApi.setParticipantAvatar(user.id, picked), true);
+  assert.equal((await sessionApi.provisionParticipant(claims)).avatarId, picked);
+
+  // Signing in rewrites the mirrored profile whenever it drifted. That write
+  // must not take the avatar with it — the picker would reappear on the next
+  // rename, asking again for something already answered.
+  const renamed = await sessionApi.provisionParticipant({ ...claims, firstName: "Peserta Ganti" });
+  assert.equal(renamed.avatarId, picked);
+  assert.equal(renamed.displayName, "Peserta Ganti");
+});
+
+test("an avatar outside the catalogue is refused and leaves the stored one alone", async () => {
+  const user = await sessionApi.provisionParticipant(claims);
+  const picked = AVATARS[5].id;
+  assert.equal(await avatarApi.setParticipantAvatar(user.id, picked), true);
+
+  // This column is rendered straight into every surface that lists people, so
+  // an id no preset matches would blank an identity for everyone looking at it.
+  for (const bad of ["", "not-an-avatar", "ROCKET", "../rocket", "<script>"]) {
+    assert.equal(await avatarApi.setParticipantAvatar(user.id, bad), false, `${bad} must be refused`);
+  }
+  assert.equal((await sessionApi.provisionParticipant(claims)).avatarId, picked);
+});
+
+test("picking an avatar for a user who is not there fails instead of writing nothing quietly", async () => {
+  const missing = "00000000-0000-4000-8000-000000000000";
+  assert.equal(await avatarApi.setParticipantAvatar(missing, AVATARS[0].id), false);
 });

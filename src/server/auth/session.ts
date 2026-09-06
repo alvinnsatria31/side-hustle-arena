@@ -6,8 +6,13 @@ import { hashOpaqueToken, generateOpaqueToken } from "./crypto";
 import { getArenaSessionExpiry } from "./expiry";
 import { getParticipantUser } from "./participant-session";
 
-
-export type ArenaUser = { id: string; authSubject: string; email: string | null; displayName: string | null; avatarUrl: string | null };
+/**
+ * One definition, owned by the module that builds it. This used to be declared
+ * again here, so a field added to the mirrored row (the picked avatar) reached
+ * `getCurrentUser()` at runtime but was invisible to its callers' types.
+ */
+export type { ArenaUser } from "./participant-provision";
+import type { ArenaUser } from "./participant-provision";
 
 export async function provisionAndCreateSession(input: {
   subject: string; grantId: string; grantExpiresAt: Date; profile: { email: string; displayName: string; avatarUrl: string | null };

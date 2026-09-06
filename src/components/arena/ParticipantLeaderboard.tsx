@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { ArenaApiError, getLeaderboard } from '@/lib/arena-client';
 import { getParticipantOverview, useParticipantResource } from '@/lib/participant-client';
+import { AvatarBadge } from './AvatarBadge';
 import { ParticipantShell, RefreshButton, ResourceState, participantDate } from './ParticipantDashboard';
 
 export default function ParticipantLeaderboard() {
@@ -32,7 +33,7 @@ export default function ParticipantLeaderboard() {
         <table className="w-full min-w-[540px] text-left text-sm">
           <caption className="sr-only">Ranking {leaderboard.data.weekCode}</caption>
           <thead className="bg-sk-bg text-xs text-sk-muted"><tr><th scope="col" className="p-4">Rank</th><th scope="col" className="p-4">Peserta / Project</th><th scope="col" className="p-4 text-right">Skor</th><th scope="col" className="p-4 text-right">Poin</th></tr></thead>
-          <tbody className="divide-y divide-sk-border">{leaderboard.data.rows.map((row) => <tr key={row.rank} className={row.rank <= 3 ? 'bg-sk-success-tint/30' : ''}><td className="p-4 font-bold text-sk-navy">#{row.rank}</td><td className="max-w-md p-4"><div className="font-bold text-sk-navy">{row.displayName}</div><div className="mt-1 text-sk-body">{row.projectTitle}</div><div className="mt-1 text-xs text-sk-muted">{row.divisionName}</div></td><td className="p-4 text-right font-semibold tabular-nums">{row.finalScore}</td><td className="p-4 text-right font-semibold tabular-nums text-sk-success">+{row.pointsAwarded}</td></tr>)}</tbody>
+          <tbody className="divide-y divide-sk-border">{leaderboard.data.rows.map((row) => <tr key={row.rank} className={row.rank <= 3 ? 'bg-sk-success-tint/30' : ''}><td className="p-4 font-bold text-sk-navy">#{row.rank}</td><td className="max-w-md p-4"><div className="flex items-center gap-2.5"><AvatarBadge avatarId={row.avatarId} size="sm" /><span className="font-bold text-sk-navy">{row.displayName}</span></div><div className="mt-1 text-sk-body">{row.projectTitle}</div><div className="mt-1 text-xs text-sk-muted">{row.divisionName}</div></td><td className="p-4 text-right font-semibold tabular-nums">{row.finalScore}</td><td className="p-4 text-right font-semibold tabular-nums text-sk-success">+{row.pointsAwarded}</td></tr>)}</tbody>
         </table>
       </div>}
     </section>}

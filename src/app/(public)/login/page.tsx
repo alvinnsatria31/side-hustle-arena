@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { ButtonLink } from "@/components/primitives/Button";
+import { SignInButton } from "@/components/auth/SignInButton";
+import { sanitizeInternalReturnPath } from "@/server/auth/return-path";
 import { Entrance } from "@/components/motion/Reveal";
 import { PARTICIPANT_COOKIE, verifyParticipantToken } from "@/server/auth/participant-token";
 
@@ -14,7 +15,8 @@ export const dynamic = "force-dynamic";
  *
  * There is no form here and there never will be: the Arena verifies the Sekolah
  * Karir participant session and issues none of its own, so the only control on
- * this page is the door to the main site's gate. See
+ * this page is the door to the main site's gate — opened in a popup, so nobody
+ * has to leave the Arena to walk through it. See
  * docs/backend/PARTICIPANT_SESSION.md.
  */
 export default async function LoginPage({
@@ -38,7 +40,12 @@ export default async function LoginPage({
   }
   if (signedIn) redirect("/app");
 
-  const failed = (await searchParams).error === "auth_failed";
+  const params = await searchParams;
+  const failed = params.error === "auth_failed";
+  // Where the protected guard wanted them to be. Sanitised to an internal
+  // `/app` path, so a crafted `?returnTo=` cannot turn this card into a
+  // redirector to somebody else's origin.
+  const returnTo = sanitizeInternalReturnPath(typeof params.returnTo === "string" ? params.returnTo : undefined);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sk-bg px-6 py-24">
@@ -65,11 +72,9 @@ export default async function LoginPage({
             Sesi kamu tidak bisa diverifikasi. Silakan masuk lagi.
           </p>
         ) : null}
-        <ButtonLink href="/auth/login" size="lg" fullWidth>
-          Masuk dengan akun Sekolah Karir
-        </ButtonLink>
+        <SignInButton continueTo={returnTo} />
         <p className="mt-6 rounded-xl border border-dashed border-sk-blue-tint-border bg-sk-blue-wash px-4 py-3 text-[12px] leading-relaxed text-sk-body">
-          Arena tidak menyimpan password. Autentikasi dilakukan aman melalui Sekolah Karir.
+          Arena tidak menyimpan password. Jendela kecil akan terbuka untuk verifikasi Sekolah Karir, lalu kamu langsung masuk tanpa meninggalkan halaman ini.
         </p>
       </Entrance>
     </div>

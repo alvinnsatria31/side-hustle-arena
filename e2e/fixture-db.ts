@@ -161,6 +161,16 @@ export async function setupFixture(sql: Sql) {
     insert into arena.project_rubric_criteria (project_id, name, description, weight, max_score, sort_order)
     values (${project.id}, 'Execution', 'Browser E2E rubric fixture.', 1, 100, 0)`;
 
+  // Teardown dropped the participant row and the app would rebuild it on the
+  // first authenticated request — with no avatar, which is exactly what raises
+  // the arrival picker. That modal is deliberately not dismissable, so it would
+  // sit over every `/app` page and every spec here would fail on a click that
+  // never lands. Creating the row up front makes this fixture an established
+  // participant; `provisionParticipant` only refreshes the cached profile and
+  // leaves the avatar alone. First arrival is covered on purpose in
+  // avatar-picker.spec.ts, which clears the column itself.
+  await ensureUser(sql);
+
   return { token: await mintParticipantToken() };
 }
 
@@ -210,13 +220,23 @@ export async function getProjectId(sql: Sql) {
   return project.id as string;
 }
 
+/**
+ * The fixture participant is an established one, avatar already picked.
+ *
+ * `avatar_id` has to be set here rather than left null: null is what raises the
+ * arrival picker, and that modal is deliberately not dismissable — left unset,
+ * it would cover every `/app` page and every spec in this suite would fail on a
+ * click that never reaches its target. First arrival is exercised on purpose in
+ * avatar-picker.spec.ts, which clears the column itself.
+ */
 async function ensureUser(sql: Sql) {
   const [user] = await sql`
-    insert into identity.users (auth_subject, email_cache, display_name_cache)
-    values (${AUTH_SUBJECT}, 'e2e@example.test', 'E2E')
+    insert into identity.users (auth_subject, email_cache, display_name_cache, avatar_id)
+    values (${AUTH_SUBJECT}, 'e2e@example.test', 'E2E', 'rocket')
     on conflict (auth_subject) do update
       set email_cache = excluded.email_cache,
           display_name_cache = excluded.display_name_cache,
+          avatar_id = excluded.avatar_id,
           updated_at = now()
     returning id`;
   return user.id as string;

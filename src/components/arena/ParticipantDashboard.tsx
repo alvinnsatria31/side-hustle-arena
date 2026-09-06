@@ -6,6 +6,7 @@ import { Bell, CalendarClock, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Troph
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { useParticipant } from '@/features/arena/participant';
+import { SignInButton } from '@/components/auth/SignInButton';
 import { ArenaApiError } from '@/lib/arena-client';
 import { getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
 import type { ReactNode } from 'react';
@@ -41,7 +42,7 @@ export function ParticipantShell({ title, children, action }: { title: string; c
 export function ResourceState({ loading, error, retry }: { loading: boolean; error: Error | null; retry: () => void }) {
   if (error) return <div role="alert" className="my-5 border-l-2 border-sk-error bg-sk-error-wash p-5">
     <p className="mb-3 text-sm text-sk-error">{error instanceof ArenaApiError && error.status === 401 ? 'Sesi kamu berakhir. Silakan masuk kembali.' : error.message}</p>
-    {error instanceof ArenaApiError && error.status === 401 ? <ButtonLink href="/auth/login" size="sm">Masuk kembali</ButtonLink> : <Button onClick={retry} size="sm" variant="ghost" iconLeft={<RefreshCw size={14} aria-hidden />}>Coba lagi</Button>}
+    {error instanceof ArenaApiError && error.status === 401 ? <SignInButton size="sm" fullWidth={false} label="Masuk kembali" /> : <Button onClick={retry} size="sm" variant="ghost" iconLeft={<RefreshCw size={14} aria-hidden />}>Coba lagi</Button>}
   </div>;
   if (loading) return <div role="status" className="flex min-h-32 items-center justify-center gap-3 text-sm text-sk-muted"><LoaderCircle className="animate-spin motion-reduce:animate-none" size={20} aria-hidden />Memuat data...</div>;
   return null;

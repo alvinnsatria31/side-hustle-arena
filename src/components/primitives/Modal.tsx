@@ -11,13 +11,20 @@ interface ModalProps {
   children: ReactNode;
   labelledBy?: string;
   className?: string;
+  /**
+   * False for a modal that is a required step rather than an interruption:
+   * no close button, and neither the backdrop nor Escape dismisses it. Use it
+   * only when the surface underneath is genuinely unusable until the person
+   * answers — otherwise it is a trap, not a dialog.
+   */
+  dismissable?: boolean;
 }
 
 /**
  * Floating-surface modal: backdrop fade + content 8–12px lift (no zoom).
  * Escape closes; focus is trapped and restored.
  */
-export function Modal({ open, onClose, children, labelledBy, className }: ModalProps) {
+export function Modal({ open, onClose, children, labelledBy, className, dismissable = true }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,7 +36,7 @@ export function Modal({ open, onClose, children, labelledBy, className }: ModalP
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        if (dismissable) onClose();
         return;
       }
       if (e.key !== 'Tab' || !panelRef.current) return;
@@ -57,7 +64,7 @@ export function Modal({ open, onClose, children, labelledBy, className }: ModalP
       document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, dismissable]);
 
   return (
     <AnimatePresence>
@@ -71,7 +78,7 @@ export function Modal({ open, onClose, children, labelledBy, className }: ModalP
         >
           <div
             className="absolute inset-0 bg-sk-navy/45 backdrop-blur-[2px]"
-            onClick={onClose}
+            onClick={dismissable ? onClose : undefined}
             aria-hidden
           />
           <motion.div
@@ -88,13 +95,15 @@ export function Modal({ open, onClose, children, labelledBy, className }: ModalP
               className,
             )}
           >
-            <button
-              onClick={onClose}
-              aria-label="Tutup"
-              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-sk-muted transition-colors hover:bg-sk-track hover:text-sk-navy"
-            >
-              <X size={17} aria-hidden />
-            </button>
+            {dismissable && (
+              <button
+                onClick={onClose}
+                aria-label="Tutup"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-sk-muted transition-colors hover:bg-sk-track hover:text-sk-navy"
+              >
+                <X size={17} aria-hidden />
+              </button>
+            )}
             {children}
           </motion.div>
         </motion.div>

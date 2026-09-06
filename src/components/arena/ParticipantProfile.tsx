@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { Gift, UserRound } from 'lucide-react';
+import { Gift } from 'lucide-react';
 import { useParticipant } from '@/features/arena/participant';
 import { Button } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
+import { AvatarChooser } from '@/components/arena/AvatarChooser';
 import { getParticipantMilestones, getParticipantOverview, takeParticipantReward, useParticipantResource } from '@/lib/participant-client';
 import { EnrollmentHistory, ParticipantLogout, ParticipantShell, ParticipantStats, RefreshButton, ResourceState, participantDate } from './ParticipantDashboard';
 
@@ -40,7 +41,7 @@ export default function ParticipantProfile() {
 
   return <ParticipantShell title="Profile" action={<RefreshButton refresh={refresh} loading={resource.loading || rewards.loading} />}>
     <div className="flex flex-wrap items-center gap-4 border-b border-sk-border pb-6">
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-sk-blue-tint text-sk-blue"><UserRound size={28} aria-hidden /></span>
+      <AvatarChooser />
       <div className="min-w-0 flex-1"><h2 className="text-xl font-bold text-sk-navy">{user.displayName ?? 'Peserta'}</h2><p className="mt-1 break-all text-sm text-sk-muted">{user.email ?? 'Email belum tersedia'}</p></div>
       <ParticipantLogout />
     </div>

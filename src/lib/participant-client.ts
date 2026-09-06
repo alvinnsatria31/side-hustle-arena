@@ -24,6 +24,8 @@ export async function participantRequest<T>(path: string, init?: RequestInit): P
 export const getParticipantOverview = () => participantRequest<ParticipantOverview>('/api/arena/me');
 export const getParticipantMilestones = () => participantRequest<{ ladder: MilestoneLadder }>('/api/arena/milestones');
 export const takeParticipantReward = (slug: string) => participantRequest('/api/arena/milestones/take', { method: 'POST', body: JSON.stringify({ slug }) });
+export const setParticipantAvatar = (avatarId: string) =>
+  participantRequest<{ avatarId: string }>('/api/arena/me/avatar', { method: 'PUT', body: JSON.stringify({ avatarId }) });
 export const getParticipantInbox = (unreadOnly = false, limit = 20) => participantRequest<ParticipantInbox>(`/api/arena/notifications?limit=${limit}${unreadOnly ? '&unread=1' : ''}`);
 export const readParticipantInbox = (eventIds?: string[]) => participantRequest('/api/arena/notifications', { method: 'POST', body: JSON.stringify(eventIds ? { eventIds } : { all: true }) });
 

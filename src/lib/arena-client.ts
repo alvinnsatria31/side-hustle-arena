@@ -212,6 +212,7 @@ export interface SubmitResult {
 export interface LeaderboardEntry {
   rank: number;
   displayName: string;
+  avatarId: string | null;
   projectTitle: string;
   divisionName: string;
   finalScore: number;

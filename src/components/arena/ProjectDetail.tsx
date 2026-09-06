@@ -115,9 +115,9 @@ export function CtaActions({ slug }: { slug: string }) {
           {saved ? 'Tersimpan' : 'Simpan untuk nanti'}
         </Button>
       </div>
-      {/* Login menyerahkan browser ke route SSO, jadi tidak ada callback yang
-          sempat jalan di halaman ini. Enrollment setelah login harus ditangani
-          di halaman tujuan `continueTo`. */}
+      {/* Login jalan di jendela popup, jadi halaman ini tidak ikut ditinggalkan.
+          Begitu sesi ada, browser dimuat ulang ke `continueTo` — enrollment
+          setelah login tetap ditangani di halaman tujuan itu, bukan di sini. */}
       <LoginModal
         open={loginOpen}
         onClose={() => setLoginOpen(false)}

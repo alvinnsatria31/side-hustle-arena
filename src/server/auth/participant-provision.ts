@@ -10,6 +10,12 @@ export type ArenaUser = {
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /**
+   * The preset avatar this participant picked, or null if they never have.
+   * Null is what the app reads to raise the one-time picker, so it must survive
+   * all the way to the client rather than being defaulted here.
+   */
+  avatarId: string | null;
 };
 
 /**
@@ -69,5 +75,6 @@ function serialize(row: typeof users.$inferSelect): ArenaUser {
     email: row.emailCache,
     displayName: row.displayNameCache,
     avatarUrl: row.avatarUrlCache,
+    avatarId: row.avatarId,
   };
 }

@@ -61,10 +61,27 @@ domain, so it signs the participant out of the main site too. There is no "log
 out of the Arena only" to offer, and pretending otherwise would leave someone
 signed in where they thought they had left.
 
-**Login is a redirect.** `/auth/login` sends the visitor to the main site's
-`/arena` gate, which raises the OTP modal and then offers the door back through
-`/arena/enter` — the route that re-scopes a pre-split cookie so this subdomain
-receives it. `returnTo` is deliberately not forwarded to another origin.
+**Login is a popup, not a departure.** `/auth/login` still sends the browser to
+the main site's `/arena` gate — that gate raises the OTP modal and then offers
+the door back through `/arena/enter`, the route that re-scopes a pre-split
+cookie so this subdomain receives it. What changed on 2026-09-06 is *which*
+browsing context makes that trip: `signInWithPopup()` opens the gate in a popup
+window and leaves the Arena page standing behind it, so a participant who was
+reading a project brief returns to that brief rather than to a generic landing.
+
+The handshake is polling, not `postMessage`. The gate is a different origin, so
+nothing on this page may read that window beyond `closed` — but the cookie it
+sets is scoped to the registrable domain, so our own origin can simply look.
+`GET /api/auth/session` answers `{ signedIn }` from the token alone (no
+database, no user mirror), the popup polls it once a second, and the first
+`true` closes the window and reloads onto the destination. Nothing has to be
+agreed with `sekolah-karir-website` for this to work, and nothing breaks there
+when the gate changes where it redirects afterwards.
+
+A blocked popup falls back to handing over the whole tab, which is exactly the
+old behaviour. `returnTo` is still never forwarded to another origin; it is
+sanitised by `sanitizeInternalReturnPath` and applied on the way back, on this
+origin only.
 
 **Trust is symmetric.** Reading the main-site session means this deployment must
 be trusted as much as the main site. That was already true of the Arena it
@@ -81,7 +98,43 @@ be an improvement rather than a formality.
   `https://www.sekolahkarir.id`. The apex only 308-redirects there, so it works
   but costs a hop; unset, the config defaults to `www`.
 - The main site keeps serving `/arena` and `/arena/enter`. Those are this app's
-  front door, not leftovers from the previous Arena.
+  front door, not leftovers from the previous Arena — and now they are also what
+  runs inside the sign-in popup, so neither may refuse to render in a
+  `window.open`ed context (no `Cross-Origin-Opener-Policy: same-origin` on the
+  gate, no framebusting redirect to the apex).
+- This app sends no `Cross-Origin-Opener-Policy` header of its own. Adding one
+  would sever the opener relationship and break the popup's `closed` detection.
+
+## What the main site does *not* have to do
+
+Nothing. The popup flow was built to need no change in `sekolah-karir-website`,
+because that repository is actively worked on by other people. Two things there
+would make it nicer, and neither is required:
+
+1. **Close the popup itself.** If `/arena/enter` detected `window.opener` and
+   called `window.close()`, the popup would vanish on the spot instead of a beat
+   later when our poll notices. Purely cosmetic — the poll already closes it.
+2. **A token endpoint.** The dormant PKCE bridge
+   ([AUTH_INTEGRATION_CONTRACT.md](./AUTH_INTEGRATION_CONTRACT.md)) is the real
+   upgrade: it would let the Arena render its own sign-in form instead of
+   borrowing the gate. Until then the Arena cannot authenticate anyone — it
+   holds no participant accounts, so it has nothing to check an OTP against.
+
+## Arrival: picking an avatar
+
+A participant who signed in on the main site is already authenticated here, so
+the Arena asks them for exactly one thing on arrival: the avatar the leaderboard
+shows. `identity.users.avatar_id` is nullable, and null is the whole trigger —
+the protected layout raises `AvatarPickerModal` while it stays null, which makes
+the step self-healing rather than stateful: a save that never lands simply asks
+again next time.
+
+The id is validated against the preset catalogue (`src/lib/avatars.ts`) in
+`setParticipantAvatar`, not only in the route, because the column is rendered
+straight into every surface that lists people — an unknown id would blank an
+identity for everyone looking at that row, not just its owner. `avatar_id` is
+Arena-owned and distinct from `avatar_url_cache`, which mirrors the main site
+and is not ours to write; signing in again therefore never clears the choice.
 
 ## Why sign-in does not read the bridge's configuration
 

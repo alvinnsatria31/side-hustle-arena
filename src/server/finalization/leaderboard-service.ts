@@ -9,6 +9,8 @@ type Db = ReturnType<typeof getDb>;
 export interface LeaderboardRow {
   rank: number;
   displayName: string;
+  /** The preset they picked, or null; the client degrades an unknown id itself. */
+  avatarId: string | null;
   projectTitle: string;
   divisionName: string;
   finalScore: number;
@@ -40,6 +42,7 @@ export async function listWeekLeaderboard(
     .select({
       rank: weeklyRankings.rank,
       displayName: users.displayNameCache,
+      avatarId: users.avatarId,
       userId: users.id,
       projectTitle: projects.title,
       divisionName: divisions.name,
@@ -59,6 +62,7 @@ export async function listWeekLeaderboard(
     rows: rows.map((row) => ({
       rank: row.rank,
       displayName: row.displayName ?? `Peserta ${row.userId.slice(0, 8)}`,
+      avatarId: row.avatarId,
       projectTitle: row.projectTitle,
       divisionName: row.divisionName,
       finalScore: Number(row.finalScore),

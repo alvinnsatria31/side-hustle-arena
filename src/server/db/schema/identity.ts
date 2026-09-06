@@ -8,6 +8,15 @@ export const users = identity.table("users", {
   emailCache: text("email_cache"),
   displayNameCache: text("display_name_cache"),
   avatarUrlCache: text("avatar_url_cache"),
+  /**
+   * The preset avatar the participant picked in the Arena (src/lib/avatars.ts).
+   *
+   * Null means "never picked", which is what raises the one-time picker on
+   * arrival — so it is deliberately nullable rather than defaulted. Distinct
+   * from `avatar_url_cache`, which mirrors whatever the main site holds and is
+   * not ours to write; this column is Arena-owned display identity.
+   */
+  avatarId: text("avatar_id"),
   status: userStatus("status").default("ACTIVE").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

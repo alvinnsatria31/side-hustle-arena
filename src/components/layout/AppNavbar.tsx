@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bell, LogOut, UserRound } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { AvatarBadge } from '@/components/arena/AvatarBadge';
 import { useParticipant } from '@/features/arena/participant';
 import { getNotifications } from '@/lib/arena-client';
 import { cn } from '@/lib/cn';
@@ -100,9 +101,18 @@ export function AppNavbar() {
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-label="Menu pengguna"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sk-blue to-sk-blue-400 text-[14px] font-bold text-white shadow-md transition-transform hover:scale-105 active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-full shadow-md transition-transform hover:scale-105 active:scale-95"
           >
-            {(user.displayName ?? 'Peserta').slice(0, 1).toUpperCase()}
+            {/* The initial stands in only until they have picked: the picker
+                runs on arrival, so this is what the first paint shows and not a
+                state anyone stays in. */}
+            {user.avatarId ? (
+              <AvatarBadge avatarId={user.avatarId} size="sm" className="h-9 w-9 text-[18px]" />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sk-blue to-sk-blue-400 text-[14px] font-bold text-white">
+                {(user.displayName ?? 'Peserta').slice(0, 1).toUpperCase()}
+              </span>
+            )}
           </button>
         </div>
       </nav>
@@ -113,9 +123,12 @@ export function AppNavbar() {
           aria-label="Menu pengguna"
           className="fixed right-4 top-16 z-50 w-56 rounded-[var(--radius-sk-lg)] border border-sk-border bg-white p-1.5 shadow-sk-lg sm:right-6"
         >
-          <div className="px-3 py-2">
-            <p className="text-[13px] font-bold text-sk-navy">{user.displayName ?? 'Peserta'}</p>
-            <p className="break-all font-mono text-[10.5px] text-sk-muted">{user.email}</p>
+          <div className="flex items-center gap-2.5 px-3 py-2">
+            {user.avatarId ? <AvatarBadge avatarId={user.avatarId} size="sm" /> : null}
+            <div className="min-w-0">
+              <p className="text-[13px] font-bold text-sk-navy">{user.displayName ?? 'Peserta'}</p>
+              <p className="break-all font-mono text-[10.5px] text-sk-muted">{user.email}</p>
+            </div>
           </div>
           <div className="my-1 h-px bg-sk-border" />
           <Link

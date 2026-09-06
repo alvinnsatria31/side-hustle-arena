@@ -1,0 +1,1 @@
+ALTER TABLE "identity"."users" ADD COLUMN "avatar_id" text;
