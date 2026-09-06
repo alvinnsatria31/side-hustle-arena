@@ -108,11 +108,17 @@ const INSTRUCTION = [
 const MAX_TEXT_CHARS = 8_000;
 
 /**
- * Hard ceiling on generation, the other half of the latency budget.
- * A full reply measured ~900 tokens, so this leaves headroom without letting a
- * verbose run wander past the platform's function timeout.
+ * Hard ceiling on generation.
+ *
+ * This model reasons before it answers, and `max_tokens` bounds the two
+ * together. A tight cap therefore does not buy speed — it buys an empty reply:
+ * at 1200 the run spent all 1200 on reasoning and returned zero characters of
+ * JSON, and at 4000 it did the same, more slowly (34.5s) than an uncapped run
+ * that succeeded (25.2s). Reasoning measured 1535-1943 tokens on a successful
+ * scan but is not predictable, so the ceiling is a runaway guard, not a budget.
+ * Latency is bounded by REQUEST_TIMEOUT_MS instead, which is the honest lever.
  */
-const MAX_OUTPUT_TOKENS = 1_200;
+const MAX_OUTPUT_TOKENS = 8_000;
 
 /**
  * Fail before the platform does.

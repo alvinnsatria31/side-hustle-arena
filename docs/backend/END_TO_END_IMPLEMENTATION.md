@@ -338,3 +338,48 @@ carrying the same deliberately flawed CV, and `npm run test:cv:scan` asserts
 that both extract to the same text and that the result is long enough to reach
 the analyzer. The contentless fixture is kept as the negative case. The
 extractor itself is the one the Arena reviewer already uses.
+
+### CV Scanner: Why It Cannot Ship Synchronously On The Free Plan
+
+Measured 2026-09-06 against `deepseek/deepseek-v4-flash`, the only model the
+configured provider offers. Same CV (`qa-files/cv-sample.pdf`) every run.
+
+| reasoning tokens | wall clock | outcome |
+|---|---|---|
+| 1,535 | 25.2s | complete |
+| 1,943 | 18.4s | complete |
+| 3,750 | 29.0s | truncated |
+| 4,000 | 34.5s | truncated |
+| 8,000 | 62.8s | truncated |
+| 10,635 | 90.7s | complete |
+
+This is a reasoning model, and `max_tokens` bounds reasoning and answer
+together. Three consequences, none of them obvious from the code:
+
+**A tight cap does not buy speed, it buys an empty reply.** At 1,200 tokens the
+run spent all 1,200 reasoning and returned zero characters of JSON. That was the
+shipped value; the feature would have failed for every user the moment the flag
+was turned on.
+
+**Prompt length is not the lever it looked like.** Trimming the instruction from
+2,471 to 920 characters did not help: that run burned 8,000 reasoning tokens in
+62.8s and still returned nothing. A ~300-character prompt did succeed in 18.4s,
+but one sample is not a control.
+
+**The spread is the actual blocker.** 18s to 91s on identical input means even a
+run that fits under Hobby's 60s ceiling proves nothing about the next one. A
+synchronous scan on this model is a coin flip, and `maxDuration` cannot fix a
+variance problem.
+
+Options, in the order they are worth considering:
+
+1. **Move the scan off the request path** to the Hermes VPS (202.74.75.95),
+   which has no function timeout and which the Arena review pipeline already
+   drives. Keeps the analysis quality, costs nothing, and the dispatch pattern
+   exists in `src/server/automation/vps-hooks.ts`.
+2. **Use a non-reasoning model.** Latency collapses when nothing is spent on
+   reasoning. Needs a provider that offers one; the current key does not.
+3. **Vercel Pro** (300s). Works, but pays monthly to paper over a 10:1
+   reasoning-to-answer ratio.
+
+Until one of these lands, `NEXT_PUBLIC_CV_SCANNER_ENABLED` must stay unset.
