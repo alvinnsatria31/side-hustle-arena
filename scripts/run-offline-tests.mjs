@@ -39,8 +39,11 @@ for (const name of files) {
     skipped.push([name, KNOWN_EXCLUSIONS[name]]);
     continue;
   }
-  // The suites that stand up their own fixtures read DATABASE_URL directly.
-  if (readFileSync(join(root, "scripts", name), "utf8").includes("DATABASE_URL")) {
+  // The suites that stand up their own fixtures READ the variable; matching the
+  // bare word instead caught any file that merely mentioned it — a fixture
+  // connection string handed to a pure validator, or a comment explaining the
+  // rule — and skipped suites that were perfectly offline.
+  if (/process\.env\.DATABASE_URL/.test(readFileSync(join(root, "scripts", name), "utf8"))) {
     skipped.push([name, "needs a live PostgreSQL database."]);
     continue;
   }
@@ -51,10 +54,30 @@ console.log(`Running ${run.length} offline suites; skipping ${skipped.length}.\n
 for (const [name, reason] of skipped) console.log(`  skip  ${name}\n        ${reason}`);
 console.log("");
 
+/**
+ * Point the database at nothing on purpose.
+ *
+ * "Offline" is decided by reading the test file for DATABASE_URL, and that
+ * heuristic cannot see a suite that reaches Postgres through a service's
+ * default `db = getDb()` argument. One did: the voucher-push test queried a
+ * real database for a UUID that happens not to exist, so it passed on any
+ * machine whose .env pointed somewhere live and only failed once CI ran it
+ * against nothing. Green for the wrong reason is the worst outcome a test
+ * runner can produce.
+ *
+ * A loopback address on a closed port still parses as a valid URL — so config
+ * validation at import time is satisfied — and refuses to connect. Any suite
+ * that quietly needs the database now fails here, on the developer's machine,
+ * instead of surviving until CI.
+ */
 const result = spawnSync(
   process.execPath,
   ["--import", "./scripts/node-test-hooks.mjs", "--test", "--test-force-exit", ...run],
-  { cwd: root, stdio: "inherit" },
+  {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, DATABASE_URL: "postgresql://offline:offline@127.0.0.1:1/offline" },
+  },
 );
 
 process.exit(result.status ?? 1);

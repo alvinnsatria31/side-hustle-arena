@@ -119,7 +119,14 @@ test("voucher push reports missing redemption and pending contract without throw
   try {
     delete process.env.MAIN_SITE_ORIGIN;
     delete process.env.MAIN_SITE_VOUCHER_TOKEN;
-    const missing = await voucher.pushRewardCode("0d224c11-a09f-41dd-8c7c-63484e7f7a0b");
+    // `db` is injected rather than left to default to getDb(). This test used to
+    // reach the real database for a UUID that happens not to exist, so it passed
+    // wherever DATABASE_URL pointed at something live and failed in CI, where it
+    // does not — a green run for the wrong reason. A missing redemption is a
+    // pure branch and needs no Postgres to prove.
+    const noRows = { select: () => ({ from: () => ({ where: async () => [] }) }) };
+    const refuse = () => { throw new Error("a missing redemption must never reach the main site"); };
+    const missing = await voucher.pushRewardCode("0d224c11-a09f-41dd-8c7c-63484e7f7a0b", refuse, noRows);
     assert.deepEqual(missing, { ok: false, pushable: false, error: "Redemption not found." });
   } finally {
     if (savedOrigin !== undefined) process.env.MAIN_SITE_ORIGIN = savedOrigin;
