@@ -12,6 +12,7 @@ import {
   ListChecks,
   LogOut,
   Mail,
+  Rocket,
   ShieldAlert,
   SquareArrowOutUpRight,
   Users,
@@ -43,6 +44,10 @@ const GROUPS: Array<{ label: string | null; items: NavItem[] }> = [
   {
     label: 'Operasi',
     items: [
+      // Rocket, not Workflow: this sits directly above Otomasi, and two
+      // adjacent entries wearing the same icon are the two an operator most
+      // needs to tell apart. It also matches the button on the page it opens.
+      { label: 'Trigger Workflow', href: '/app/admin/workflows', icon: Rocket, scope: 'projects' },
       { label: 'Otomasi', href: '/app/admin/jobs', icon: Workflow, scope: 'overview' },
       { label: 'Review', href: '/app/admin/reviews', icon: ClipboardCheck, scope: 'reviews' },
       { label: 'Email', href: '/app/admin/email', icon: Mail, scope: 'notifications' },

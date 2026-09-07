@@ -14,13 +14,29 @@ const envKeys = ["ARENA_ADMIN_SUBJECTS", "ARENA_ADMIN_ROLES", "INTERNAL_ADMIN_TO
 const saved = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
 const forbidden = error => error.code === "FORBIDDEN";
 
+test("Trigger Workflow page accepts project admins without overview and rejects other scopes", async () => {
+  reset();
+  process.env.ARENA_ADMIN_ROLES = JSON.stringify({ "sk-participant:publisher": ["projects"], "sk-participant:viewer": ["overview"] });
+  const page = load("src/app/(app)/app/admin/workflows/page.tsx", {
+    "next/navigation": { redirect: path => { throw new Error(`redirect:${path}`); } },
+    "@/components/admin/AdminShell": { AdminShell: "section" },
+    "@/components/admin/TriggerWorkflow": { TriggerWorkflow: "form" },
+  });
+  session = { authSubject: "sk-participant:publisher" };
+  assert.equal((await page.default()).props.title, "Trigger Workflow");
+  session = { authSubject: "sk-participant:viewer" };
+  await assert.rejects(page.default(), /redirect:\/app\/admin/);
+  session = null;
+  await assert.rejects(page.default(), forbidden);
+});
+
 let session = null;
 const calls = [];
 
 function load(relative, mocks = {}) {
   const filename = path.resolve(root, relative);
   const source = readFileSync(filename, "utf8");
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const module = { exports: {} };
   const resolve = specifier => {
     if (Object.hasOwn(mocks, specifier)) return mocks[specifier];

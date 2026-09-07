@@ -1,5 +1,31 @@
 # Admin operations
 
+## Trigger Workflow menu (7 September 2026)
+
+Project admins can open `/app/admin/workflows` from **Trigger Workflow** in the
+sidebar, without needing the `overview` scope. The form calls the existing
+session-authenticated `/api/internal/admin/launch` endpoint: create a week,
+generate projects for active divisions, and optionally approve/publish.
+
+**Buka sekarang** sets the opening time at submission, so a manual run is not
+held until Monday or today's 08:00. A custom opening time and deadline use WIB.
+The default is preview; **Setujui dan publikasikan langsung** explicitly skips
+the preview wait. Deadline must be future and after opening, and an audit reason
+is required. Further attempts with a returned week ID reuse that week; once
+any project publishes the form stops launching again. Project/deadline/feature
+guards in the backend remain authoritative.
+
+If a dispatched request fails without a reliable result, the form blocks another
+submission and directs the operator to inspect Projects: the server may already
+have created or published the week. Validation failures before dispatch remain
+editable. This avoids a blind retry creating another release; it is not a
+server-side idempotency guarantee across reloads or concurrent browser tabs.
+
+Manual launch does not change the generation or auto-publish flags, Vercel
+cron, or the recurring n8n workflow. Scheduled weekly generation/publication
+continues when configured and activated. The Otomasi page links to this form
+and retains individual scheduled jobs and readiness diagnostics.
+
 ## Completed: authorization separation
 
 - `src/server/admin/auth.ts` exports `requireArenaAdmin(request, scope): Promise<{ actorSubject: string }>` and the session-only `requireArenaAdminSession()` console gate.
