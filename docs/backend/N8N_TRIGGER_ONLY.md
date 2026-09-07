@@ -49,7 +49,7 @@ Authorization: Bearer {ARENA_CRON_TOKEN}
 | Daily 08:00 WIB | `email-flush`, `week-notifications` |
 | Daily 01:30 WIB | `session-cleanup`, `storage-cleanup` |
 | Sunday 09:00 WIB | `project-generate` |
-| Monday 07:00 WIB | `project-drop` |
+| Every hour, on the hour (WIB) | `project-drop` |
 | Saturday 00:05 WIB | `week-close` |
 | Weekend every 2h | `week-finalize` |
 
@@ -86,6 +86,15 @@ finalize) reports itself as waiting and stays `done: true`. The schedule is the
 retry mechanism; nothing needs to be requeued by hand.
 
 ## Firing more often than needed is safe
+
+Publication is checked hourly so the Monday 08:00 WIB opening is reached and
+weeks still awaiting publication can be retried later, including off-schedule
+weeks. This does not retry held siblings once another project has opened their
+week: the scheduler excludes OPEN weeks. The old Monday 07:00
+tick ran before `opensAt`, so it could not publish the normal weekly drop.
+Import and activate the updated JSON in n8n to apply this schedule; changing
+the repository file does not update a live workflow. Vercel's daily 11:00 WIB
+publication tick remains a fallback.
 
 Every job is idempotent and self-gating: it finds its own work, refuses to act
 past its own guards, and reports `skipped` when there is nothing to do. Firing

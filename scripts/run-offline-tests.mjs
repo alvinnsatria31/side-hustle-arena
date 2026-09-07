@@ -25,8 +25,6 @@ const root = resolve(here, "..");
 const KNOWN_EXCLUSIONS = {
   "cv-scan-live.test.mjs":
     "calls the real CV provider — needs AI_CV_API_KEY and spends money per run.",
-  "project-scheduler.test.mjs":
-    "'cron dates fit the preview window' expects sub-daily vercel.json crons; the deployed values are daily because Vercel Hobby cannot do sub-daily, and n8n is the real scheduler. Pre-existing and deliberate — see docs/backend/IMPLEMENTATION_AUDIT_2026-09-07.md.",
 };
 
 const files = readdirSync(join(root, "scripts"))

@@ -49,14 +49,14 @@
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 7 * * 1" }] }
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 * * * *" }] }
       },
       "id": "tick-drop",
-      "name": "Monday 07:00 WIB",
+      "name": "Hourly project publication",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [-620, 380],
-      "notes": "Monday drop. Safe to fire more often than needed - publishing an already-open week reports 'week already open'."
+      "notes": "Retry due weeks every hour. Arena enforces opening time and preview approval; already-open weeks are excluded."
     },
     {
       "parameters": {
@@ -82,7 +82,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\nconst byTrigger = {\n  'Every 2 minutes': ['reviews-run'],\n  'Daily 08:00 WIB': ['email-flush', 'week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday 09:00 WIB': ['project-generate'],\n  'Monday 07:00 WIB': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
+        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\nconst byTrigger = {\n  'Every 2 minutes': ['reviews-run'],\n  'Daily 08:00 WIB': ['email-flush', 'week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday 09:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
       },
       "id": "route",
       "name": "Which jobs are due",
@@ -125,7 +125,7 @@
     "Daily 08:00 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
     "Daily 01:30 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
     "Sunday 09:00 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Monday 07:00 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
+    "Hourly project publication": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
     "Saturday 00:05 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
     "Weekend every 2h": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
     "Which jobs are due": { "main": [[{ "node": "Tell Arena to run it", "type": "main", "index": 0 }]] },

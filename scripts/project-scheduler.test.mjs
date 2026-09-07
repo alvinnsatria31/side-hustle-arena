@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { runProjectGenerate, runProjectDrop } from "../src/server/scheduler/service.ts";
 import { weeklyWindow } from "../src/server/generation/core.ts";
 import { ArenaDomainError } from "../src/server/arena/errors.ts";
@@ -61,10 +62,33 @@ test("publication reports held projects, retries them, and isolates week failure
 
 test("cron dates fit the preview window and publication opening", async () => {
   const { crons } = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8"));
-  assert.equal(crons.find((c) => c.path.endsWith("/project-generate")).schedule, "0 2-16 * * 0");
-  assert.equal(crons.find((c) => c.path.endsWith("/project-drop")).schedule, "0 * * * *");
+  assert.equal(crons.find((c) => c.path.endsWith("/project-generate")).schedule, "0 2 * * 0");
+  assert.equal(crons.find((c) => c.path.endsWith("/project-drop")).schedule, "0 4 * * *");
   const now = new Date("2026-09-06T02:00:00Z");
   const window = weeklyWindow(now);
   assert.ok(now >= window.previewAt && now < window.opensAt);
   assert.equal(window.opensAt.toISOString(), "2026-09-07T01:00:00.000Z");
+  const fallbackDrop = new Date("2026-09-07T04:00:00Z");
+  assert.ok(fallbackDrop >= window.opensAt && fallbackDrop < window.submissionDeadlineAt);
+});
+
+test("n8n publication fires at opening and retries held or off-schedule weeks", async () => {
+  const workflow = JSON.parse(await readFile(new URL("../n8n/arena-trigger-workflow.json", import.meta.url), "utf8"));
+  assert.equal(workflow.settings.timezone, "Asia/Jakarta");
+  const drop = workflow.nodes.find(node => node.id === "tick-drop");
+  const expression = drop.parameters.rule.interval[0].expression.split(" ");
+  // These publication slots must all exist: opening, a retry, and an ad-hoc week.
+  for (const date of ["2026-09-07T08:00:00+07:00", "2026-09-07T09:00:00+07:00", "2026-09-08T08:00:00+07:00"]) {
+    const local = new Date(new Date(date).getTime() + 7 * 3600_000);
+    const fields = [local.getUTCMinutes(), local.getUTCHours(), local.getUTCDate(), local.getUTCMonth() + 1, local.getUTCDay()];
+    assert.ok(expression.every((field, index) => field === "*" || Number(field) === fields[index]), `No publication tick at ${date}`);
+  }
+  const router = workflow.nodes.find(node => node.id === "route");
+  for (const trigger of workflow.nodes.filter(node => node.type === "n8n-nodes-base.scheduleTrigger")) {
+    const routed = runInNewContext(`(function () { ${router.parameters.jsCode} })()`, { $prevNode: { name: trigger.name } });
+    assert.ok(routed.length > 0, `${trigger.name} must route to a job`);
+    assert.ok(workflow.connections[trigger.name].main[0].some(connection => connection.node === router.name));
+    if (trigger.id === "tick-drop") assert.equal(routed[0].json.job, "project-drop");
+    if (trigger.id === "tick-reviews") assert.equal(routed[0].json.job, "reviews-run");
+  }
 });
