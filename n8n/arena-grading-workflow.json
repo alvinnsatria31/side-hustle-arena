@@ -2,18 +2,29 @@
   "name": "Arena grading (claim/lease)",
   "meta": {
     "description": "Claims one Arena review job, grades only the sources that job returned, then closes that same lease. Contract: docs/backend/N8N_GRADING_WORKFLOW.md. Never posts a final score - the backend computes it.",
-    "arenaContractVersion": "claim-lease-v1"
+    "arenaContractVersion": "claim-lease-v1",
+    "arenaOwns": "reviews-run queue (claim/lease). The scheduler workflow must NOT also schedule reviews-run."
   },
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
       },
       "id": "trigger",
       "name": "Every 2 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-460, 0]
+      "position": [
+        -460,
+        0
+      ]
     },
     {
       "parameters": {
@@ -22,28 +33,43 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\"workerId\": \"n8n-grading\"}",
-        "options": { "timeout": 30000 }
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "claim",
       "name": "Claim one job",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-240, 0]
+      "position": [
+        -240,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "version": 2, "caseSensitive": true },
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
           "combinator": "and",
           "conditions": [
             {
-              "operator": { "type": "object", "operation": "notEmpty", "singleValue": true },
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
               "leftValue": "={{ $json.data.job }}"
             }
           ]
@@ -53,7 +79,10 @@
       "name": "Got a job?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-20, 0],
+      "position": [
+        -20,
+        0
+      ],
       "notes": "QUEUE_EMPTY is a 200 with job: null. Stop quietly - do not retry."
     },
     {
@@ -64,7 +93,10 @@
       "name": "Build blind prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [200, -100]
+      "position": [
+        200,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -73,19 +105,27 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.AI_API_KEY }}" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AI_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ model: $env.AI_REVIEW_MODEL, temperature: 0, response_format: { type: 'json_object' }, messages: [{ role: 'user', content: $json.prompt }] }) }}",
-        "options": { "timeout": 300000 }
+        "options": {
+          "timeout": 300000
+        }
       },
       "id": "grade",
       "name": "Grade with model",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [420, -100],
+      "position": [
+        420,
+        -100
+      ],
       "onError": "continueErrorOutput",
       "notes": "Must finish well inside the 600s lease."
     },
@@ -97,16 +137,26 @@
       "name": "Shape and pre-check",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [640, -100]
+      "position": [
+        640,
+        -100
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "version": 2, "caseSensitive": true },
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
           "combinator": "and",
           "conditions": [
             {
-              "operator": { "type": "boolean", "operation": "true", "singleValue": true },
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
               "leftValue": "={{ $json.valid }}"
             }
           ]
@@ -116,7 +166,10 @@
       "name": "Usable output?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [860, -100]
+      "position": [
+        860,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -125,19 +178,27 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId, workerId: 'n8n-grading', output: $json.output }) }}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        }
       },
       "id": "complete",
       "name": "Complete the lease",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, -200]
+      "position": [
+        1080,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -146,41 +207,127 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.INTERNAL_AUTOMATION_TOKEN }}"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId ?? $('Build blind prompt').first().json.jobId, workerId: 'n8n-grading', code: $json.code ?? 'MODEL_CALL_FAILED', message: ($json.message ?? 'model call failed').toString().slice(0, 500) }) }}",
-        "options": { "timeout": 60000 }
+        "options": {
+          "timeout": 60000
+        }
       },
       "id": "fail",
       "name": "Report the failure",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1080, 0],
+      "position": [
+        1080,
+        0
+      ],
       "notes": "Reporting keeps the reason; a silently expired lease recovers without one. A technical failure never spends a participant review attempt."
     }
   ],
   "connections": {
-    "Every 2 minutes": { "main": [[{ "node": "Claim one job", "type": "main", "index": 0 }]] },
-    "Claim one job": { "main": [[{ "node": "Got a job?", "type": "main", "index": 0 }]] },
-    "Got a job?": { "main": [[{ "node": "Build blind prompt", "type": "main", "index": 0 }], []] },
-    "Build blind prompt": { "main": [[{ "node": "Grade with model", "type": "main", "index": 0 }]] },
-    "Grade with model": {
+    "Every 2 minutes": {
       "main": [
-        [{ "node": "Shape and pre-check", "type": "main", "index": 0 }],
-        [{ "node": "Report the failure", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Claim one job",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Shape and pre-check": { "main": [[{ "node": "Usable output?", "type": "main", "index": 0 }]] },
+    "Claim one job": {
+      "main": [
+        [
+          {
+            "node": "Got a job?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Got a job?": {
+      "main": [
+        [
+          {
+            "node": "Build blind prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build blind prompt": {
+      "main": [
+        [
+          {
+            "node": "Grade with model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grade with model": {
+      "main": [
+        [
+          {
+            "node": "Shape and pre-check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report the failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape and pre-check": {
+      "main": [
+        [
+          {
+            "node": "Usable output?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Usable output?": {
       "main": [
-        [{ "node": "Complete the lease", "type": "main", "index": 0 }],
-        [{ "node": "Report the failure", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Complete the lease",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report the failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
   "pinData": {}
 }

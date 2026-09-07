@@ -92,3 +92,36 @@ test("n8n publication fires at opening and retries held or off-schedule weeks", 
     if (trigger.id === "tick-reviews") assert.equal(routed[0].json.job, "reviews-run");
   }
 });
+
+test("exactly one workflow owns the review queue", async () => {
+  // `claimReviewJob` is a single queue. The scheduler's `reviews-run` job and
+  // the grading workflow's /reviews/claim both draw from it, so activating both
+  // puts two systems on one queue — the same shape as the legacy Supabase
+  // workflows the VPS audit flagged as P1. The lease keeps it correct, not
+  // sensible. This test makes the ownership explicit rather than tribal.
+  const load = async (name) => JSON.parse(await readFile(new URL(`../n8n/${name}`, import.meta.url), "utf8"));
+  const scheduler = await load("arena-trigger-workflow.json");
+  const grading = await load("arena-grading-workflow.json");
+
+  const router = scheduler.nodes.find(node => node.id === "route");
+  const scheduled = new Set();
+  for (const trigger of scheduler.nodes.filter(node => node.type === "n8n-nodes-base.scheduleTrigger")) {
+    for (const item of runInNewContext(`(function () { ${router.parameters.jsCode} })()`, { $prevNode: { name: trigger.name } })) {
+      scheduled.add(item.json.job);
+    }
+  }
+  assert.ok(!scheduled.has("reviews-run"), "the scheduler must not run reviews; the grading workflow owns that queue");
+
+  // And the grading workflow must actually claim, or nothing reviews at all.
+  const claims = grading.nodes.some(node => typeof node.parameters?.url === "string" && node.parameters.url.includes("/api/internal/reviews/claim"));
+  assert.ok(claims, "the grading workflow must claim from the review queue");
+
+  // Every scheduled job must still be a real job name.
+  const known = ["week-close", "week-finalize", "email-flush", "week-notifications",
+    "session-cleanup", "storage-cleanup", "project-drop", "project-generate", "reviews-run"];
+  for (const job of scheduled) assert.ok(known.includes(job), `unknown job "${job}"`);
+
+  // Both workflows must pin WIB, or a cron expression means a different hour.
+  assert.equal(scheduler.settings.timezone, "Asia/Jakarta");
+  assert.equal(grading.settings.timezone, "Asia/Jakarta");
+});

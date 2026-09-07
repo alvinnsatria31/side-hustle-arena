@@ -94,6 +94,39 @@ for (const trigger of triggers) {
   }
 }
 
+// --- The grading workflow, which owns the review queue -----------------------
+//
+// Checked with GET /reviews/claim, not POST. GET reports queue depth and
+// changes nothing; POST would lease a real job and stall it until the lease
+// expires, which is not something a connectivity check should ever do.
+const automationToken = process.env.ARENA_AUTOMATION_TOKEN ?? process.env.INTERNAL_AUTOMATION_TOKEN;
+if (!only) {
+  console.log("");
+  if (!automationToken) {
+    console.log("○ review queue        INTERNAL_AUTOMATION_TOKEN unset — grading workflow path not checked.");
+  } else {
+    try {
+      const response = await fetch(`${base}/api/internal/reviews/claim`, {
+        headers: { authorization: `Bearer ${automationToken}` },
+        signal: AbortSignal.timeout(30_000),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.status === 200) {
+        // Depth is a count per job status, not a single number.
+        const depth = body?.data?.depth ?? {};
+        const summary = Object.entries(depth).map(([status, count]) => `${status}=${count}`).join(" ") || "empty";
+        console.log(`✔ review queue        200   ${summary}  (grading workflow can claim)`);
+      } else {
+        console.log(`✖ review queue        ${response.status}   ${JSON.stringify(body?.error ?? body).slice(0, 120)}`);
+        failures += 1;
+      }
+    } catch (error) {
+      console.log(`✖ review queue        ${error.name}: ${error.message}`);
+      failures += 1;
+    }
+  }
+}
+
 console.log(`\n${failures === 0 ? "All jobs answered." : `${failures} job(s) FAILED.`}`);
 if (gatedCount) {
   console.log(`${gatedCount} job(s) switched off by a flag (○). Not a fault — but n8n's own summary`);

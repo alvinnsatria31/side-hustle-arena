@@ -1,94 +1,146 @@
 {
   "name": "Arena scheduler (trigger only)",
   "meta": {
-    "description": "n8n only says WHEN. Arena does the work: generates and publishes the weekly project, reviews and scores submissions with its configured model, closes and finalizes the week. No payload here ever carries a score. Contract: docs/backend/N8N_TRIGGER_ONLY.md",
+    "description": "n8n only says WHEN. Arena does the work: generates and publishes the weekly project, closes and finalizes the week. No payload here ever carries a score. Contract: docs/backend/N8N_TRIGGER_ONLY.md",
     "arenaContractVersion": "trigger-only-v1"
   },
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] }
-      },
-      "id": "tick-reviews",
-      "name": "Every 2 minutes",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [-620, -200],
-      "notes": "Keeps the review queue moving. Each tick reviews a few jobs and stops well inside the serverless ceiling; an empty queue answers 'skipped' and costs nothing."
-    },
-    {
-      "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
       },
       "id": "tick-daily",
       "name": "Daily 08:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, -40]
+      "position": [
+        -620,
+        -40
+      ]
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "30 1 * * *" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 1 * * *"
+            }
+          ]
+        }
       },
       "id": "tick-maintenance",
       "name": "Daily 01:30 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 100]
+      "position": [
+        -620,
+        100
+      ]
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * 0" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 0"
+            }
+          ]
+        }
       },
       "id": "tick-generate",
       "name": "Sunday 09:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 240],
+      "position": [
+        -620,
+        240
+      ],
       "notes": "Generate next week's projects as a preview. Publication is a separate, opening-time-gated job."
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 * * * *" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
       },
       "id": "tick-drop",
       "name": "Hourly project publication",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 380],
+      "position": [
+        -620,
+        380
+      ],
       "notes": "Retry due weeks every hour. Arena enforces opening time and preview approval; already-open weeks are excluded."
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "5 0 * * 6" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5 0 * * 6"
+            }
+          ]
+        }
       },
       "id": "tick-close",
       "name": "Saturday 00:05 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 520],
+      "position": [
+        -620,
+        520
+      ],
       "notes": "Just past the Friday 23:59 WIB deadline. Close is deadline-gated and never forced from a timer."
     },
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 */2 * * 6,0" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * 6,0"
+            }
+          ]
+        }
       },
       "id": "tick-finalize",
       "name": "Weekend every 2h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-620, 660],
+      "position": [
+        -620,
+        660
+      ],
       "notes": "Finalize refuses while reviews are still running. That is not a failure - it retries on the next tick, which is why this repeats."
     },
     {
       "parameters": {
-        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\nconst byTrigger = {\n  'Every 2 minutes': ['reviews-run'],\n  'Daily 08:00 WIB': ['email-flush', 'week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday 09:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
+        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n//\n// reviews-run is deliberately ABSENT. Reviews are owned by the grading\n// workflow, which claims from the same queue; scheduling both here would put\n// two systems on one queue for no gain.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\nconst byTrigger = {\n  'Daily 08:00 WIB': ['email-flush', 'week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday 09:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
       },
       "id": "route",
       "name": "Which jobs are due",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-340, 180]
+      "position": [
+        -340,
+        180
+      ]
     },
     {
       "parameters": {
@@ -97,16 +149,30 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.ARENA_CRON_TOKEN }}" }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ARENA_CRON_TOKEN }}"
+            }
           ]
         },
-        "options": { "timeout": 120000, "response": { "response": { "neverError": true, "fullResponse": true } } }
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
       },
       "id": "call",
       "name": "Tell Arena to run it",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-80, 180],
+      "position": [
+        -80,
+        180
+      ],
       "notes": "GET is correct: the jobs write, but access is gated by the bearer token, never by the method. neverError keeps a 4xx visible in the run log instead of aborting the branch."
     },
     {
@@ -117,20 +183,105 @@
       "name": "Summarise the run",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [180, 180]
+      "position": [
+        180,
+        180
+      ]
     }
   ],
   "connections": {
-    "Every 2 minutes": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Daily 08:00 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Daily 01:30 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Sunday 09:00 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Hourly project publication": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Saturday 00:05 WIB": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Weekend every 2h": { "main": [[{ "node": "Which jobs are due", "type": "main", "index": 0 }]] },
-    "Which jobs are due": { "main": [[{ "node": "Tell Arena to run it", "type": "main", "index": 0 }]] },
-    "Tell Arena to run it": { "main": [[{ "node": "Summarise the run", "type": "main", "index": 0 }]] }
+    "Daily 08:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 01:30 WIB": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sunday 09:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly project publication": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Saturday 00:05 WIB": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekend every 2h": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Which jobs are due": {
+      "main": [
+        [
+          {
+            "node": "Tell Arena to run it",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell Arena to run it": {
+      "main": [
+        [
+          {
+            "node": "Summarise the run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1", "timezone": "Asia/Jakarta" },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta"
+  },
   "pinData": {}
 }
