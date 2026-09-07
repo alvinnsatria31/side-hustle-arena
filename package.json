@@ -38,7 +38,8 @@
     "test:sso:local": "node --test scripts/db-sso-integration.test.mjs",
     "test:db:local": "node --test scripts/db-live-constraints.test.mjs",
     "db:bootstrap:library": "node --import ./scripts/node-test-hooks.mjs scripts/bootstrap-generation-library.mjs",
-    "test:offline": "node scripts/run-offline-tests.mjs"
+    "test:offline": "node scripts/run-offline-tests.mjs",
+    "n8n:dry-run": "node scripts/n8n-dry-run.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1125.0",
