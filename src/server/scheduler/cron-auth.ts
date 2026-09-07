@@ -24,6 +24,7 @@ export function requireCronCaller(request: Request): { callerId: string } {
   const candidates: Array<[string, string | undefined]> = [
     ["vercel-cron", process.env.CRON_SECRET],
     ["internal-automation", process.env.INTERNAL_AUTOMATION_TOKEN],
+    ["arena-cron", process.env.ARENA_CRON_TOKEN],
   ];
   for (const [callerId, expected] of candidates) {
     if (!expected) continue;
