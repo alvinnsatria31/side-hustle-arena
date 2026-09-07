@@ -35,6 +35,30 @@ export default function CareerReportPage() {
           { label: 'Poin tersedia', value: report.points.balance.toLocaleString('id-ID'), note: `${report.points.lifetimeEarned.toLocaleString('id-ID')} poin diperoleh` },
         ].map(stat => <Card key={stat.label} className="p-5"><dt className="text-xs text-sk-muted">{stat.label}</dt><dd className="mt-3 text-2xl font-extrabold text-sk-navy">{stat.value}</dd><p className="mt-2 text-xs text-sk-muted">{stat.note}</p></Card>)}
       </dl>
+      {/* Placed before the empty state on purpose: someone who has scanned a CV
+          but not finished a project yet is exactly who benefits from seeing
+          which of their claims the Arena could still back. */}
+      {report.cv && <Reveal><Card className="mb-7 p-6 sm:p-7">
+        <span className="eyebrow">Dari CV kamu</span>
+        <h2 className="mt-3 text-lg font-bold text-sk-navy">Klaim di CV, dibandingkan bukti Arena</h2>
+        <p className="mb-5 mt-2 text-xs leading-relaxed text-sk-muted">CV berisi klaim yang kamu tulis sendiri; Arena berisi yang diamati reviewer pada hasil kerjamu. Keduanya tidak digabung jadi satu angka. Skill tanpa bukti bukan berarti klaimnya salah — Arena hanya belum pernah menilainya.</p>
+        <dl className="mb-5 grid grid-cols-3 gap-3">
+          {[
+            { label: 'Skor CV', value: `${report.cv.score}/100`, note: report.cv.statusLabel },
+            { label: 'Sudah ada bukti', value: report.cv.corroborated, note: 'Dinilai di Arena' },
+            { label: 'Belum ada bukti', value: report.cv.unevidenced, note: 'Peluang project' },
+          ].map(stat => <div key={stat.label}><dt className="text-xs text-sk-muted">{stat.label}</dt><dd className="mt-2 text-xl font-extrabold text-sk-navy">{stat.value}</dd><p className="mt-1 text-xs text-sk-muted">{stat.note}</p></div>)}
+        </dl>
+        {report.cv.claimedSkills.length === 0
+          ? <p className="text-sm text-sk-muted">Analisis CV ini tidak mencantumkan skill apa pun.</p>
+          : <ul className="divide-y divide-sk-border">{report.cv.claimedSkills.map(claim => <li key={claim.name} className="flex items-center justify-between gap-3 py-3">
+            <div className="min-w-0"><span className="font-semibold text-sk-navy">{claim.name}</span><p className="mt-1 text-xs text-sk-muted">Klaim CV: {claim.level}</p></div>
+            {claim.evidencedScore === null
+              ? <span className="shrink-0 text-xs text-sk-muted">Belum ada bukti</span>
+              : <span className="shrink-0 text-right"><span className="font-mono text-sm text-sk-blue">{claim.evidencedScore}/100</span><span className="block text-xs text-sk-muted">{claim.evidenceCount} bukti review</span></span>}
+          </li>)}</ul>}
+        <p className="mt-4 text-xs text-sk-muted">Dari {report.cv.fileName}, dianalisis {participantDate(report.cv.analyzedAt)} WIB.</p>
+      </Card></Reveal>}
       {report.projectsCompleted === 0 ? <Card className="p-6 sm:p-10"><EmptyState title="Belum ada project selesai." description="Pilih project dan kumpulkan hasil kerjamu. Setelah hasil mingguannya difinalisasi, riwayat dan bukti skill akan muncul di sini." primaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }} /></Card> : <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
           <Reveal><Card className="p-6 sm:p-7"><h2 className="text-lg font-bold text-sk-navy">Peta skill dari bukti kerja</h2><p className="mb-5 mt-2 text-xs leading-relaxed text-sk-muted">Rata-rata skor bukti review per skill. Ini bukan persentase kesiapan kerja atau jaminan lolos rekrutmen.</p>

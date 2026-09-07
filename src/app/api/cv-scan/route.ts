@@ -37,7 +37,12 @@ export async function POST(request: Request) {
     return fail("CV Scanner belum dibuka.", 404);
   }
 
-  const limit = checkRateLimit(clientKey(request));
+  const limit = await checkRateLimit(clientKey(request));
+  if (limit.degraded) {
+    // The shared counter is unreachable, so this instance is guarding the AI
+    // bill on its own. Worth knowing about before the invoice says so.
+    console.warn("cv-scan rate limiter fell back to in-memory counting; the shared counter is unavailable.");
+  }
   if (!limit.allowed) {
     return Response.json(
       { error: { code: "RATE_LIMITED", message: "Terlalu banyak permintaan. Coba lagi nanti." } },

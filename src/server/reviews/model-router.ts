@@ -17,6 +17,16 @@ export interface ModelCall {
   profile: ReviewModelProfile;
   model: string;
   input: BlindReviewerInput;
+  /**
+   * The caller's remaining time, if it has one.
+   *
+   * A drain tick has a budget it must not overrun, but the provider's own
+   * ceiling knows nothing about it — so a job started with 2s of budget left
+   * could still hold the invocation for a further 120s and be killed mid-review
+   * by the platform, leaving the job leased to a worker that no longer exists.
+   * Whichever expires first wins.
+   */
+  signal?: AbortSignal;
 }
 
 export interface ReviewProvider {
@@ -110,7 +120,8 @@ export class ApiReviewProvider implements ReviewProvider {
     const response = await this.transport(`${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.config.apiKey}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(120_000), redirect: 'error',
+      signal: call.signal ? AbortSignal.any([call.signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000),
+      redirect: 'error',
       body: JSON.stringify({
         model: this.config.models[call.profile], response_format: { type: 'json_object' },
         messages: [

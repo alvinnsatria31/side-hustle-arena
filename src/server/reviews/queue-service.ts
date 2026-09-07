@@ -246,6 +246,8 @@ export async function completeReviewJob(input: {
   model?: string;
   now?: Date;
   db?: Db;
+  /** The caller's remaining time, forwarded to the second judge's model call. */
+  signal?: AbortSignal;
 }): Promise<CompletedReview> {
   const { jobId, workerId } = input;
   const now = input.now ?? new Date();
@@ -297,6 +299,7 @@ export async function completeReviewJob(input: {
       profile: "judge",
       model: judgeProvider.name,
       input: jobInput.blind,
+      signal: input.signal,
     });
     const judgeValidation = validateReviewerOutput(judgeOutput, blindRubric, jobInput.blind.sources);
     if (!judgeValidation.ok) {

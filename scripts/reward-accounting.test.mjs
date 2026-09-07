@@ -111,6 +111,14 @@ function fakeDb() {
         for (const release of held.values()) release();
       },
     };
+    // Drizzle turns a transaction opened on a `tx` into a SAVEPOINT, so service
+    // code is free to call a helper that opens its own — `notify(input, tx)` in
+    // the redemption path does exactly that. Without this the fake only had a
+    // transaction on the root and every reward write died on
+    // `db.transaction is not a function`. Reusing the same tx keeps the
+    // enclosing rollback authoritative, which is what a savepoint inside a
+    // failed outer transaction ends up doing anyway.
+    tx.transaction = async (fn) => fn(tx);
     return tx;
   };
   root.transaction = async (fn) => {
@@ -155,8 +163,18 @@ test('milestone earnings exclude spending/refunds but include fraud debt', async
 
 test('concurrent duplicate claims debit once and create one audit/inbox notice', async () => {
   const { db, claim } = setup();
-  const results = await Promise.all(Array.from({ length: 8 }, () => claim()));
-  assert.equal(new Set(results.map((r) => r.redemptionId)).size, 1);
+  // Exactly one claim wins; the rest are refused rather than handed the winner's
+  // redemption. That refusal is deliberate — claimRedemption "never mint[s] or
+  // silently re-issue[s]", and e2e-finalization.test.mjs asserts the same
+  // against real Postgres. What matters here is that losing does not cost
+  // anything: one row, one debit, one notice, one audit entry.
+  const results = await Promise.allSettled(Array.from({ length: 8 }, () => claim()));
+  const fulfilled = results.filter((r) => r.status === 'fulfilled');
+  assert.equal(fulfilled.length, 1, 'a duplicate claim must be refused, not re-issued');
+  assert.ok(fulfilled[0].value.redemptionId);
+  for (const rejected of results.filter((r) => r.status === 'rejected')) {
+    assert.match(rejected.reason.message, /sudah diklaim/);
+  }
   assert.equal(db.tables.get(redemptions).length, 1);
   assert.equal(db.tables.get(pointLedger).filter((r) => r.entryType === 'REWARD_REDEMPTION').length, 1);
   assert.equal(db.tables.get(pointAccounts)[0].balance, 1000);
@@ -222,7 +240,9 @@ test('concurrent reversals refund once, release stock and require intentional re
   await assert.rejects(claim(), /retryOf/);
   const retried = await claim({ retryOf: redemptionId });
   assert.notEqual(retried.redemptionId, redemptionId);
-  assert.deepEqual(await claim({ retryOf: redemptionId }), retried);
+  // Repeating the same intentional retry is still a same-claim repeat, and is
+  // refused for the same reason a repeated first claim is.
+  await assert.rejects(claim({ retryOf: redemptionId }), /sudah diklaim/);
   assert.equal(db.tables.get(pointAccounts)[0].balance, 1000);
 });
 

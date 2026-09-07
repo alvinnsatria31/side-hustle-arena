@@ -7,6 +7,7 @@ import { closeWeekForFinalization, finalizeWeek } from "@/server/finalization/se
 import { broadcastWeekNotification, flushPendingEmails } from "@/server/notifications/service";
 import { scheduledWeekNotices } from "@/server/notifications/schedule";
 import { cleanupExpiredArenaSessions } from "@/server/auth/session-retention";
+import { pruneRateLimitCounters } from "@/server/cv/rate-limit";
 import { cleanupExpiredUploads } from "@/server/storage/cleanup";
 import { generateWeek, prepareScheduledWeek, publishWeek } from "@/server/generation/service";
 import { createReviewProvider } from "@/server/reviews/model-router";
@@ -102,9 +103,24 @@ export async function runWeekNotifications(now = new Date()): Promise<JobResult>
   return { job: "week-notifications", done: results.every((result) => !result.failed && !("batchFull" in result && result.batchFull)), detail: { results } };
 }
 
-/** Drop auth sessions past the retention window (PRD §65 Authentication). */
+/**
+ * Drop auth sessions past the retention window (PRD §65 Authentication), and
+ * the spent rate-limit windows alongside them.
+ *
+ * Both are ephemeral rows that only exist to be forgotten, so they share one
+ * daily sweep rather than growing a cron entry each. Pruning counters here also
+ * keeps it off the CV scan request path, where it would make one unlucky
+ * visitor pay for everyone else's housekeeping.
+ */
 export async function runSessionCleanup(now = new Date()): Promise<JobResult> {
-  return { job: "session-cleanup", done: true, detail: { deleted: await cleanupExpiredArenaSessions(now) } };
+  return {
+    job: "session-cleanup",
+    done: true,
+    detail: {
+      deleted: await cleanupExpiredArenaSessions(now),
+      rateLimitWindows: await pruneRateLimitCounters(now),
+    },
+  };
 }
 
 const projectJobs = {
@@ -192,6 +208,18 @@ const reviewJobs = {
 };
 
 /**
+ * Did this throw because a deadline cut it short?
+ *
+ * `AbortSignal.timeout` rejects with a `TimeoutError` DOMException and an
+ * explicit abort with `AbortError`; undici surfaces both through fetch. Node
+ * builds without a global `DOMException` still name their errors the same way,
+ * so the name is what we match on rather than the class.
+ */
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
+/**
  * Review whatever is queued, using the configured AI provider (PRD §20, §43).
  *
  * This is the link that makes the pipeline run itself: without it a submission
@@ -219,14 +247,25 @@ export async function runReviewsRun(_now = new Date(), deps = reviewJobs): Promi
   let failure: string | undefined;
 
   for (let attempt = 0; attempt < deps.maxJobs; attempt += 1) {
-    if (deps.clock() >= deadline) {
+    const remainingMs = deadline - deps.clock();
+    if (remainingMs <= 0) {
       stopped = "time budget reached; the next tick continues";
       break;
     }
     let completed: Awaited<ReturnType<typeof runConfiguredReviewJob>>;
     try {
-      completed = await deps.runOne();
+      // The budget bounds the job itself, not just the decision to start one.
+      // Checking only up front let a job claimed with 1ms of budget left run for
+      // its own provider ceiling instead, overrunning the invocation.
+      completed = await deps.runOne({ budgetMs: remainingMs });
     } catch (error) {
+      if (isAbortError(error) && deps.clock() >= deadline) {
+        // Out of budget, not broken. The job was handed back for retry, so the
+        // next tick picks it up — reporting this as a failure would make an
+        // ordinary busy tick look like a provider outage.
+        stopped = "time budget reached mid-review; the job was handed back for retry";
+        break;
+      }
       failure = error instanceof Error ? error.message : String(error);
       break;
     }

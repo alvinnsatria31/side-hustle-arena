@@ -6,6 +6,17 @@ import { JOBS, type JobName } from "@/server/scheduler/service";
 export const dynamic = "force-dynamic";
 
 /**
+ * The ceiling every scheduled job runs under.
+ *
+ * 60s is the free-plan hard limit, and `reviews-run` is the job that can
+ * approach it: its drain budget (ARENA_REVIEW_DRAIN_BUDGET_MS, 45s) is sized to
+ * finish inside this with room for the response. Leaving it unset meant the
+ * platform default applied here while `/api/internal/reviews/run` declared 300
+ * — the same work with two different ceilings depending on who triggered it.
+ */
+export const maxDuration = 60;
+
+/**
  * Scheduled-job entrypoint. Vercel Cron issues a GET with the cron secret as a
  * bearer token, so this is a GET even though the jobs write — access is gated
  * by `requireCronCaller`, never by the method.

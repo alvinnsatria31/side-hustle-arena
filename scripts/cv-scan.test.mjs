@@ -82,19 +82,71 @@ test('an empty impactExamples array is allowed: nothing to rewrite is a valid fi
   assert.deepEqual(toCvResult(analysis, 'cv.pdf').impactExamples, []);
 });
 
-test('the rate limiter allows a burst then refuses with a retry hint', () => {
-  resetRateLimit();
+/**
+ * Stands in for the shared counter. The upsert is the whole point of the
+ * limiter, so the stub implements exactly it: one row per
+ * (bucket, subject, window), returning the running total.
+ */
+function sharedCounterStub() {
+  const rows = new Map();
+  return {
+    rows,
+    insert: () => ({
+      values: (value) => ({
+        onConflictDoUpdate: () => ({
+          returning: async () => {
+            const key = `${value.bucket}|${value.subject}|${value.windowStart.getTime()}`;
+            rows.set(key, (rows.get(key) ?? 0) + 1);
+            return [{ count: rows.get(key) }];
+          },
+        }),
+      }),
+    }),
+  };
+}
+
+test('the rate limiter allows a burst then refuses with a retry hint', async () => {
+  const db = sharedCounterStub();
   const now = Date.now();
   for (let i = 0; i < 5; i += 1) {
-    assert.equal(checkRateLimit('1.2.3.4', now).allowed, true, `call ${i + 1} should pass`);
+    const call = await checkRateLimit('1.2.3.4', now, db);
+    assert.equal(call.allowed, true, `call ${i + 1} should pass`);
+    assert.equal(call.degraded, false, 'the shared counter was available; this must not report degraded');
   }
-  const blocked = checkRateLimit('1.2.3.4', now);
+  const blocked = await checkRateLimit('1.2.3.4', now, db);
   assert.equal(blocked.allowed, false);
   assert.ok(blocked.retryAfterSeconds > 0);
 
   // A different caller is unaffected, and the window eventually reopens.
-  assert.equal(checkRateLimit('5.6.7.8', now).allowed, true);
-  assert.equal(checkRateLimit('1.2.3.4', now + 61 * 60 * 1000).allowed, true);
+  assert.equal((await checkRateLimit('5.6.7.8', now, db)).allowed, true);
+  assert.equal((await checkRateLimit('1.2.3.4', now + 61 * 60 * 1000, db)).allowed, true);
+});
+
+test('the shared counter is what limits, not the instance that happens to serve', async () => {
+  // The defect this replaced: each instance counted alone, so N instances meant
+  // N times the allowance. Two "instances" here means two callers of the same
+  // shared row — the sixth call must lose regardless of which one makes it.
+  const db = sharedCounterStub();
+  const now = Date.now();
+  for (let i = 0; i < 5; i += 1) {
+    assert.equal((await checkRateLimit('9.9.9.9', now, db)).allowed, true);
+  }
+  const fromAnotherInstance = await checkRateLimit('9.9.9.9', now, db);
+  assert.equal(fromAnotherInstance.allowed, false, 'a second instance must see the first instance’s count');
+});
+
+test('an unreachable counter degrades to a local limiter instead of an outage', async () => {
+  resetRateLimit();
+  const broken = { insert: () => { throw new Error('connection refused'); } };
+  const now = Date.now();
+
+  const first = await checkRateLimit('7.7.7.7', now, broken);
+  assert.equal(first.allowed, true, 'a database blip must not take the endpoint down');
+  assert.equal(first.degraded, true, 'the route needs to know the guard is weakened');
+
+  // Still a speed bump: the fallback is the old behaviour, never weaker.
+  for (let i = 0; i < 4; i += 1) await checkRateLimit('7.7.7.7', now, broken);
+  assert.equal((await checkRateLimit('7.7.7.7', now, broken)).allowed, false);
 });
 
 test('the client key reads the first forwarded address, not the whole chain', () => {

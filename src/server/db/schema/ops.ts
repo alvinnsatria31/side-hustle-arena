@@ -1,4 +1,4 @@
-import { boolean, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import { ops } from "./schemas";
 
 /**
@@ -22,3 +22,35 @@ export const featureFlags = ops.table("feature_flags", {
   message: text("message"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * Shared request counters for endpoints that cost money per call.
+ *
+ * The CV scanner's limiter used to be a `Map` in one serverless instance, so it
+ * reset on every cold start and never coordinated across concurrent instances —
+ * it stopped a casual loop and nothing else. Serverless has no process to keep
+ * state in, so the state has to live where every instance can see it.
+ *
+ * A FIXED window, not a sliding one: `(bucket, subject, window_start)` makes the
+ * whole check a single atomic upsert with no read-then-write race, which matters
+ * far more here than the window edge. The tradeoff is honest — a caller timing a
+ * burst either side of a boundary gets up to twice the allowance once — and for
+ * a spend limiter that is an acceptable price for correctness under concurrency.
+ *
+ * Rows are pruned by the `session-cleanup` job; nothing here is durable state.
+ */
+export const rateLimitCounters = ops.table(
+  "rate_limit_counters",
+  {
+    /** Which limiter, so one table serves more than the CV scanner. */
+    bucket: text("bucket").notNull(),
+    /** Who is being limited — a client IP today, never a user secret. */
+    subject: text("subject").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").default(0).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bucket, table.subject, table.windowStart] }),
+    index("ops_rate_limit_window_idx").on(table.windowStart),
+  ],
+);

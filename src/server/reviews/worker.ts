@@ -39,14 +39,28 @@ export async function runOneReviewJob(input: {
   });
 }
 
-export async function runConfiguredReviewJob(): Promise<CompletedReview | null> {
+/**
+ * Claim and complete one queued review.
+ *
+ * `budgetMs` is the caller's remaining time, not a per-call timeout: the same
+ * signal bounds the primary review AND the second judge together, because from
+ * the drain tick's point of view those are one unit of work. Without it a job
+ * could run its provider ceiling twice over (120s primary + 120s judge, on top
+ * of a 60s extraction) inside an invocation that is killed at 60s.
+ *
+ * An expired budget surfaces as a provider failure, which hands the job back
+ * for retry without consuming a participant attempt (PRD §42) — the same path
+ * a real provider timeout already took.
+ */
+export async function runConfiguredReviewJob(options: { budgetMs?: number } = {}): Promise<CompletedReview | null> {
   const provider = createReviewProvider('review');
   const workerId = `arena-worker:${crypto.randomUUID()}`;
   const claimed = await claimReviewJob(workerId);
   if (!claimed) return null;
+  const signal = options.budgetMs === undefined ? undefined : AbortSignal.timeout(Math.max(0, options.budgetMs));
   try {
-    const primary = await provider.review({ profile: 'review', model: process.env.AI_REVIEW_MODEL ?? provider.name, input: claimed.input });
-    return await completeReviewJob({ jobId: claimed.jobId, workerId, output: primary, model: process.env.AI_REVIEW_MODEL ?? provider.name });
+    const primary = await provider.review({ profile: 'review', model: process.env.AI_REVIEW_MODEL ?? provider.name, input: claimed.input, signal });
+    return await completeReviewJob({ jobId: claimed.jobId, workerId, output: primary, model: process.env.AI_REVIEW_MODEL ?? provider.name, signal });
   } catch (error) {
     if (!(error instanceof ArenaDomainError) || error.code === 'REVIEW_PROVIDER_FAILED') {
       await failReviewJob({ jobId: claimed.jobId, workerId, code: 'REVIEW_PROVIDER_FAILED', message: 'Configured review provider failed; retry scheduled.' });

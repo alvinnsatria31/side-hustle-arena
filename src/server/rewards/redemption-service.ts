@@ -85,6 +85,15 @@ export async function claimRedemption(input: {
     const duplicate = takes.find((take) => take.idempotencyKey === key);
     if (duplicate) {
       if (!activeStatuses.has(duplicate.status)) invalid("Previous claim ended; use retryOf with its redemption ID for an intentional retry.");
+      // Funding is checked BEFORE the refusal below, because the two say very
+      // different things. "Already claimed" is a normal answer to a double
+      // click. An unfunded claim — a row that exists with no matching debit —
+      // is a data-integrity problem somebody has to look at, and it used to be
+      // invisible: `key` is derived from userId+rewardId(+retryOf), so a repeat
+      // always matched here and was refused before reaching the funding guard
+      // further down. A legacy unfunded claim reported "already claimed" and
+      // nothing ever flagged it.
+      await requireFunded(duplicate, tx);
       // Same-claim repeat (double-click, retried POST): refuse, never mint or
       // silently re-issue. Intentional retries go through retryOf explicitly.
       invalid("Reward ini sudah diklaim.");

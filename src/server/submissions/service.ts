@@ -260,18 +260,41 @@ async function createVersion(tx: Db, submission: Submission, items: DraftItem[],
   return version;
 }
 
-async function draftItemsAccessible(items: DraftItem[]) {
-  try {
-    for (const item of items) {
+/**
+ * Can a reviewer actually open everything this submission points at?
+ *
+ * A false here costs the participant a version marked FAILED, so the reason has
+ * to be recoverable afterwards. It previously was not: one `try` wrapped the
+ * whole loop and swallowed every error identically, so "this link is dead" and
+ * "our own network hiccuped for 3 seconds" produced the same silent FAILED with
+ * nothing written anywhere. That is a genuinely bad failure to debug — the
+ * participant sees a rejected submission and the logs say nothing at all.
+ *
+ * The check still fails closed, because handing an unopenable link to a reviewer
+ * wastes a real review attempt. What changes is that it says why, and per item:
+ * the guard is now inside the loop, so the item that failed is the item named.
+ */
+async function draftItemsAccessible(items: DraftItem[], submissionId: string) {
+  for (const item of items) {
+    try {
       if (item.itemType === "LINK" && item.externalUrl) {
-        if (!(await checkExternalUrlAccess(item.externalUrl)).accessible) return false;
+        const access = await checkExternalUrlAccess(item.externalUrl);
+        if (!access.accessible) {
+          console.warn(`submission ${submissionId}: link item ${item.id} is not reachable (${item.externalUrl}).`);
+          return false;
+        }
       }
       if (item.itemType === "FILE" && item.storageKey) await headPrivateObject(item.storageKey);
+    } catch (error) {
+      // Reached when the CHECK broke, not when the item was judged unreachable —
+      // a DNS failure, a timeout, storage refusing a HEAD. Same outcome, very
+      // different cause, and only this line distinguishes them later.
+      const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      console.warn(`submission ${submissionId}: accessibility check for ${item.itemType} item ${item.id} could not complete — ${reason}`);
+      return false;
     }
-    return true;
-  } catch {
-    return false;
   }
+  return true;
 }
 
 export async function submitArenaSubmission({ userId, enrollmentId, now = new Date() }: { userId: string; enrollmentId: string; now?: Date }) {
@@ -297,7 +320,7 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
     if (items.filter((item) => item.itemType === "LINK").length > MAX_LINKS) {
       throw new ArenaDomainError("LINK_LIMIT_EXCEEDED", "The link limit for this submission has been reached.");
     }
-    if (!await draftItemsAccessible(items)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
+    if (!await draftItemsAccessible(items, submission.id)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
 
     const allocation = (await tx.update(submissions).set({ reviewAttemptsUsed: sql`${submissions.reviewAttemptsUsed} + 1`, updatedAt: now })
       .where(and(eq(submissions.id, submission.id), sql`${submissions.reviewAttemptsUsed} < ${context.rules.maxReviewAttempts}`))

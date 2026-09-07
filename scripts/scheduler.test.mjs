@@ -257,6 +257,57 @@ test("reviews-run drains the queue in small ticks and never lets a broken provid
   assert.equal(attempts, 1, "a broken provider must be tried once per tick, not once per job");
 });
 
+test("reviews-run bounds the job itself, not just the decision to start one", async () => {
+  const base = {
+    provider: () => ({ name: "test-provider" }),
+    maxJobs: 3,
+    budgetMs: 45_000,
+    clock: () => 0,
+  };
+  const completed = (n) => ({ versionId: `v${n}`, status: "COMPLETED_HIDDEN", aiScore: 80, secondJudge: { ran: false } });
+
+  // Each job is told how much of the tick is left, so the provider ceiling can
+  // never outlive the invocation. Without this a job claimed at 44.9s could hold
+  // the function for a further 120s (primary) plus 120s (second judge).
+  const budgets = [];
+  let now = 0;
+  await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    maxJobs: 3,
+    budgetMs: 30_000,
+    clock: () => now,
+    runOne: async (options) => { budgets.push(options?.budgetMs); now += 10_000; return completed(budgets.length); },
+  });
+  assert.deepEqual(budgets, [30_000, 20_000, 10_000], "each job must receive the tick's REMAINING time, not the full budget");
+
+  // A job aborted because the tick ran out is not a provider outage: it was
+  // handed back for retry, so the tick reports `stopped`, stays done, and does
+  // not page anyone.
+  let elapsed = 0;
+  const abort = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+  const starved = await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    budgetMs: 1_000,
+    clock: () => elapsed,
+    runOne: async () => { elapsed = 5_000; throw abort; },
+  });
+  assert.equal(starved.done, true, "running out of budget is not a failed tick");
+  assert.match(starved.detail.stopped, /time budget reached mid-review/);
+  assert.equal(starved.detail.failed, undefined);
+
+  // The same abort BEFORE the deadline is a real provider timeout and must stay
+  // visible as a failure — otherwise a provider hanging on every call looks
+  // exactly like a healthy busy queue.
+  const genuine = await scheduler.runReviewsRun(new Date(), {
+    ...base,
+    budgetMs: 45_000,
+    clock: () => 0,
+    runOne: async () => { throw abort; },
+  });
+  assert.equal(genuine.done, false, "a provider timeout inside the budget is still a failure");
+  assert.match(genuine.detail.failed, /aborted/);
+});
+
 test("reviews-run is a registered scheduled job", () => {
   assert.equal(typeof scheduler.JOBS["reviews-run"], "function");
 });
