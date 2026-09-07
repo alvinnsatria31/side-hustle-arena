@@ -1,0 +1,65 @@
+name: CI
+
+# What a machine can check without credentials: types, lint, the schema
+# contract, the offline test suites, and a real production build.
+#
+# Deliberately NOT here: anything needing the live database, the AI providers,
+# object storage, or the canonical Sekolah Karir login. Those are release
+# verification, they cost money or need secrets, and a CI job that quietly skips
+# them while reporting green would be worse than not running them at all.
+# `npm run test:offline` prints every suite it skips and why.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push makes the previous run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      APP_ENV: test
+      # The build reaches no database — every route is server-rendered on demand
+      # — but the config parsers refuse malformed values, so these have to be
+      # well-formed rather than empty. They are placeholders, not credentials.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+      SESSION_SECRET: ci-placeholder-secret-at-least-32-chars
+      ARENA_ORIGIN: http://localhost:3001
+      ARENA_ALLOWED_ORIGINS: http://localhost:3001
+      SK_AUTH_ORIGIN: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Compares the repository's schema definitions against the migrations, so
+      # a hand-edited table or a migration nobody generated is caught here
+      # rather than on a deploy. It does not touch a real database.
+      - name: Schema contract
+        run: npm run db:check
+
+      - name: Offline tests
+        run: npm run test:offline
+
+      - name: Build
+        run: npm run build
