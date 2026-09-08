@@ -35,6 +35,21 @@ export interface HealthSignal {
   action?: string;
 }
 
+/**
+ * How long a claimable review job may wait before the *absence* of a worker is
+ * the story, rather than the depth of the queue.
+ *
+ * The grading workflow polls every 2 minutes, so a job still unclaimed well past
+ * that means nothing is polling at all: the n8n workflow is inactive, its
+ * credentials are wrong, or the box is unreachable. This is the one failure the
+ * existing counters cannot show — `review-stranded` and `review-lease-expired`
+ * both read PROCESSING, and a queue nobody ever claims never reaches PROCESSING.
+ * It stays silent on a healthy empty queue, which is why it keys off the age of
+ * the oldest claimable job and not off depth.
+ */
+const REVIEW_UNCLAIMED_WARN_MINUTES = 30;
+const REVIEW_UNCLAIMED_ALERT_MINUTES = 120;
+
 /** A scheduled job that has not run for far longer than its own cadence. */
 const HEARTBEAT_EXPECTATIONS: Array<{ job: string; action: string; withinHours: number }> = [
   { job: "jobs-sync", withinHours: 24, action: "Cek /app/admin/careers dan pemicu n8n “Every 4 hours”." },
@@ -80,6 +95,29 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
       level: "WARN",
       detail: `${expiredLease.count - (stranded?.count ?? 0)} review job punya lease kedaluwarsa dan menunggu diklaim ulang.`,
       action: `Lease berlaku ${JOB_LEASE_SECONDS} detik; kalau angkanya tidak turun, worker grading kemungkinan mati.`,
+    });
+  }
+
+  const [claimable] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      oldestAvailableAt: sql<Date | null>`min(${reviewJobs.availableAt})`,
+    })
+    .from(reviewJobs)
+    .where(and(
+      inArray(reviewJobs.status, ["PENDING", "RETRY"]),
+      lte(reviewJobs.availableAt, now),
+    ));
+  const oldestClaimableAt = claimable?.oldestAvailableAt ? new Date(claimable.oldestAvailableAt) : null;
+  const claimableWaitedMinutes = oldestClaimableAt
+    ? Math.floor((now.getTime() - oldestClaimableAt.getTime()) / 60_000)
+    : null;
+  if (claimableWaitedMinutes !== null && claimableWaitedMinutes >= REVIEW_UNCLAIMED_WARN_MINUTES) {
+    signals.push({
+      key: "review-unclaimed",
+      level: claimableWaitedMinutes >= REVIEW_UNCLAIMED_ALERT_MINUTES ? "ALERT" : "WARN",
+      detail: `${claimable.count} review job siap diklaim, yang tertua sudah menunggu ${claimableWaitedMinutes} menit tanpa ada worker yang mengambilnya.`,
+      action: "Worker grading tidak berjalan. Cek workflow n8n “Arena grading (claim/lease)” aktif dan INTERNAL_AUTOMATION_TOKEN, AI_API_BASE_URL, AI_API_KEY, AI_REVIEW_MODEL terisi di container.",
     });
   }
 
@@ -174,6 +212,11 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
     signals,
     queue,
     heartbeats,
+    claimable: {
+      count: claimable?.count ?? 0,
+      oldestAvailableAt: oldestClaimableAt,
+      waitedMinutes: claimableWaitedMinutes,
+    },
     email: {
       backlog: emailBacklog?.count ?? 0,
       held: emailHeld?.count ?? 0,
@@ -194,3 +237,58 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
 }
 
 export type AutomationHealth = Awaited<ReturnType<typeof getAutomationHealth>>;
+
+/**
+ * Turn health signals into rail badges.
+ *
+ * The rail shows a number only where something needs doing, so this maps the
+ * signals that already exist onto the page that fixes each one. Deriving it
+ * from `signals` rather than from raw counts is what keeps the badges
+ * action-only: a signal is by definition something an operator can act on, so
+ * a queue of five healthy jobs produces no badge while one stranded job does.
+ *
+ * A new signal therefore lights up its page automatically — the only thing
+ * needed is a prefix here. Signals with no page fall through to Overview,
+ * which counts every signal regardless.
+ */
+const SIGNAL_ROUTES: Array<{ prefix: string; href: string }> = [
+  { prefix: "review-", href: "/app/admin/reviews" },
+  { prefix: "email-", href: "/app/admin/email" },
+  { prefix: "heartbeat:", href: "/app/admin/jobs" },
+  { prefix: "jobs-source:", href: "/app/admin/careers" },
+  { prefix: "cv-", href: "/app/admin/cv-scanner" },
+];
+
+export interface NavBadge {
+  count: number;
+  level: Exclude<AlertLevel, "OK">;
+  /** Read out by screen readers, so the badge never depends on colour alone. */
+  label: string;
+}
+
+export function getAdminNavBadges(health: Pick<AutomationHealth, "signals">): Record<string, NavBadge> {
+  const badges: Record<string, NavBadge> = {};
+  const add = (href: string, level: AlertLevel) => {
+    if (level === "OK") return;
+    const current = badges[href];
+    badges[href] = {
+      count: (current?.count ?? 0) + 1,
+      level: current?.level === "ALERT" ? "ALERT" : level,
+      label: "",
+    };
+  };
+
+  for (const signal of health.signals) {
+    const route = SIGNAL_ROUTES.find((entry) => signal.key.startsWith(entry.prefix));
+    if (route) add(route.href, signal.level);
+    add("/app/admin", signal.level);
+  }
+
+  for (const [href, badge] of Object.entries(badges)) {
+    badges[href] = {
+      ...badge,
+      label: `${badge.count} ${badge.level === "ALERT" ? "perlu tindakan" : "perlu dicek"}`,
+    };
+  }
+  return badges;
+}

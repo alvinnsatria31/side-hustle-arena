@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   CalendarClock,
   ClipboardCheck,
+  FileText,
   FolderKanban,
   Gauge,
   Gift,
@@ -12,10 +13,11 @@ import {
   ListChecks,
   LogOut,
   Mail,
-  Rocket,
+  ScanLine,
   Briefcase,
   ShieldAlert,
   SquareArrowOutUpRight,
+  Trophy,
   Users,
   Workflow,
   type LucideIcon,
@@ -23,6 +25,7 @@ import {
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { cn } from '@/lib/cn';
 import type { ArenaAdminScope } from '@/server/admin/auth';
+import type { NavBadge } from '@/server/ops/automation-health';
 
 interface NavItem {
   label: string;
@@ -32,55 +35,159 @@ interface NavItem {
   scope: ArenaAdminScope | null;
 }
 
-const GROUPS: Array<{ label: string | null; items: NavItem[] }> = [
-  { label: null, items: [{ label: 'Overview', href: '/app/admin', icon: Gauge, scope: null }] },
-  {
-    label: 'Konten',
-    items: [
-      { label: 'Project', href: '/app/admin/projects', icon: FolderKanban, scope: 'projects' },
-      { label: 'Divisi', href: '/app/admin/divisions', icon: Layers, scope: 'projects' },
-      { label: 'Minggu', href: '/app/admin/weeks', icon: CalendarClock, scope: 'weeks' },
-    ],
-  },
-  {
-    label: 'Operasi',
-    items: [
-      // Rocket, not Workflow: this sits directly above Otomasi, and two
-      // adjacent entries wearing the same icon are the two an operator most
-      // needs to tell apart. It also matches the button on the page it opens.
-      { label: 'Trigger Workflow', href: '/app/admin/workflows', icon: Rocket, scope: 'projects' },
-      { label: 'Otomasi', href: '/app/admin/jobs', icon: Workflow, scope: 'overview' },
-      { label: 'Review', href: '/app/admin/reviews', icon: ClipboardCheck, scope: 'reviews' },
-      { label: 'Email', href: '/app/admin/email', icon: Mail, scope: 'notifications' },
-      { label: 'Sumber Lowongan', href: '/app/admin/careers', icon: Briefcase, scope: 'careers' },
-      { label: 'Audit Log', href: '/app/admin/audit', icon: ListChecks, scope: 'overview' },
-    ],
-  },
-  {
-    label: 'Orang & Reward',
-    items: [
-      { label: 'Peserta', href: '/app/admin/users', icon: Users, scope: 'users' },
-      { label: 'Reward', href: '/app/admin/rewards', icon: Gift, scope: 'rewards' },
-    ],
-  },
-  { label: 'Sistem', items: [{ label: 'Saklar Darurat', href: '/app/admin/flags', icon: ShieldAlert, scope: 'projects' }] },
-];
+/** A product with enough pages to need its own internal order. */
+interface NavNest {
+  label: string;
+  icon: LucideIcon;
+  sections: Array<{ label: string; items: NavItem[] }>;
+}
+
+type Entry = { kind: 'item'; item: NavItem } | { kind: 'nest'; nest: NavNest };
+
+const item = (label: string, href: string, icon: LucideIcon, scope: ArenaAdminScope | null): Entry =>
+  ({ kind: 'item', item: { label, href, icon, scope } });
 
 /**
- * The admin rail.
+ * The rail is grouped by what an operator manages, not by kind of work.
  *
- * A Client Component for one reason: `usePathname`. Marking the active item is
- * navigation's job — without it, two clicks in you have only the page heading
- * to tell you where you are.
+ * The old grouping ("Konten", "Operasi") named categories nobody searches for:
+ * finding the jobs pipeline meant knowing it was called "Sumber Lowongan" and
+ * lived under "Operasi". Products are what people actually go looking for, so
+ * the subdomain's four products lead — and everything that genuinely crosses
+ * all four (users, notifications, kill switches, the audit trail) is grouped
+ * apart rather than parked inside whichever product it resembles most.
  *
- * The rail is light rather than navy on purpose: a dark sidebar pulls the eye
- * to the menu, and the menu is the least-read thing on an operations screen.
+ * Arena is nested because it alone has a lifecycle: eleven pages that are only
+ * comprehensible in the order the week runs. The other products are single
+ * entries, so nesting them would be ceremony with nothing inside.
  */
-export function AdminSidebar({ subject, scopes }: { subject: string; scopes: ArenaAdminScope[] }) {
+const GROUPS: Array<{ label: string | null; entries: Entry[] }> = [
+  { label: null, entries: [item('Overview', '/app/admin', Gauge, null)] },
+  {
+    label: 'Produk',
+    entries: [
+      item('CV Scanner', '/app/admin/cv-scanner', ScanLine, 'overview'),
+      item('Career Report', '/app/admin/career-report', FileText, 'overview'),
+      // Named for the product, not for the page's contents: an operator looks
+      // for "Jobs", never for "Sumber Lowongan".
+      item('Jobs', '/app/admin/careers', Briefcase, 'careers'),
+      {
+        kind: 'nest',
+        nest: {
+          label: 'Arena',
+          icon: Trophy,
+          sections: [
+            {
+              label: 'Siapkan',
+              items: [
+                { label: 'Project', href: '/app/admin/projects', icon: FolderKanban, scope: 'projects' },
+                { label: 'Divisi', href: '/app/admin/divisions', icon: Layers, scope: 'projects' },
+                { label: 'Minggu', href: '/app/admin/weeks', icon: CalendarClock, scope: 'weeks' },
+              ],
+            },
+            {
+              label: 'Jalankan',
+              items: [
+                // Trigger Workflow used to sit beside this and do the same job.
+                // It now lives inside Otomasi; /app/admin/workflows redirects.
+                { label: 'Otomasi', href: '/app/admin/jobs', icon: Workflow, scope: 'overview' },
+                { label: 'Review', href: '/app/admin/reviews', icon: ClipboardCheck, scope: 'reviews' },
+              ],
+            },
+            {
+              label: 'Hasil',
+              items: [{ label: 'Reward', href: '/app/admin/rewards', icon: Gift, scope: 'rewards' }],
+            },
+          ],
+        },
+      },
+    ],
+  },
+  {
+    label: 'Lintas Produk',
+    entries: [
+      item('Peserta', '/app/admin/users', Users, 'users'),
+      item('Email', '/app/admin/email', Mail, 'notifications'),
+      item('Saklar Darurat', '/app/admin/flags', ShieldAlert, 'projects'),
+      item('Audit Log', '/app/admin/audit', ListChecks, 'overview'),
+    ],
+  },
+];
+
+function isActive(href: string, pathname: string) {
+  return href === '/app/admin' ? pathname === href : pathname.startsWith(href);
+}
+
+/**
+ * A count, and never a decorative one.
+ *
+ * Every badge comes from a health signal, so its presence means there is
+ * something to do — which is what lets a rail with no numbers be read as "all
+ * clear" rather than "no data". The count is paired with `sr-only` text so the
+ * state does not depend on colour alone.
+ */
+function Badge({ badge }: { badge: NavBadge }) {
+  return (
+    <span
+      className={cn(
+        'ml-auto rounded-full px-1.5 text-[10px] font-extrabold leading-[1.45]',
+        badge.level === 'ALERT' ? 'bg-sk-error-wash text-sk-error' : 'bg-sk-warning-wash text-sk-warning-ink',
+      )}
+    >
+      {badge.count}
+      <span className="sr-only"> {badge.label}</span>
+    </span>
+  );
+}
+
+export function AdminSidebar({
+  subject,
+  scopes,
+  badges = {},
+}: {
+  subject: string;
+  scopes: ArenaAdminScope[];
+  badges?: Record<string, NavBadge>;
+}) {
   const pathname = usePathname();
+  const allowed = (entry: NavItem) => entry.scope === null || scopes.includes(entry.scope);
+
+  // Scope filtering runs before anything is numbered. A static "1 · Siapkan"
+  // would read as a bug the moment an admin without `projects` sees a rail that
+  // starts at 2, so the numbers are assigned to whatever survived the filter.
   const visible = GROUPS
-    .map((group) => ({ ...group, items: group.items.filter((item) => item.scope === null || scopes.includes(item.scope)) }))
-    .filter((group) => group.items.length > 0);
+    .map((group) => ({
+      ...group,
+      entries: group.entries.flatMap<Entry>((entry) => {
+        if (entry.kind === 'item') return allowed(entry.item) ? [entry] : [];
+        const sections = entry.nest.sections
+          .map((section) => ({ ...section, items: section.items.filter(allowed) }))
+          .filter((section) => section.items.length > 0);
+        return sections.length > 0 ? [{ kind: 'nest', nest: { ...entry.nest, sections } }] : [];
+      }),
+    }))
+    .filter((group) => group.entries.length > 0);
+
+  const renderItem = ({ href, label, icon: Icon }: NavItem) => {
+    const active = isActive(href, pathname);
+    const badge = badges[href];
+    return (
+      <li key={href}>
+        <Link
+          href={href}
+          aria-current={active ? 'page' : undefined}
+          className={cn(
+            'flex items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-[13px] font-medium transition-colors',
+            active ? 'bg-sk-blue-tint font-bold text-sk-blue' : 'text-sk-body hover:bg-sk-bg hover:text-sk-navy',
+          )}
+        >
+          <Icon size={16} aria-hidden />
+          {label}
+          {badge && <Badge badge={badge} />}
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <aside
@@ -101,24 +208,28 @@ export function AdminSidebar({ subject, scopes }: { subject: string; scopes: Are
               <p className="mb-1.5 px-2.5 text-[10.5px] font-bold uppercase tracking-wider text-sk-muted">{group.label}</p>
             )}
             <ul className="space-y-0.5">
-              {group.items.map(({ href, label, icon: Icon }) => {
-                const active = href === '/app/admin' ? pathname === href : pathname.startsWith(href);
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-[13px] font-medium transition-colors',
-                        active ? 'bg-sk-blue-tint font-bold text-sk-blue' : 'text-sk-body hover:bg-sk-bg hover:text-sk-navy',
-                      )}
-                    >
-                      <Icon size={16} aria-hidden />
-                      {label}
-                    </Link>
+              {group.entries.map((entry) =>
+                entry.kind === 'item' ? (
+                  renderItem(entry.item)
+                ) : (
+                  <li key={entry.nest.label}>
+                    <p className="flex items-center gap-2.5 px-2.5 py-2 text-[13px] font-bold text-sk-navy">
+                      <entry.nest.icon size={16} aria-hidden />
+                      {entry.nest.label}
+                    </p>
+                    <div className="ml-[18px] border-l border-sk-border pl-2">
+                      {entry.nest.sections.map((section, index) => (
+                        <div key={section.label}>
+                          <p className="mb-1 mt-2 px-2.5 text-[9.5px] font-bold uppercase tracking-wider text-sk-muted first:mt-0">
+                            {index + 1} · {section.label}
+                          </p>
+                          <ul className="space-y-0.5">{section.items.map(renderItem)}</ul>
+                        </div>
+                      ))}
+                    </div>
                   </li>
-                );
-              })}
+                ),
+              )}
             </ul>
           </div>
         ))}
