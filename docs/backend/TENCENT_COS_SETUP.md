@@ -1,5 +1,13 @@
 # Tencent Cloud COS Setup (file bytes backend)
 
+> **Naming note (8 September 2026).** The canonical environment variables are
+> `STORAGE_BUCKET`, `STORAGE_REGION`, `STORAGE_ENDPOINT`,
+> `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`. The `TENCENT_COS_*`
+> names below are read as a compatibility alias only. Local development runs on
+> `http://localhost:3001`, not `:3000`. Follow `.env.example` and
+> `src/server/storage/config-core.ts` when provisioning; where this document
+> disagrees with them, they win.
+
 Locked decision: file bytes live in Tencent Cloud COS (private bucket,
 region `ap-jakarta`); all text/metadata/state lives in Neon. Deploy target is
 Vercel. Code side is done (`src/server/storage/`); this doc covers the console

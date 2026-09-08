@@ -118,7 +118,7 @@ test("exactly one workflow owns the review queue", async () => {
 
   // Every scheduled job must still be a real job name.
   const known = ["week-close", "week-finalize", "email-flush", "week-notifications",
-    "session-cleanup", "storage-cleanup", "project-drop", "project-generate", "reviews-run"];
+    "session-cleanup", "storage-cleanup", "project-drop", "project-generate", "reviews-run", "jobs-sync"];
   for (const job of scheduled) assert.ok(known.includes(job), `unknown job "${job}"`);
 
   // Both workflows must pin WIB, or a cron expression means a different hour.

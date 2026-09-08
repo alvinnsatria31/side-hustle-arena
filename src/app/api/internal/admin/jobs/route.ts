@@ -2,7 +2,7 @@ import { z } from "zod";
 import { arenaData, arenaError } from "@/server/arena/http";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { requireArenaAdmin } from "@/server/admin/auth";
-import { adminJobCatalogue, adminJobs, automationReadiness, isAdminJob, listAutomationRuns, runAdminJob } from "@/server/admin/jobs";
+import { adminJobCatalogue, adminJobs, automationReadinessWithSources, isAdminJob, listAutomationRuns, runAdminJob } from "@/server/admin/jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     await requireArenaAdmin(request, "overview");
-    const readiness = automationReadiness();
+    const readiness = await automationReadinessWithSources();
     return arenaData({ jobs: adminJobCatalogue(readiness), readiness, runs: await listAutomationRuns(20) });
   } catch (error) { return arenaError(error); }
 }

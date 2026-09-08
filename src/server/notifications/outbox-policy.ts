@@ -1,13 +1,47 @@
 export const MAX_EMAIL_ATTEMPTS = 6;
 export const EMAIL_LEASE_MS = 60_000;
+/**
+ * How long a message may keep being retried.
+ *
+ * Resend retains idempotency keys for 24h; past that, reusing the key on a
+ * send that may secretly have succeeded could deliver twice. So a message that
+ * outlives the window is held for an operator rather than retried. That is the
+ * right call — and it makes the flush cadence a correctness requirement, not a
+ * tuning preference. See `flushCadenceIsSafe`.
+ */
+export const EMAIL_RETRY_WINDOW_MS = 23 * 3600_000;
 
 export function retryAt(attempt: number, now: Date) {
-  return new Date(now.getTime() + Math.min(5 * 3 ** Math.max(0, attempt - 1), 240) * 60_000);
+  return new Date(now.getTime() + retryDelayMs(attempt));
+}
+
+/** Backoff ladder: 5m, 15m, 45m, 135m, then 240m for every later attempt. */
+export function retryDelayMs(attempt: number) {
+  return Math.min(5 * 3 ** Math.max(0, attempt - 1), 240) * 60_000;
+}
+
+/** Wall-clock time the full ladder needs to exhaust MAX_EMAIL_ATTEMPTS. */
+export function retryLadderSpanMs() {
+  let total = 0;
+  for (let attempt = 1; attempt < MAX_EMAIL_ATTEMPTS; attempt += 1) total += retryDelayMs(attempt);
+  return total;
+}
+
+/**
+ * Is a flush schedule fast enough to be honest about its retry budget?
+ *
+ * A retry only happens on a tick, so the real time between attempts is the
+ * backoff plus up to one flush interval. With a daily flush the second attempt
+ * landed 24h after the first — already outside the window — so every failed
+ * message was held having used exactly one of its six attempts. Six attempts
+ * that can never be taken are not a retry policy.
+ */
+export function flushCadenceIsSafe(intervalMs: number) {
+  return retryLadderSpanMs() + intervalMs * MAX_EMAIL_ATTEMPTS < EMAIL_RETRY_WINDOW_MS;
 }
 
 export function retryExpired(firstAttempt: Date | null, now: Date) {
-  // Resend retains idempotency keys for 24h. Leave a margin for clock/network delay.
-  return firstAttempt !== null && now.getTime() - firstAttempt.getTime() >= 23 * 3600_000;
+  return firstAttempt !== null && now.getTime() - firstAttempt.getTime() >= EMAIL_RETRY_WINDOW_MS;
 }
 
 function escapeHtml(value: string) {

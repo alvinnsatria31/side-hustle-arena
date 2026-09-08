@@ -1,8 +1,14 @@
 import type { ParticipantOverview } from '@/server/arena/participant-service';
+import { normalizeText } from './jobs/text';
 
 type ReportSource = Pick<ParticipantOverview, 'history' | 'skillEvidence' | 'points'> & {
   /** The participant's most recent saved CV analysis, or null if they have none. */
   cv?: CvSummary | null;
+  /**
+   * The shared taxonomy resolver, injected so this module stays pure and the
+   * CV/Arena join uses the same vocabulary as Jobs.
+   */
+  resolveSkill?: (name: string) => string | null;
 };
 
 /** The parts of a stored CV analysis the report is allowed to read. */
@@ -14,8 +20,6 @@ export interface CvSummary {
   evidence: Array<{ skill: string; level: 'kuat' | 'cukup' | 'kurang' | 'belum'; note: string }>;
 }
 
-/** Same skill, written differently. Not clever on purpose — see buildCareerReport. */
-const normaliseSkill = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ');
 const average = (values: number[]) => values.length
   ? Math.round(values.reduce((sum, score) => sum + score, 0) / values.length * 10) / 10
   : null;
@@ -24,27 +28,58 @@ const average = (values: number[]) => values.length
 export function buildCareerReport(source: ReportSource) {
   const completed = source.history.filter(row => !row.sealed && row.week.status === 'FINALIZED' && row.status !== 'VOIDED' && row.ranking);
   const evidence = source.skillEvidence.filter(item => completed.some(row => row.project.slug === item.projectSlug && row.week.weekCode === item.weekCode));
-  const grouped = new Map<string, { id: string; name: string; scores: number[] }>();
+  // Measured and inherited evidence are averaged separately, and the headline
+  // score prefers the measured one.
+  //
+  // A PROJECT-attributed row records that the participant did work involving
+  // the skill; it is the project's overall score standing in, because no rubric
+  // criterion measures that skill yet. Averaging it together with real
+  // per-criterion measurements would launder one into the other — which is the
+  // exact thing that made "Excel 82, SQL 82, Communication 82" look like three
+  // findings instead of one.
+  const grouped = new Map<string, { id: string; name: string; measured: number[]; inherited: number[] }>();
   for (const item of evidence) {
-    const skill = grouped.get(item.skillId) ?? { id: item.skillId, name: item.name, scores: [] };
-    skill.scores.push(item.score);
+    const skill = grouped.get(item.skillId) ?? { id: item.skillId, name: item.name, measured: [], inherited: [] };
+    if (item.attribution === 'CRITERION') skill.measured.push(item.score);
+    else skill.inherited.push(item.score);
     grouped.set(item.skillId, skill);
   }
-  const skills = [...grouped.values()].map(skill => ({
-    id: skill.id, name: skill.name, score: average(skill.scores)!, evidenceCount: skill.scores.length,
-  })).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  const skills = [...grouped.values()].map(skill => {
+    const measuredScore = average(skill.measured);
+    const inheritedScore = average(skill.inherited);
+    return {
+      id: skill.id,
+      name: skill.name,
+      /** The number to show. Null when nothing has measured this skill yet. */
+      score: measuredScore,
+      /** How many reviews scored rubric criteria attributed to this skill. */
+      measuredCount: skill.measured.length,
+      /**
+       * The project score carried by work that involved this skill without
+       * measuring it. Shown as context, never as the skill's score.
+       */
+      projectScore: inheritedScore,
+      projectEvidenceCount: skill.inherited.length,
+      evidenceCount: skill.measured.length + skill.inherited.length,
+    };
+  }).sort((a, b) =>
+    (b.score ?? -1) - (a.score ?? -1)
+    || b.measuredCount - a.measuredCount
+    || a.name.localeCompare(b.name));
   // The CV and the Arena are two different kinds of claim, and the report keeps
   // them apart deliberately. A CV says what someone states about themselves; the
   // Arena says what a reviewer observed in submitted work. Averaging the two
   // would launder the first into the second, so the CV score is carried through
   // untouched and the only thing joined is WHICH skills each one names.
   //
-  // Matching is a normalised string compare and nothing more. "no Arena evidence
-  // yet" therefore means exactly that — not that the claim is false, and not
-  // that the skill is absent. A participant who wrote "Ms. Excel" against an
-  // Arena skill named "Excel" lands in `unevidenced`, which is the honest
-  // answer for a matcher this simple.
-  const evidencedByName = new Map(skills.map(skill => [normaliseSkill(skill.name), skill]));
+  // Matching goes through the shared skill taxonomy — the same index Jobs uses
+  // — so "Ms. Excel" on a CV and "Excel" in Arena resolve to one skill instead
+  // of being reported as an unevidenced claim. A name the taxonomy does not
+  // know still lands in `unevidenced`, which remains the honest answer: it
+  // means "no Arena evidence yet", not that the claim is false.
+  const resolve = source.resolveSkill ?? (() => null);
+  const byId = new Map(skills.map(skill => [skill.id, skill]));
+  const evidencedByName = new Map(skills.map(skill => [normalizeText(skill.name), skill]));
   const cv = source.cv
     ? {
       score: source.cv.score,
@@ -52,12 +87,15 @@ export function buildCareerReport(source: ReportSource) {
       fileName: source.cv.fileName,
       analyzedAt: source.cv.analyzedAt,
       claimedSkills: source.cv.evidence.map(claim => {
-        const matched = evidencedByName.get(normaliseSkill(claim.skill));
+        const resolvedId = resolve(claim.skill);
+        const matched = (resolvedId ? byId.get(resolvedId) : undefined) ?? evidencedByName.get(normalizeText(claim.skill));
         return {
           name: claim.skill,
           level: claim.level,
           evidencedScore: matched?.score ?? null,
           evidenceCount: matched?.evidenceCount ?? 0,
+          /** Whether the taxonomy recognised this claim's wording at all. */
+          resolvedToTaxonomy: Boolean(resolvedId ?? matched),
         };
       }),
     }

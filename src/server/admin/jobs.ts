@@ -1,7 +1,7 @@
 import "server-only";
-import { desc } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { runs } from "@/server/db/schema";
+import { jobSources, runs } from "@/server/db/schema";
 import { writeAudit } from "@/server/reviews/audit";
 import { JOBS, type JobName } from "@/server/scheduler/service";
 import { generationConfig } from "@/server/generation/core";
@@ -43,6 +43,8 @@ export const adminJobs = {
     detail: "Hapus sesi peserta yang sudah kedaluwarsa." },
   "storage-cleanup": { scope: "storage", label: "Bersihkan upload",
     detail: "Hapus upload intent kedaluwarsa yang tidak dirujuk submission." },
+  "jobs-sync": { scope: "careers", label: "Tarik lowongan",
+    detail: "Ambil lowongan terbaru dari setiap sumber aktif yang sudah jatuh tempo. Aman diulang." },
 } satisfies Record<JobName, { scope: ArenaAdminScope; label: string; detail: string }>;
 
 export type AdminJobName = JobName;
@@ -94,7 +96,7 @@ export function automationReadiness(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export type AutomationReadiness = ReturnType<typeof automationReadiness>;
+export type AutomationReadiness = ReturnType<typeof automationReadiness> & { jobsSourcesActive?: number };
 
 /** Why a job would do nothing if it ran right now, or null when it is live. */
 function inertReason(job: JobName, readiness: AutomationReadiness): string | null {
@@ -107,7 +109,22 @@ function inertReason(job: JobName, readiness: AutomationReadiness): string | nul
   if (job === "reviews-run" && !readiness.reviewProvider) {
     return "Provider AI review belum terkonfigurasi, jadi antrean review tidak akan jalan.";
   }
+  if (job === "jobs-sync" && !readiness.jobsSourcesActive) {
+    return "Belum ada sumber lowongan aktif, jadi job ini melaporkan “no active jobs source is due”. Daftarkan satu sumber di halaman Jobs.";
+  }
   return null;
+}
+
+/**
+ * Readiness plus the one fact that needs a database read.
+ *
+ * `automationReadiness` is deliberately synchronous and environment-only so it
+ * can be called from anywhere; whether a jobs source exists is a row, not an
+ * environment variable, so it is layered on here.
+ */
+export async function automationReadinessWithSources(db: Db = getDb()): Promise<AutomationReadiness & { jobsSourcesActive: number }> {
+  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(jobSources).where(eq(jobSources.isActive, true));
+  return { ...automationReadiness(), jobsSourcesActive: row?.count ?? 0 };
 }
 
 export function adminJobCatalogue(readiness: AutomationReadiness = automationReadiness()) {

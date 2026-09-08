@@ -10,6 +10,15 @@ assert.ok(['development', 'test'].includes(process.env.APP_ENV), 'Jobs fixtures 
 const sql = postgres(process.env.DATABASE_URL, { max: 1 });
 after(() => sql.end({ timeout: 5 }));
 
+/**
+ * Evidence selection, against a real database.
+ *
+ * The catalog assertions this suite used to carry are gone with the catalog —
+ * openings now come from `arena.job_openings` and are covered by
+ * `scripts/jobs-pipeline-integration.test.mjs`. What remains here is the part
+ * that is specifically about whose evidence counts, which is the rule most
+ * likely to be broken silently by a future join.
+ */
 test('Jobs uses only own evidence from the ranking-selected review in FINALIZED weeks', async (t) => {
   const stamp = randomUUID();
   const userIds = [], weekIds = [], projectIds = [], skillIds = [], reviewIds = [], versionIds = [], submissionIds = [], enrollmentIds = [];
@@ -73,16 +82,26 @@ test('Jobs uses only own evidence from the ranking-selected review in FINALIZED 
   }
 
   const result = await getJobsOverview(userIds[0]);
+  // Only this user's own evidence, only from the ranking-selected review, only
+  // from FINALIZED weeks. The `excluded-*` skills exist precisely so a leak
+  // from another user, another run or a CLOSED week would show up by name.
   assert.deepEqual(result.skills, ['SQL']);
-  assert.equal(result.source, 'hardcoded');
-  assert.match(result.sourceLabel, /belum terhubung/);
-  assert.equal(result.matchCount, 1);
-  assert.equal(result.jobs[0].id, 'sample-data');
-  assert.equal(result.jobs[0].matchScore, 33);
   assert.equal(JSON.stringify(result).includes('excluded-'), false);
+
+  // Openings come from the database now; the hardcoded catalog is gone.
+  assert.equal(JSON.stringify(result).includes('sample-data'), false);
+  assert.ok(['live', 'empty'].includes(result.source));
+  for (const job of result.jobs) {
+    assert.ok(job.sourceSlug, 'every opening must name the source it came from');
+    assert.match(job.applicationUrl, /^https:\/\//);
+  }
+  assert.ok(result.matchCount <= result.jobs.length);
+  assert.equal(result.totalOpen, result.jobs.length);
 
   const empty = await getJobsOverview(userIds[2]);
   assert.deepEqual(empty.skills, []);
   assert.equal(empty.matchCount, 0);
+  // No evidence means no score — with a stated reason, never a zero.
   assert.ok(empty.jobs.every(job => job.matchScore === null));
+  assert.ok(empty.jobs.every(job => ['NO_EVIDENCE', 'NO_SKILL_DATA'].includes(job.unscoredReason)));
 });

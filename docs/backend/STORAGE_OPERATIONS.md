@@ -4,8 +4,21 @@
 
 - Completed byte-bounded `downloadObjectBytes` helper, actual content signature checks, and immutable snapshot writer with SHA-256 destination verification.
 - Completed injected cleanup decision engine: dry-run by default, environment scope, 24-hour expiry grace, consumed-intent and reference protection, reference recheck before delete.
-- Actual check: `node --import ./scripts/node-test-hooks.mjs --test scripts/storage-integrity.test.mjs` passed 6/6 tests on 2026-09-05. Node emitted the existing module-type warning.
-- Pending: submission integration, authenticated cleanup route, historical download ownership tests, final type/lint checks.
+- **Integrated into the submission flow on 2026-09-08** (audit finding A01).
+  `finalizeArenaUpload` records the SHA-256 of the bytes it read;
+  `submitArenaSubmission` freezes every draft file into a write-once
+  `snapshots/` object before allocating a review attempt, and the version row
+  references the snapshot key and checksum. The reviewer verifies identity, not
+  size. See [`REMEDIATION_2026-09-08.md`](./REMEDIATION_2026-09-08.md).
+- Cleanup now also reclaims **consumed** intents whose object nothing references
+  any more — the shape an orphan actually takes when a draft item is deleted and
+  its object delete fails. Reference lookups decide, not the consumed flag.
+- Actual checks: `scripts/storage-integrity.test.mjs` and
+  `scripts/submission-immutability.test.mjs` offline, plus
+  `npm run test:local:lifecycle`, which uploads through a real presigned PUT to
+  the sandbox object store and replays it with equal-size different bytes.
+- Still pending: live-bucket verification on the release target (CORS, presign,
+  replay) — unchanged by this work.
 - No live bucket calls, migration writes, or credential values were used in these tests.
 
 ## Extraction helper contract

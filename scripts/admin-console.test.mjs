@@ -14,20 +14,31 @@ const envKeys = ["ARENA_ADMIN_SUBJECTS", "ARENA_ADMIN_ROLES", "INTERNAL_ADMIN_TO
 const saved = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
 const forbidden = error => error.code === "FORBIDDEN";
 
-test("Trigger Workflow page accepts project admins without overview and rejects other scopes", async () => {
+// Trigger Workflow used to be its own page gated on `projects`. It now lives
+// inside Otomasi, which is gated on `overview` — so the release form has to
+// carry that check itself. These two tests are what stop the merge from
+// quietly downgrading a page-level guard into no guard at all.
+test("Otomasi renders the off-schedule release only for project admins", async () => {
   reset();
   process.env.ARENA_ADMIN_ROLES = JSON.stringify({ "sk-participant:publisher": ["projects"], "sk-participant:viewer": ["overview"] });
-  const page = load("src/app/(app)/app/admin/workflows/page.tsx", {
-    "next/navigation": { redirect: path => { throw new Error(`redirect:${path}`); } },
-    "@/components/admin/AdminShell": { AdminShell: "section" },
+  const page = load("src/app/(app)/app/admin/jobs/page.tsx", {
+    "@/components/admin/AdminJobsConsole": { AdminJobsConsole: "section" },
     "@/components/admin/TriggerWorkflow": { TriggerWorkflow: "form" },
   });
   session = { authSubject: "sk-participant:publisher" };
-  assert.equal((await page.default()).props.title, "Trigger Workflow");
+  assert.equal((await page.default()).props.release.type, "form");
   session = { authSubject: "sk-participant:viewer" };
-  await assert.rejects(page.default(), /redirect:\/app\/admin/);
+  assert.equal((await page.default()).props.release, null);
   session = null;
   await assert.rejects(page.default(), forbidden);
+});
+
+test("the retired Trigger Workflow route redirects into Otomasi", async () => {
+  reset();
+  const page = load("src/app/(app)/app/admin/workflows/page.tsx", {
+    "next/navigation": { redirect: target => { throw new Error(`redirect:${target}`); } },
+  });
+  assert.throws(() => page.default(), /^Error: redirect:\/app\/admin\/jobs$/);
 });
 
 let session = null;
@@ -87,15 +98,15 @@ async function payload(response) {
 // database, so it is recorded rather than run.
 const schedulerMock = {
   JOBS: Object.fromEntries(["week-close", "week-finalize", "email-flush", "week-notifications", "session-cleanup",
-    "storage-cleanup", "project-drop", "project-generate", "reviews-run"]
+    "storage-cleanup", "project-drop", "project-generate", "reviews-run", "jobs-sync"]
     .map(job => [job, async () => { calls.push(job); return { job, done: true, detail: { skipped: "test" } }; }])),
 };
 const jobMocks = {
   "@/server/scheduler/service": schedulerMock,
   "@/server/reviews/audit": { writeAudit: async () => {} },
   "@/server/db/client": { getDb: () => ({}) },
-  "@/server/db/schema": { runs: {} },
-  "drizzle-orm": { desc: () => {} },
+  "@/server/db/schema": { runs: {}, jobSources: {} },
+  "drizzle-orm": { desc: () => {}, eq: () => {}, sql: () => {} },
 };
 
 test("every scheduled job the timers can call is mapped to an admin scope", () => {
@@ -330,4 +341,34 @@ test("reading the audit log requires only the overview scope, and offers no writ
   assert.equal((await get("sk-participant:rewards-only")).status, 403);
   // ...and neither can an anonymous caller.
   assert.equal((await get(null)).status, 403);
+});
+
+// The rail's promise is that no number means no work. That only holds if
+// badges are derived from signals — anything counting rows would light up a
+// healthy queue of five and teach operators to ignore the numbers.
+test("nav badges count only actionable signals, and name themselves for screen readers", async () => {
+  reset();
+  const { getAdminNavBadges } = load("src/server/ops/automation-health.ts", {
+    "@/server/db/client": { getDb: () => { throw new Error("must not query"); } },
+    "@/server/cv/rate-limit": { getSpendWindow: async () => { throw new Error("must not query"); } },
+    "@/server/career/jobs/sync-core": { sourceHealth: () => "HEALTHY" },
+  });
+
+  assert.deepEqual(getAdminNavBadges({ signals: [] }), {}, "a healthy console shows no numbers at all");
+
+  const badges = getAdminNavBadges({ signals: [
+    { key: "review-unclaimed", level: "ALERT", detail: "" },
+    { key: "review-stranded", level: "WARN", detail: "" },
+    { key: "email-aging", level: "WARN", detail: "" },
+    { key: "heartbeat:jobs-sync", level: "ALERT", detail: "" },
+    { key: "cv-spend", level: "WARN", detail: "" },
+  ] });
+
+  assert.equal(badges["/app/admin/reviews"].count, 2);
+  assert.equal(badges["/app/admin/reviews"].level, "ALERT", "the worst signal on a page wins");
+  assert.equal(badges["/app/admin/email"].level, "WARN");
+  assert.equal(badges["/app/admin/jobs"].count, 1, "heartbeats belong to Otomasi");
+  assert.equal(badges["/app/admin/cv-scanner"].count, 1);
+  assert.equal(badges["/app/admin"].count, 5, "Overview counts every signal, routed or not");
+  assert.match(badges["/app/admin"].label, /5 perlu tindakan/, "the count is spoken, not only coloured");
 });

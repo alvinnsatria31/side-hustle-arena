@@ -5,9 +5,11 @@ import {
   enrollments,
   pointAccounts,
   pointLedger,
+  projectRubricCriteria,
   projectSkills,
   projects,
   reviewJobs,
+  reviewScores,
   reviews,
   skillEvidence,
   submissionVersions,
@@ -21,6 +23,8 @@ import { crossedThresholds, getLifetimePoints } from "@/server/rewards/milestone
 import { catalog } from "@/server/db/schema";
 import { writeAudit } from "@/server/reviews/audit";
 import { rankFinalists } from "./ranking";
+import { eligibleVersionOrder, isFinalizableReview } from "./finalist-core";
+import { attributeSkillEvidence } from "./skill-attribution";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -102,25 +106,29 @@ async function collectEligibleFinalists(db: Db, weekId: string): Promise<Eligibl
       .from(submissionVersions)
       .where(eq(submissionVersions.submissionId, submission.id))
       .orderBy(desc(submissionVersions.versionNumber));
-    const validVersion = versions.find((version) => version.reviewAttemptNumber != null);
-    if (!validVersion) continue;
-    const runs = await db
-      .select()
-      .from(reviews)
-      .where(eq(reviews.submissionVersionId, validVersion.id))
-      .orderBy(desc(reviews.runNumber))
-      .limit(1);
-    const review = runs[0];
-    if (!review || (review.status !== "COMPLETED_HIDDEN" && review.status !== "PUBLISHED")) continue;
-    finalists.push({
-      userId: enrollment.userId,
-      enrollmentId: enrollment.id,
-      projectId: enrollment.projectId,
-      versionId: validVersion.id,
-      reviewId: review.id,
-      finalScore: Number(review.finalScore),
-      finalSubmittedAt: validVersion.submittedAt,
-    });
+    // Newest-first, but "newest that actually has a score". A later attempt
+    // whose review failed terminally must fall back to the earlier reviewed
+    // version rather than erase a valid completion (PRD §33/§62).
+    for (const version of eligibleVersionOrder(versions)) {
+      const runs = await db
+        .select()
+        .from(reviews)
+        .where(eq(reviews.submissionVersionId, version.id))
+        .orderBy(desc(reviews.runNumber))
+        .limit(1);
+      const review = runs[0];
+      if (!isFinalizableReview(review)) continue;
+      finalists.push({
+        userId: enrollment.userId,
+        enrollmentId: enrollment.id,
+        projectId: enrollment.projectId,
+        versionId: version.id,
+        reviewId: review.id,
+        finalScore: Number(review.finalScore),
+        finalSubmittedAt: version.submittedAt,
+      });
+      break;
+    }
   }
   return finalists;
 }
@@ -252,10 +260,15 @@ async function finalizeWeekInTransaction(input: {
       .update(enrollments)
       .set({ status: "COMPLETED", completedAt: now })
       .where(eq(enrollments.id, finalist.enrollmentId));
-    // Skill evidence: one row per project skill, scored at the final score and
-    // traceable to the review row. Unique (review, skill) + on-conflict-ignore
-    // keeps idempotent re-finalize safe; the participant reader only serves
-    // evidence whose ranking survived (voids delete the ranking row).
+    // Skill evidence: one row per project skill, traceable to the review row.
+    // Unique (review, skill) + on-conflict-ignore keeps idempotent re-finalize
+    // safe; the participant reader only serves evidence whose ranking survived
+    // (voids delete the ranking row).
+    //
+    // The SCORE is per skill, not the project score copied across. Criteria a
+    // curator attributed to a skill are what measure it; where nothing is
+    // attributed the project score stands in and the row says so, so no reader
+    // can mistake one measurement for several.
     const [reviewRow] = await db
       .select({ summary: reviews.summary })
       .from(reviews)
@@ -265,16 +278,38 @@ async function finalizeWeekInTransaction(input: {
       .from(projectSkills)
       .where(eq(projectSkills.projectId, finalist.projectId));
     if (skillRows.length > 0) {
+      const criteria = await db
+        .select({ id: projectRubricCriteria.id, skillId: projectRubricCriteria.skillId, weight: projectRubricCriteria.weight, maxScore: projectRubricCriteria.maxScore })
+        .from(projectRubricCriteria)
+        .where(eq(projectRubricCriteria.projectId, finalist.projectId));
+      const criterionScores = await db
+        .select({ rubricCriterionId: reviewScores.rubricCriterionId, rawScore: reviewScores.rawScore, maxScore: reviewScores.maxScore })
+        .from(reviewScores)
+        .where(eq(reviewScores.reviewId, finalist.reviewId));
+      const attributed = attributeSkillEvidence({
+        projectSkills: skillRows.map((skill) => skill.skillId),
+        criteria: criteria.map((criterion) => ({
+          id: criterion.id, skillId: criterion.skillId,
+          weight: Number(criterion.weight), maxScore: Number(criterion.maxScore),
+        })),
+        scores: criterionScores.map((score) => ({
+          rubricCriterionId: score.rubricCriterionId,
+          rawScore: Number(score.rawScore), maxScore: Number(score.maxScore),
+        })),
+        projectScore: finalist.finalScore,
+      });
       await db
         .insert(skillEvidence)
         .values(
-          skillRows.map((skill) => ({
+          attributed.map((skill) => ({
             userId: finalist.userId,
             weekId: week.id,
             projectId: finalist.projectId,
             reviewId: finalist.reviewId,
             skillId: skill.skillId,
-            score: finalist.finalScore.toFixed(2),
+            score: skill.score.toFixed(2),
+            attribution: skill.attribution,
+            criterionCount: skill.criterionCount,
             evidenceSummary: reviewRow?.summary ?? null,
           })),
         )

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, isNull, lt, notExists } from "drizzle-orm";
+import { and, asc, eq, lt, notExists } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { submissionDraftItems, submissionVersionItems, uploadIntents } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
@@ -7,14 +7,19 @@ import { cleanupUnusedObjects, UNUSED_OBJECT_GRACE_MS } from "./cleanup-core";
 import { getStorageEnvironment } from "./config";
 import { deletePrivateObject } from "./upload";
 
-/** No bucket listing: only ledger-backed, expired, unused objects are candidates. */
+/**
+ * No bucket listing: only ledger-backed, expired, unreferenced objects are
+ * candidates. Consumed intents are included — a draft item deleted after its
+ * object delete failed leaves exactly that shape of orphan behind, and the
+ * `notExists` pair below is what keeps a live draft or version safe.
+ */
 export async function cleanupExpiredUploads({ dryRun = true, limit = 25, now = new Date() }: { dryRun?: boolean; limit?: number; now?: Date } = {}) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isFinite(now.getTime())) {
     throw new ArenaDomainError("VALIDATION_ERROR", "Cleanup limit must be between 1 and 100.");
   }
   const db = getDb();
   const cutoff = new Date(now.getTime() - UNUSED_OBJECT_GRACE_MS);
-  const eligible = and(isNull(uploadIntents.consumedAt), lt(uploadIntents.expiresAt, cutoff),
+  const eligible = and(lt(uploadIntents.expiresAt, cutoff),
     notExists(db.select({ id: submissionDraftItems.id }).from(submissionDraftItems).where(eq(submissionDraftItems.storageKey, uploadIntents.storageKey))),
     notExists(db.select({ id: submissionVersionItems.id }).from(submissionVersionItems).where(eq(submissionVersionItems.storageKey, uploadIntents.storageKey))));
   const candidates = await db.select({ id: uploadIntents.id }).from(uploadIntents)

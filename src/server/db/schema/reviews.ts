@@ -5,7 +5,7 @@ import { users } from "./identity";
 import { projects, projectRubricCriteria, skills } from "./projects";
 import { submissionVersions } from "./submissions";
 import { weeks } from "./arena-core";
-import { reviewJobStatus, reviewStatus } from "./enums";
+import { reviewJobStatus, reviewStatus, skillEvidenceAttribution } from "./enums";
 import { arena } from "./schemas";
 
 export const reviewJobs = arena.table("review_jobs", {
@@ -101,6 +101,18 @@ export const skillEvidence = arena.table("skill_evidence", {
   reviewId: uuid("review_id").notNull().references(() => reviews.id),
   skillId: uuid("skill_id").notNull().references(() => skills.id),
   score: numeric("score").notNull(),
+  /**
+   * CRITERION — computed from the rubric criteria that measured this skill.
+   * PROJECT   — the project's overall score, recorded because the participant
+   *             did work involving this skill, but NOT a measurement of it.
+   *
+   * Every reader must respect the difference: before this column existed, one
+   * project score was written onto every skill and nothing downstream could
+   * tell the two apart.
+   */
+  attribution: skillEvidenceAttribution("attribution").default("PROJECT").notNull(),
+  /** How many rubric criteria fed the score. Zero for PROJECT attribution. */
+  criterionCount: integer("criterion_count").default(0).notNull(),
   evidenceSummary: text("evidence_summary"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

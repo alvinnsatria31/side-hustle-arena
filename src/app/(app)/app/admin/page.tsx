@@ -26,6 +26,53 @@ export default async function AdminOverviewPage() {
         <Stat label="Katalog reward aktif" value={`${overview.catalog.active}/${overview.catalog.total}`} sub="SKU" />
       </div>
 
+      {/* Health above depth on purpose: a count tells an operator how much is
+          queued, and only this tells them whether anything is wrong. */}
+      <Card className="mb-6 p-6">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <PanelHeading>Kesehatan otomasi</PanelHeading>
+          <Badge variant={overview.health.level === 'OK' ? 'mint' : 'amber'}>
+            {overview.health.level === 'OK' ? 'NORMAL' : overview.health.level === 'WARN' ? 'PERLU DICEK' : 'PERLU TINDAKAN'}
+          </Badge>
+        </div>
+        {overview.health.signals.length === 0 ? (
+          <p className="text-sm text-sk-muted">
+            Tidak ada sinyal masalah. Heartbeat job terjadwal, antrean review, outbox email, sumber lowongan dan kuota
+            pemindaian CV semuanya dalam batas.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {overview.health.signals.map((signal) => (
+              <li key={signal.key} className="border-l-2 border-sk-border pl-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={signal.level === 'ALERT' ? 'amber' : 'slate'}>{signal.level}</Badge>
+                  <span className="text-sm text-sk-navy">{signal.detail}</span>
+                </div>
+                {signal.action && <p className="mt-1 text-xs leading-relaxed text-sk-muted">{signal.action}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4 grid gap-2 border-t border-dashed border-sk-border pt-4 text-xs text-sk-muted sm:grid-cols-2">
+          <p>
+            Outbox email: {overview.health.email.backlog} menunggu, {overview.health.email.held} tertahan,{' '}
+            {overview.health.email.agingPastHalfWindow} melewati separuh jendela retry.
+          </p>
+          <p>
+            Pemindaian CV jam ini:{' '}
+            {overview.health.cvSpend.available
+              ? `${overview.health.cvSpend.used}/${overview.health.cvSpend.ceiling}`
+              : 'penghitung tidak terbaca'}.
+          </p>
+          <p className="sm:col-span-2">
+            Heartbeat:{' '}
+            {overview.health.heartbeats
+              .map((beat) => `${beat.job} ${beat.lastRunAt ? jakartaDate(beat.lastRunAt) : 'belum pernah'}${beat.overdue ? ' (telat)' : ''}`)
+              .join(' · ')}
+          </p>
+        </div>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6">
           <PanelHeading>Antrean Review</PanelHeading>

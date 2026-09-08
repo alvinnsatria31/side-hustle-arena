@@ -1,5 +1,17 @@
 # The trigger-only contract
 
+> **PARTLY SUPERSEDED (8 September 2026).** The rule below — n8n says *when*,
+> Arena decides *what* — still holds and is still enforced. What is out of date
+> is the job list and the cadences: `reviews-run` is no longer scheduled here
+> (the grading workflow owns that queue, see
+> [`N8N_SEKOLAH_KARIR_MIGRATION.md`](./N8N_SEKOLAH_KARIR_MIGRATION.md)), the
+> cron guard now also accepts `ARENA_CRON_TOKEN`, and three cadences changed
+> because the old ones were too slow to be correct: `email-flush` every 15
+> minutes, `project-generate` hourly through the Sunday window, `jobs-sync`
+> every four hours. Those numbers are asserted by
+> `scripts/automation-contract.test.mjs` — read the workflow JSON and that test
+> as the source of truth, not the cadence table below.
+
 `n8n/arena-trigger-workflow.json` names this file in its `meta.description`, but
 it did not exist — the audit of 7 September 2026 found the dangling reference.
 This is that contract, written from the workflow and

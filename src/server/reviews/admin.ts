@@ -4,6 +4,7 @@ import { getDb } from "@/server/db/client";
 import { reviewJobs, reviewOverrides, reviews, submissionVersions } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "./audit";
+import { canAdminRequeue } from "./queue-policy";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -15,7 +16,16 @@ type Db = ReturnType<typeof getDb>;
  * before/after state + reason + actor, and never delete the original review.
  */
 
-/** Requeue a version for a fresh review run. The old review rows stay untouched. */
+/**
+ * Requeue a version for a fresh review run. The old review rows stay untouched.
+ *
+ * This is also the recovery path for a review that never produced a row at
+ * all — a first attempt whose extraction or provider failed terminally. It
+ * previously refused those ("only a reviewed version can be rerun"), which left
+ * an operator with no button and a week that would not finalize; the only fix
+ * was hand-written SQL. A version with no review is now rerunnable, and what is
+ * refused instead is stealing a job from a worker that still holds a live lease.
+ */
 export async function rerunReview(
   input: { versionId: string; actorSubject: string; reason: string; now?: Date; db?: Db },
 ): Promise<{ jobId: string; nextRunNumber: number }> {
@@ -28,18 +38,21 @@ export async function rerunReview(
     await db.select().from(submissionVersions).where(eq(submissionVersions.id, input.versionId))
   )[0];
   if (!version) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Submission version not found.");
+  if (version.reviewAttemptNumber == null || version.accessStatus !== "ACCESSIBLE") {
+    throw new ArenaDomainError("VALIDATION_ERROR", "Only a version that consumed a review attempt can be rerun.");
+  }
   const existing = await db
     .select({ runNumber: reviews.runNumber, aiScore: reviews.aiScore })
     .from(reviews)
     .where(eq(reviews.submissionVersionId, input.versionId))
     .orderBy(desc(reviews.runNumber))
     .limit(1);
-  if (existing.length === 0) {
-    throw new ArenaDomainError("VALIDATION_ERROR", "Only a reviewed version can be rerun.");
-  }
-  const nextRunNumber = existing[0].runNumber + 1;
+  const nextRunNumber = (existing[0]?.runNumber ?? 0) + 1;
 
   const job = (await db.select().from(reviewJobs).where(eq(reviewJobs.submissionVersionId, input.versionId)))[0];
+  if (!canAdminRequeue(job ?? null, now)) {
+    throw new ArenaDomainError("REVIEW_JOB_UNAVAILABLE", "A worker still holds a live lease on this review; wait for it to finish or expire.");
+  }
   let jobId = job?.id;
   if (job) {
     await db
@@ -63,7 +76,14 @@ export async function rerunReview(
     action: "REVIEW_RERUN",
     entityType: "review_job",
     entityId: jobId,
-    metadata: { versionId: input.versionId, nextRunNumber, previousAiScore: existing[0].aiScore, reason: input.reason },
+    metadata: {
+      versionId: input.versionId,
+      nextRunNumber,
+      previousAiScore: existing[0]?.aiScore ?? null,
+      recovery: existing.length === 0 ? "first-review-failure" : null,
+      previousJobStatus: job?.status ?? null,
+      reason: input.reason,
+    },
   });
   return { jobId: jobId!, nextRunNumber };
 }

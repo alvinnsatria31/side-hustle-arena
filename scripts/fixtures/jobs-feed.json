@@ -1,0 +1,89 @@
+{
+  "_comment": "Local sandbox fixture feed. NOT real openings — every company here is invented, and the fixture adapter refuses to run outside the local sandbox. Shapes are deliberately awkward (nested company, comma-joined skills, missing fields, one malformed record) so the normalizer is exercised rather than flattered.",
+  "items": [
+    {
+      "id": "fx-001",
+      "role": "Junior Data Analyst",
+      "company": { "name": "Studio Data Contoh (fiktif)" },
+      "city": "Jakarta",
+      "arrangement": "Hybrid",
+      "contract": "Full-time",
+      "summary": "Membersihkan data penjualan multi-kanal dan menyusun laporan margin mingguan untuk tim komersial.",
+      "skills_required": "SQL, Excel, Data Visualization",
+      "skills_nice": "Dashboard",
+      "apply": "https://example.invalid/fx-001",
+      "posted": "2026-09-01T02:00:00Z",
+      "expires": "2026-12-01T02:00:00Z",
+      "pay": { "min": 6000000, "max": 9000000, "currency": "IDR", "period": "MONTH" }
+    },
+    {
+      "id": "fx-002",
+      "role": "Business Intelligence Intern",
+      "company": { "name": "Laboratorium Wawasan (fiktif)" },
+      "city": "Remote",
+      "arrangement": "Remote",
+      "contract": "Internship",
+      "summary": "Membangun dashboard operasional dan menuliskan interpretasinya untuk stakeholder non-teknis.",
+      "skills_required": "Excel, Dashboard, Business Insight",
+      "apply": "https://example.invalid/fx-002",
+      "posted": "2026-09-03T02:00:00Z"
+    },
+    {
+      "id": "fx-003",
+      "role": "Marketing Analytics Associate",
+      "company": { "name": "Kampanye Imajinasi (fiktif)" },
+      "city": "Bandung",
+      "contract": "Contract",
+      "summary": "Mengukur performa kampanye lintas kanal dan merekomendasikan alokasi anggaran berikutnya.",
+      "skills_required": "Campaign Analysis, Reporting, Communication",
+      "apply": "https://example.invalid/fx-003",
+      "posted": "2026-08-20T02:00:00Z"
+    },
+    {
+      "id": "fx-004",
+      "role": "Junior Product Designer",
+      "company": { "name": "Studio Antarmuka Contoh (fiktif)" },
+      "city": "Remote",
+      "arrangement": "Kerja jarak jauh",
+      "contract": "Penuh waktu",
+      "summary": "Merancang alur onboarding dan mengujinya bersama pengguna nyata sebelum diserahkan ke engineering.",
+      "skills_required": "Figma, User Research, Prototyping",
+      "apply": "https://example.invalid/fx-004",
+      "posted": "2026-09-05T02:00:00Z"
+    },
+    {
+      "id": "fx-005",
+      "role": "Frontend Developer Intern",
+      "company": { "name": "Web Rekaan (fiktif)" },
+      "city": "Jakarta",
+      "arrangement": "Di kantor",
+      "contract": "Magang",
+      "summary": "Membangun komponen antarmuka yang aksesibel dan menulis pengujian dasarnya.",
+      "skills_required": "HTML, CSS, JavaScript",
+      "apply": "https://example.invalid/fx-005",
+      "posted": "2026-09-06T02:00:00Z"
+    },
+    {
+      "id": "fx-006",
+      "role": "Operations Analyst",
+      "company": { "name": "Operasi Simulasi (fiktif)" },
+      "city": "Surabaya",
+      "contract": "Full-time",
+      "summary": "Menelusuri hambatan proses gudang dan menyusun rekomendasi perbaikan berbasis data.",
+      "skills_required": "Excel, Data Cleaning, Presentation",
+      "apply": "https://example.invalid/fx-006",
+      "posted": "2026-08-28T02:00:00Z"
+    },
+    {
+      "id": "fx-007",
+      "role": "Lowongan tanpa tautan lamaran",
+      "company": { "name": "Uji Validasi (fiktif)" },
+      "city": "Jakarta",
+      "contract": "Full-time",
+      "summary": "Record ini sengaja tidak punya URL lamaran yang aman, supaya jalur penolakan validasi ikut terlihat saat pengembangan lokal.",
+      "skills_required": "Excel",
+      "apply": "http://example.invalid/insecure",
+      "posted": "2026-09-04T02:00:00Z"
+    }
+  ]
+}

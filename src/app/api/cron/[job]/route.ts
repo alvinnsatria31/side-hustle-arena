@@ -2,6 +2,8 @@ import { arenaData, arenaError } from "@/server/arena";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { requireCronCaller } from "@/server/scheduler/cron-auth";
 import { JOBS, type JobName } from "@/server/scheduler/service";
+import { getDb } from "@/server/db/client";
+import { writeAudit } from "@/server/reviews/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,21 @@ export async function GET(request: Request, context: { params: Promise<{ job: st
     const { job } = await context.params;
     const run = JOBS[job as JobName];
     if (!run) throw new ArenaDomainError("VALIDATION_ERROR", `Unknown scheduled job "${job}".`);
-    return arenaData(await run());
+    const startedAt = Date.now();
+    const result = await run();
+    // The heartbeat. Without a row per scheduled run, "this job has not fired
+    // for a day" is unanswerable — and a timer that silently stopped is the
+    // failure mode nothing else surfaces, because everything simply looks calm.
+    // Best-effort: a heartbeat write must never fail the job it is recording.
+    await writeAudit(getDb(), {
+      actorType: "SYSTEM",
+      actorSubject: "cron",
+      action: "SCHEDULED_JOB_RAN",
+      entityType: "scheduled_job",
+      entityId: job,
+      metadata: { done: result.done, durationMs: Date.now() - startedAt, detail: result.detail },
+    }).catch((error) => console.warn(`[cron] heartbeat for ${job} could not be recorded:`, error));
+    return arenaData(result);
   } catch (error) {
     return arenaError(error);
   }

@@ -7,6 +7,7 @@ import { useParticipant } from '@/features/arena/participant';
 import { Button } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { AvatarChooser } from '@/components/arena/AvatarChooser';
+import { PrivacyControls } from '@/components/arena/PrivacyControls';
 import { getParticipantMilestones, getParticipantOverview, takeParticipantReward, useParticipantResource } from '@/lib/participant-client';
 import { EnrollmentHistory, ParticipantLogout, ParticipantShell, ParticipantStats, RefreshButton, ResourceState, participantDate } from './ParticipantDashboard';
 
@@ -69,5 +70,6 @@ export default function ParticipantProfile() {
       </section>
       <EnrollmentHistory history={data.history} />
     </>}
+    <PrivacyControls />
   </ParticipantShell>;
 }

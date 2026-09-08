@@ -2,9 +2,14 @@
  * Public Weekly Spotlight reads.
  *
  * The showcase was the last Arena surface served from `data/mock` — it published
- * invented winners and scores to every visitor. These tests hold the two things
- * that replace it: only FINALIZED weeks are published at all, and nothing
- * private rides along with what is.
+ * invented winners and scores to every visitor. These tests hold the three
+ * things that replace it: only FINALIZED weeks are published at all, only
+ * participants who consented are published from them, and nothing private rides
+ * along with what is.
+ *
+ * Fixture racers consent by default so the existing assertions still exercise
+ * the publishing path; `consent: false` opts one out. The consent rule itself
+ * is covered by `scripts/privacy-and-limits.test.mjs` and the browser suite.
  */
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
@@ -54,8 +59,9 @@ async function finalizedWeek(t, { label, status = "FINALIZED", racers }) {
   const created = [];
   for (const [index, racer] of racers.entries()) {
     const [user] = await sql`
-      insert into identity.users (auth_subject, display_name_cache)
-      values (${`e2e-show-${label}-${index}-${stamp}`}, ${racer.displayName}) returning id`;
+      insert into identity.users (auth_subject, display_name_cache, showcase_consent_at)
+      values (${`e2e-show-${label}-${index}-${stamp}`}, ${racer.displayName},
+              ${racer.consent === false ? null : new Date()}) returning id`;
     const [enrollment] = await sql`
       insert into arena.enrollments (user_id, week_id, project_id, status)
       values (${user.id}, ${week.id}, ${project.id}, 'SUBMITTED') returning id`;
@@ -128,6 +134,25 @@ test("a finalized week is published as ranks, scores and points — and nothing 
   assert.equal(serialised.includes("e2e-show-ok-0"), false, "an auth subject must never be published");
   assert.equal(Object.hasOwn(first, "summary"), false);
   assert.equal(Object.hasOwn(first, "userId"), false);
+});
+
+test("a ranked participant who never consented is not published", async (t) => {
+  const week = await finalizedWeek(t, {
+    label: "consent",
+    racers: [
+      { displayName: "Setuju Tampil", score: 90, points: 300 },
+      { displayName: "Tidak Setuju", score: 70, points: 200, consent: false },
+    ],
+  });
+
+  const mine = (await getLatestSpotlight()).filter((entry) => entry.weekCode === week.weekCode);
+  assert.deepEqual(mine.map((entry) => entry.participantName), ["Setuju Tampil"],
+    "ranking well is not agreement to be featured");
+  assert.equal(JSON.stringify(mine).includes("Tidak Setuju"), false);
+
+  // And the history list is gated too, not only the featured entry.
+  const history = await listSpotlightHistory(20);
+  assert.equal(history.some((row) => row.winnerName === "Tidak Setuju"), false);
 });
 
 test("a week that is not FINALIZED is not published at all", async (t) => {

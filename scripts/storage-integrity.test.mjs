@@ -78,23 +78,27 @@ test("snapshot verifies destination bytes and does not write spoofed content", a
   await assert.rejects(() => createImmutableSnapshot({ sourceKey, snapshotKey, mimeType: "application/pdf", sizeBytes: pdf.length }, corrupt), /checksum/i);
 });
 
-test("cleanup defaults to dry-run and preserves consumed, fresh, foreign, and referenced keys", async () => {
+test("cleanup defaults to dry-run and preserves fresh, foreign, and referenced keys", async () => {
   const now = new Date("2026-09-05T12:00:00Z");
   const old = new Date(now.getTime() - 48 * 3600_000);
   const row = { id: "unused", storageKey: sourceKey, expiresAt: old, consumedAt: null };
-  const candidates = [row, { ...row, id: "consumed", consumedAt: old }, { ...row, id: "fresh", expiresAt: now },
+  // `consumed` is deliberately NOT protected any more: an intent consumed by a
+  // draft item that was later deleted is exactly how an object is orphaned.
+  // Reference lookups, not the consumed flag, decide what survives.
+  const consumedOrphanKey = sourceKey.replace("11111111", "44444444");
+  const candidates = [row, { ...row, id: "consumed", storageKey: consumedOrphanKey, consumedAt: old }, { ...row, id: "fresh", expiresAt: now },
     { ...row, id: "foreign", storageKey: sourceKey.replace("development", "production") },
     { ...row, id: "version", storageKey: snapshotKey }, { ...row, id: "draft", storageKey: sourceKey.replace("11111111", "33333333") }];
   const deleted = [];
   const refs = new Set([snapshotKey, candidates[5].storageKey]);
   const deps = { async isReferenced(key) { return refs.has(key); }, async deleteObject(key) { deleted.push(key); } };
   const dry = await cleanupUnusedObjects(candidates, { now, environment: "development" }, deps);
-  assert.equal(dry.eligible, 1);
+  assert.equal(dry.eligible, 2);
   assert.equal(dry.deleted, 0);
   assert.deepEqual(deleted, []);
   const actual = await cleanupUnusedObjects(candidates, { now, environment: "development", dryRun: false }, deps);
-  assert.equal(actual.deleted, 1);
-  assert.deepEqual(deleted, [sourceKey]);
+  assert.equal(actual.deleted, 2);
+  assert.deepEqual(deleted, [sourceKey, consumedOrphanKey]);
 });
 
 test("cleanup rechecks references before deletion and fails closed on lookup failure", async () => {

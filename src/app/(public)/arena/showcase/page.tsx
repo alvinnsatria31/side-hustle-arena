@@ -7,7 +7,7 @@ import { Entrance, Reveal, StaggerGroup, StaggerItem } from '@/components/motion
 import { CountUp } from '@/components/motion/CountUp';
 import { SkillChip } from '@/components/primitives/SkillChip';
 import { Trophy } from 'lucide-react';
-import { getLatestSpotlight, listSpotlightHistory } from '@/server/finalization/showcase-service';
+import { getLatestSpotlightWithConsent, listSpotlightHistory } from '@/server/finalization/showcase-service';
 import { isoWeekNumber, monthDayLabel } from '@/lib/arena-view';
 
 export const metadata = { title: 'Weekly Spotlight' };
@@ -22,7 +22,7 @@ function scoreBand(score: number) {
 }
 
 export default async function ShowcasePage() {
-  const [spotlight, history] = await Promise.all([getLatestSpotlight(), listSpotlightHistory()]);
+  const [{ entries: spotlight, withheld }, history] = await Promise.all([getLatestSpotlightWithConsent(), listSpotlightHistory()]);
   const featured = spotlight[0];
   const others = spotlight.slice(1);
 
@@ -53,10 +53,16 @@ export default async function ShowcasePage() {
         {!featured ? (
           <Reveal y={16}>
             <Card className="p-10 text-center">
-              <h2 className="text-[20px] font-extrabold tracking-[-0.02em] text-sk-navy">Belum ada minggu yang difinalisasi.</h2>
+              <h2 className="text-[20px] font-extrabold tracking-[-0.02em] text-sk-navy">
+                {withheld > 0 ? 'Belum ada peserta yang mengizinkan karyanya tampil.' : 'Belum ada minggu yang difinalisasi.'}
+              </h2>
+              {/* An empty Showcase has two very different causes, and saying
+                  which one it is matters: "nobody has finished yet" and
+                  "everyone declined to be featured" call for opposite actions. */}
               <p className="mx-auto mt-2 max-w-[420px] text-[13.5px] leading-relaxed text-sk-muted">
-                Spotlight terbit setelah satu minggu ditutup dan seluruh review-nya selesai. Minggu pertama yang selesai
-                akan muncul di sini dengan sendirinya.
+                {withheld > 0
+                  ? `Minggu terakhir sudah difinalisasi, tetapi ${withheld} peserta berperingkat teratas belum mengizinkan karyanya ditampilkan publik. Showcase hanya menampilkan peserta yang menyetujuinya lewat halaman profil.`
+                  : 'Spotlight terbit setelah satu minggu ditutup dan seluruh review-nya selesai. Minggu pertama yang selesai akan muncul di sini dengan sendirinya.'}
               </p>
               <ButtonLink href="/arena/projects" size="lg" className="mt-6">
                 Lihat Project Minggu Ini

@@ -13,11 +13,12 @@ import {
   weekRules,
   weeks,
 } from "@/server/db/schema";
-import { createPresignedDownload, createPresignedUpload, createSubmissionObjectKey, deletePrivateObject, downloadObjectBytes, assertContentSignature, getStorageEnvironment, headPrivateObject } from "@/server/storage";
+import { createImmutableSnapshot, createPresignedDownload, createPresignedUpload, createSnapshotObjectKey, createSubmissionObjectKey, deletePrivateObject, downloadObjectBytes, assertContentSignature, getStorageEnvironment, headPrivateObject } from "@/server/storage";
 import { assertArenaFeatureOpen } from "@/server/ops/feature-flags";
 import { notifyBestEffort } from "@/server/notifications/service";
 import { enqueueReviewJob } from "@/server/reviews/queue-service";
 import { checkExternalUrlAccess } from "./url-access";
+import { planVersionSnapshots, resolveVersionItemStorage, type FrozenArtifact } from "./version-core";
 import { draftLinkSchema, draftSubmissionSchema, supportedFileMimeTypes, uploadPresignSchema } from "./schemas";
 
 const MAX_FILES = 5;
@@ -193,9 +194,14 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
   // its own — a renamed executable must fail here, before the draft references
   // it and long before a reviewer opens it. Failures delete the object so a
   // spoofed upload can never be finalized on retry.
+  let checksum: string;
   try {
     const content = await downloadObjectBytes(intent.storageKey, { expectedSizeBytes: intent.expectedSizeBytes });
     assertContentSignature(content.bytes, intent.expectedMimeType);
+    // Recorded now, over the bytes we actually read. Submit re-verifies against
+    // this before freezing, so a replayed PUT between finalize and submit is
+    // caught instead of silently becoming the reviewed artifact.
+    checksum = content.checksum;
   } catch (error) {
     await deletePrivateObject(intent.storageKey).catch(() => undefined);
     if (error instanceof ArenaDomainError) throw error;
@@ -215,6 +221,7 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
     return serializeDraftItem((await tx.insert(submissionDraftItems).values({
       submissionId: submission.id, requirementId: freshIntent.requirementId, itemType: "FILE", storageKey: freshIntent.storageKey,
       originalFilename: freshIntent.originalFilename, mimeType: freshIntent.expectedMimeType, fileSizeBytes: freshIntent.expectedSizeBytes,
+      checksum,
     }).returning())[0]);
   });
 }
@@ -244,18 +251,49 @@ function validateRequirements(requirements: (typeof projectSubmissionRequirement
   }
 }
 
-async function createVersion(tx: Db, submission: Submission, items: DraftItem[], access: "ACCESSIBLE" | "FAILED", reviewAttemptNumber: number | null, now: Date) {
+/**
+ * Freeze every draft file into a write-once snapshot object.
+ *
+ * The draft key stays presignable until its upload intent expires, so it is
+ * not a safe thing for a submitted version to reference. Each snapshot is
+ * written under a fresh `snapshots/` key with `If-None-Match: *` and read back
+ * before it is trusted, and the source bytes are re-verified against the
+ * checksum recorded at finalize — a replayed PUT in between fails here rather
+ * than becoming the reviewed artifact.
+ */
+async function freezeDraftFiles(items: DraftItem[], environment: "development" | "production"): Promise<Map<string, FrozenArtifact>> {
+  const frozen = new Map<string, FrozenArtifact>();
+  for (const item of planVersionSnapshots(items)) {
+    frozen.set(item.id, await createImmutableSnapshot({
+      sourceKey: item.storageKey!,
+      snapshotKey: createSnapshotObjectKey(environment),
+      mimeType: item.mimeType ?? "application/octet-stream",
+      sizeBytes: item.fileSizeBytes ?? 0,
+      checksum: item.checksum,
+    }));
+  }
+  return frozen;
+}
+
+async function createVersion(tx: Db, submission: Submission, items: DraftItem[], access: "ACCESSIBLE" | "FAILED", reviewAttemptNumber: number | null, now: Date, snapshots: ReadonlyMap<string, FrozenArtifact> = new Map()) {
   const newest = (await tx.select({ versionNumber: submissionVersions.versionNumber }).from(submissionVersions)
     .where(eq(submissionVersions.submissionId, submission.id)).orderBy(desc(submissionVersions.versionNumber)).limit(1))[0];
   const version = (await tx.insert(submissionVersions).values({
     submissionId: submission.id, versionNumber: (newest?.versionNumber ?? 0) + 1, explanation: submission.draftExplanation, notes: submission.draftNotes,
     submittedAt: now, accessStatus: access, reviewAttemptNumber, reviewStatus: "NOT_QUEUED",
   }).returning())[0];
-  if (items.length) await tx.insert(submissionVersionItems).values(items.map((item) => ({
-    submissionVersionId: version.id, requirementId: item.requirementId, itemType: item.itemType, label: item.label, storageKey: item.storageKey,
-    externalUrl: item.externalUrl, originalFilename: item.originalFilename, mimeType: item.mimeType, fileSizeBytes: item.fileSizeBytes,
-    checksum: item.checksum, textContent: item.textContent,
-  })));
+  if (items.length) await tx.insert(submissionVersionItems).values(items.map((item) => {
+    // A FAILED version is a record of a rejected submit, never a review input,
+    // so it keeps only metadata: no snapshot exists and no draft key is copied.
+    const storage = access === "ACCESSIBLE"
+      ? resolveVersionItemStorage(item, snapshots)
+      : { storageKey: null, checksum: null, fileSizeBytes: item.fileSizeBytes };
+    return {
+      submissionVersionId: version.id, requirementId: item.requirementId, itemType: item.itemType, label: item.label,
+      storageKey: storage.storageKey, externalUrl: item.externalUrl, originalFilename: item.originalFilename,
+      mimeType: item.mimeType, fileSizeBytes: storage.fileSizeBytes, checksum: storage.checksum, textContent: item.textContent,
+    };
+  }));
   await tx.update(submissions).set({ status: "SUBMITTED", latestVersionId: version.id, updatedAt: now }).where(eq(submissions.id, submission.id));
   return version;
 }
@@ -322,11 +360,15 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
     }
     if (!await draftItemsAccessible(items, submission.id)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
 
+    // Freeze before the attempt is allocated: a storage failure here must not
+    // burn one of the participant's three reviews (PRD §42).
+    const frozen = await freezeDraftFiles(items, getStorageEnvironment());
+
     const allocation = (await tx.update(submissions).set({ reviewAttemptsUsed: sql`${submissions.reviewAttemptsUsed} + 1`, updatedAt: now })
       .where(and(eq(submissions.id, submission.id), sql`${submissions.reviewAttemptsUsed} < ${context.rules.maxReviewAttempts}`))
       .returning({ reviewAttemptsUsed: submissions.reviewAttemptsUsed }))[0];
     if (!allocation) throw new ArenaDomainError("REVIEW_ATTEMPT_LIMIT_REACHED", "The review attempt limit has been reached.");
-    const version = await createVersion(tx, submission, items, "ACCESSIBLE", allocation.reviewAttemptsUsed, now);
+    const version = await createVersion(tx, submission, items, "ACCESSIBLE", allocation.reviewAttemptsUsed, now, frozen);
     // Review queue is automation state: the user attempt is already allocated
     // above; the job row only schedules the reviewer worker (PRD §42).
     await enqueueReviewJob(tx, version.id, now);
