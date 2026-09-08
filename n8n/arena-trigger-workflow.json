@@ -94,13 +94,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "5 0 * * 6"
+              "expression": "10 * * * *"
             }
           ]
         }
       },
-      "id": "tick-close",
-      "name": "Saturday 00:05 WIB",
+      "id": "tick-week-lifecycle",
+      "name": "Hourly week lifecycle",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -111,28 +111,7 @@
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 */2 * * 6,0"
-            }
-          ]
-        }
-      },
-      "id": "tick-finalize",
-      "name": "Weekend every 2h",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        -620,
-        660
-      ],
-      "notes": "Finalize refuses while reviews are still running. That is not a failure - it retries on the next tick, which is why this repeats."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n//\n// reviews-run is deliberately ABSENT. Reviews are owned by the grading\n// workflow, which claims from the same queue; scheduling both here would put\n// two systems on one queue for no gain.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\n//\n// Two cadences are load-bearing rather than cosmetic:\n//   email-flush every 15 minutes, because a failed message may only be retried\n//     inside the provider's 23h idempotency window and the backoff ladder needs\n//     roughly 7.5h of ticks to exhaust its six attempts. A daily flush gave a\n//     message ONE attempt before it expired.\n//   project-generate hourly through the Sunday window, because six divisions do\n//     not fit in one 60s invocation; each tick generates what it has budget for\n//     and reports `skipped` for divisions already prepared.\n//   jobs-sync every four hours, offset off the hour so it does not collide with\n//     the publication tick. Each source carries its own sync interval and the\n//     job only picks up the ones that are due, so a more frequent trigger costs\n//     nothing and a source can be tuned without touching this workflow.\nconst byTrigger = {\n  'Every 15 minutes': ['email-flush'],\n  'Every 4 hours': ['jobs-sync'],\n  'Daily 08:00 WIB': ['week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday hourly 09:00-20:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
+        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n//\n// reviews-run is deliberately ABSENT. Reviews are owned by the grading\n// workflow, which claims from the same queue; scheduling both here would put\n// two systems on one queue for no gain.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\n//\n// Two cadences are load-bearing rather than cosmetic:\n//   email-flush every 15 minutes, because a failed message may only be retried\n//     inside the provider's 23h idempotency window and the backoff ladder needs\n//     roughly 7.5h of ticks to exhaust its six attempts. A daily flush gave a\n//     message ONE attempt before it expired.\n//   project-generate hourly through the Sunday window, because six divisions do\n//     not fit in one 60s invocation; each tick generates what it has budget for\n//     and reports `skipped` for divisions already prepared.\n//   jobs-sync every four hours, offset off the hour so it does not collide with\n//     the publication tick. Each source carries its own sync interval and the\n//     job only picks up the ones that are due, so a more frequent trigger costs\n//     nothing and a source can be tuned without touching this workflow.\nconst byTrigger = {\n  'Every 15 minutes': ['email-flush'],\n  'Every 4 hours': ['jobs-sync'],\n  'Daily 08:00 WIB': ['week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday hourly 09:00-20:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  // Close then finalize, in that order, every hour. n8n runs the items this\n  // node returns through the HTTP node in order, so finalize always sees the\n  // weeks close just moved into FINALIZING.\n  //\n  // This was 'Saturday 00:05' for close and a weekend 2-hourly tick for\n  // finalize, which assumed every week ends on the weekly cycle. An ad-hoc week\n  // whose deadline fell after Saturday 00:05 -- like ADHOC-2026-09-08-7543,\n  // due Saturday 12 September 23:59 WIB -- would not be closed until the\n  // following Saturday, six days late, holding back its results and points.\n  // Both jobs are self-gating: close only touches OPEN weeks past their\n  // deadline, finalize only FINALIZING ones, so an hourly tick that finds\n  // nothing reports `skipped` and costs nothing.\n  'Hourly week lifecycle': ['week-close', 'week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
       },
       "id": "route",
       "name": "Which jobs are due",
@@ -264,28 +243,6 @@
         ]
       ]
     },
-    "Saturday 00:05 WIB": {
-      "main": [
-        [
-          {
-            "node": "Which jobs are due",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Weekend every 2h": {
-      "main": [
-        [
-          {
-            "node": "Which jobs are due",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Which jobs are due": {
       "main": [
         [
@@ -331,6 +288,17 @@
       ]
     },
     "Every 4 hours": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly week lifecycle": {
       "main": [
         [
           {

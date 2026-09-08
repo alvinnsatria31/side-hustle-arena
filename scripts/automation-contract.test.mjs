@@ -157,3 +157,32 @@ test("the Vercel cron fallback only schedules real jobs", () => {
     assert.doesNotThrow(() => firesPerWeek(entry.schedule), `unparseable schedule for ${job}`);
   }
 });
+
+test("a week is closed within a day of its deadline, whichever day that falls on", () => {
+  const code = nodeNamed(trigger, "Which jobs are due").parameters.jsCode;
+  const ownerOf = (job) => [...code.matchAll(/'([^']+)':\s*\[([^\]]*)\]/g)]
+    .find(([, , jobs]) => jobs.includes(`'${job}'`))?.[1];
+
+  const closeOwner = ownerOf("week-close");
+  assert.ok(closeOwner, "no trigger owns week-close");
+  const fires = firesPerWeek(cronOf(trigger, closeOwner));
+  // A weekly tick assumes every week ends on the weekly cycle. An ad-hoc week
+  // whose deadline falls just after that tick waits a further seven days for
+  // its results and points, which is what happened to ADHOC-2026-09-08-7543.
+  // Closing at least daily bounds that wait by the tick interval instead.
+  assert.ok(fires >= 7, `week-close fires only ${fires}x/week; an ad-hoc deadline could wait up to a week to close`);
+
+  // Order matters: finalize only picks up FINALIZING, which is the state close
+  // produces. Sharing one trigger keeps them in step — n8n sends the items this
+  // node returns through the HTTP node in order.
+  assert.equal(ownerOf("week-finalize"), closeOwner,
+    "week-finalize must ride the same tick as week-close, after it");
+  const jobs = [...code.matchAll(/'([^']+)':\s*\[([^\]]*)\]/g)].find(([, name]) => name === closeOwner)[2];
+  assert.ok(jobs.indexOf("'week-close'") < jobs.indexOf("'week-finalize'"),
+    "close must be dispatched before finalize, or finalize runs a tick behind");
+
+  const fallback = JSON.parse(readText("vercel.json")).crons;
+  const scheduleOf = (path) => fallback.find((cron) => cron.path === path)?.schedule;
+  assert.ok(firesPerWeek(scheduleOf("/api/cron/week-close")) >= 7,
+    "the Vercel fallback still closes weekly; it is coarse by plan, but it should not be the thing that delays a week");
+});
