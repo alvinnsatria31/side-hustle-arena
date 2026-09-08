@@ -1,4 +1,5 @@
 {
+  "id": "arena-scheduler-trigger",
   "name": "Arena scheduler (trigger only)",
   "meta": {
     "description": "n8n only says WHEN. Arena does the work: generates and publishes the weekly project, closes and finalizes the week. No payload here ever carries a score. Contract: docs/backend/N8N_TRIGGER_ONLY.md",

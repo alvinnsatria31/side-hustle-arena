@@ -1,4 +1,5 @@
 {
+  "id": "arena-grading-claim-lease",
   "name": "Arena grading (claim/lease)",
   "meta": {
     "description": "Claims one Arena review job, grades only the sources that job returned, then closes that same lease. Contract: docs/backend/N8N_GRADING_WORKFLOW.md. Never posts a final score - the backend computes it.",
