@@ -149,7 +149,24 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
   }
 
   // --- jobs sources -------------------------------------------------------
-  const sources = await db.select().from(jobSources);
+  // Read defensively. This table arrived with the Jobs pipeline, and a database
+  // that has not run that migration yet throws here — which used to take the
+  // whole console down with it, including the pages an operator would use to
+  // diagnose the very drift causing it. A console that cannot be opened during
+  // an incident is worse than one panel reporting itself unavailable.
+  let sources: Array<typeof jobSources.$inferSelect> = [];
+  let sourcesReadable = true;
+  try {
+    sources = await db.select().from(jobSources);
+  } catch {
+    sourcesReadable = false;
+    signals.push({
+      key: "jobs-sources-unreadable",
+      level: "ALERT",
+      detail: "Tabel sumber lowongan tidak bisa dibaca — biasanya berarti migrasi database produksi tertinggal dari kode.",
+      action: "Jalankan `npm run db:migrate` terhadap DATABASE_URL produksi, lalu muat ulang halaman ini.",
+    });
+  }
   for (const source of sources.filter((row) => row.isActive)) {
     const health = sourceHealth(source, now);
     if (health === "HEALTHY") continue;
@@ -222,6 +239,7 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
       held: emailHeld?.count ?? 0,
       agingPastHalfWindow: emailAging?.count ?? 0,
     },
+    jobsSourcesReadable: sourcesReadable,
     jobsSources: sources.map((source) => ({
       slug: source.slug,
       name: source.name,
