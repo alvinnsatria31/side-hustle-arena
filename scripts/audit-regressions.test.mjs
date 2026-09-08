@@ -20,7 +20,12 @@ function fakeDb(selections) {
       return chain;
     },
     insert: (table) => ({ values: (value) => { writes.push({ table, value }); return Promise.resolve(); } }),
-    update: (table) => ({ set: (value) => ({ where: async () => { writes.push({ table, value }); } }) }),
+    update: (table) => ({ set: (value) => ({ where: (predicate) => {
+      writes.push({ table, value, predicate });
+      const chain = Promise.resolve([]);
+      chain.returning = () => Promise.resolve([]);
+      return chain;
+    } }) }),
   };
   return db;
 }
@@ -49,7 +54,8 @@ test('manual override resolves disagreement and preserves the original AI score'
 test('targeted webhook lease includes the requested job and respects retry availability', async () => {
   const db = fakeDb([[]]);
   await claimReviewJob('worker', new Date('2026-09-05T00:00:00Z'), db, 'job-B');
-  const query = new PgDialect().sqlToQuery(db.predicates[0]);
+  // predicates[0] is now the abandoned-lease sweep that runs before the claim.
+  const query = new PgDialect().sqlToQuery(db.predicates.at(-1));
   assert.ok(query.params.includes('job-B'));
   assert.match(query.sql, /available_at/);
 });

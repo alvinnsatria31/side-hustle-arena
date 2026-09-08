@@ -8,6 +8,16 @@ const label = z.string().trim().min(2).max(200);
 const rubricSchema = z.object({
   name: label, description: text, weight: z.number().positive().max(100),
   maxScore: z.number().positive().max(100), reviewInstruction: text,
+  /**
+   * Which skill this criterion measures. Optional, and validated against the
+   * division's skill list when present — an unattributed criterion is honest,
+   * an attribution to a skill the project does not claim is a content bug.
+   *
+   * Outside `rubricHash` on purpose: attribution is editorial metadata, so
+   * adding it to an existing project must not read as tampering with a frozen
+   * base rubric.
+   */
+  skillId: z.uuid().nullish(),
 }).strict();
 
 export const packageSchema = z.object({
@@ -40,6 +50,38 @@ export type GenerationContext = {
   weekCode?: string; divisionName?: string;
 };
 export type LibraryEntry = { projectId: string; tag: "HIGH_QUALITY" | "EVERGREEN"; package: unknown };
+
+/**
+ * Markers that say "a human still has to write this".
+ *
+ * The bootstrap script fills fields a legacy project never had — case
+ * background, role description, the ten fingerprint facets — with an obvious
+ * marker rather than inventing curriculum prose, which is the right call. What
+ * was wrong was tagging the result HIGH_QUALITY: that put it straight into the
+ * fallback pool the generator publishes from when no provider is available, so
+ * a participant could have opened a brief whose mission read
+ * "[PLACEHOLDER] Misi belum ditulis".
+ *
+ * Structural validity and editorial readiness are different questions. This
+ * answers the second one.
+ */
+const PLACEHOLDER_MARKERS = [/\[PLACEHOLDER\]/i, /\bTBD\b/, /\bTODO\b/, /\bLOREM IPSUM\b/i, /<[A-Z_]{3,}>/];
+
+/** Every field of a package a reader would actually see. */
+function editorialFields(p: ProjectPackage): string[] {
+  return [
+    p.title, p.shortDescription, p.caseBackground, p.roleDescription, p.objective, p.mission,
+    ...p.rubric.flatMap((criterion) => [criterion.name, criterion.description, criterion.reviewInstruction]),
+    ...p.requirements.flatMap((requirement) => [requirement.label, requirement.instructions]),
+    ...p.resources.map((resource) => resource.label),
+    ...Object.values(p.fingerprint),
+  ];
+}
+
+/** Which visible fields still carry an unwritten marker. Empty means publishable. */
+export function placeholderFields(p: ProjectPackage): string[] {
+  return editorialFields(p).filter((value) => PLACEHOLDER_MARKERS.some((marker) => marker.test(value)));
+}
 export type GenerationProvider = {
   readonly name: string;
   generate(input: { context: GenerationContext; history: unknown[]; attempt: number; signal: AbortSignal }): Promise<unknown>;
@@ -59,7 +101,13 @@ export function rubricHash(rubric: BaseCriterion[]) {
   return contentHash(rubric.map(({ name, weight, maxScore }) => ({ name, weight, maxScore })));
 }
 
-export function validatePackage(value: unknown, context: GenerationContext): ProjectPackage {
+/**
+ * `allowPlaceholders` exists for exactly one caller: registering a
+ * needs-curation library template, whose only job is to freeze a division's
+ * base rubric so generation can start at all. Nothing that publishes, approves
+ * or generates content may pass it.
+ */
+export function validatePackage(value: unknown, context: GenerationContext, options: { allowPlaceholders?: boolean } = {}): ProjectPackage {
   const result = packageSchema.safeParse(value);
   if (!result.success) throw new ArenaDomainError("VALIDATION_ERROR", "Project package failed validation.", {
     issues: result.error.issues.map(({ path, message }) => ({ path: path.join("."), message })),
@@ -68,6 +116,10 @@ export function validatePackage(value: unknown, context: GenerationContext): Pro
   const invalid = (message: string) => { throw new ArenaDomainError("VALIDATION_ERROR", message); };
   if (p.divisionId !== context.divisionId) invalid("Package division does not match the requested division.");
   if (p.skills.some((s) => !context.skillIds.includes(s.skillId)) || new Set(p.skills.map((s) => s.skillId)).size !== p.skills.length) invalid("Unknown or duplicate skills.");
+  // A criterion may only be attributed to a skill the project actually claims,
+  // or finalization would write evidence for a skill the brief never mentions.
+  const claimed = new Set(p.skills.map((s) => s.skillId));
+  if (p.rubric.some((r) => r.skillId && !claimed.has(r.skillId))) invalid("A rubric criterion is attributed to a skill this project does not list.");
   if (rubricHash(p.rubric) !== rubricHash(context.baseRubric)) invalid("Base rubric criteria, order, weights and maximum scores are frozen.");
   if (new Set(p.rubric.map((r) => normalize(r.name))).size !== p.rubric.length) invalid("Duplicate rubric criteria.");
   if (!p.requirements.some((r) => r.required)) invalid("At least one deliverable is required.");
@@ -80,6 +132,10 @@ export function validatePackage(value: unknown, context: GenerationContext): Pro
   }
   const instructions = [p.mission, p.caseBackground, p.objective, ...p.requirements.map((r) => r.instructions)].join(" ");
   if (/\b(must|required|wajib|harus)\b.{0,50}\b(confidential|rahasia|paid subscription|berbayar|video)\b/i.test(instructions)) invalid("Project requires unsupported or restricted materials.");
+  if (!options.allowPlaceholders) {
+    const unwritten = placeholderFields(p);
+    if (unwritten.length) invalid(`Package still contains unwritten placeholder content in ${unwritten.length} field(s); the first is "${unwritten[0].slice(0, 80)}".`);
+  }
   return p;
 }
 
@@ -135,7 +191,15 @@ export async function chooseCandidate(input: {
     try {
       return { source: "library" as const, sourceProjectId: entry.projectId, libraryTag: entry.tag,
         package: validate(entry.package), attempts, rejectedLibrary };
-    } catch { rejectedLibrary.push({ projectId: entry.projectId, reason: "invalid_or_duplicate" }); }
+    } catch (error) {
+      // Keep the actual reason. "invalid_or_duplicate" told an operator staring
+      // at a held week nothing about whether the template was a duplicate, was
+      // structurally broken, or was still full of unwritten placeholder text.
+      rejectedLibrary.push({
+        projectId: entry.projectId,
+        reason: error instanceof ArenaDomainError ? error.message : "invalid_or_duplicate",
+      });
+    }
   }
   return { source: "failed" as const, attempts, rejectedLibrary };
 }

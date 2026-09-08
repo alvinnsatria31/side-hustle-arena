@@ -51,13 +51,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 9 * * 0"
+              "expression": "0 9-20 * * 0"
             }
           ]
         }
       },
       "id": "tick-generate",
-      "name": "Sunday 09:00 WIB",
+      "name": "Sunday hourly 09:00-20:00 WIB",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -131,7 +131,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n//\n// reviews-run is deliberately ABSENT. Reviews are owned by the grading\n// workflow, which claims from the same queue; scheduling both here would put\n// two systems on one queue for no gain.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\nconst byTrigger = {\n  'Daily 08:00 WIB': ['email-flush', 'week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday 09:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
+        "jsCode": "// Map whichever trigger fired to the Arena jobs it owns.\n//\n// reviews-run is deliberately ABSENT. Reviews are owned by the grading\n// workflow, which claims from the same queue; scheduling both here would put\n// two systems on one queue for no gain.\n// Every job is idempotent and self-gating: it finds its own work and reports\n// `skipped` when there is none, so firing more often than needed is safe and\n// firing late is recoverable.\n//\n// Two cadences are load-bearing rather than cosmetic:\n//   email-flush every 15 minutes, because a failed message may only be retried\n//     inside the provider's 23h idempotency window and the backoff ladder needs\n//     roughly 7.5h of ticks to exhaust its six attempts. A daily flush gave a\n//     message ONE attempt before it expired.\n//   project-generate hourly through the Sunday window, because six divisions do\n//     not fit in one 60s invocation; each tick generates what it has budget for\n//     and reports `skipped` for divisions already prepared.\n//   jobs-sync every four hours, offset off the hour so it does not collide with\n//     the publication tick. Each source carries its own sync interval and the\n//     job only picks up the ones that are due, so a more frequent trigger costs\n//     nothing and a source can be tuned without touching this workflow.\nconst byTrigger = {\n  'Every 15 minutes': ['email-flush'],\n  'Every 4 hours': ['jobs-sync'],\n  'Daily 08:00 WIB': ['week-notifications'],\n  'Daily 01:30 WIB': ['session-cleanup', 'storage-cleanup'],\n  'Sunday hourly 09:00-20:00 WIB': ['project-generate'],\n  'Hourly project publication': ['project-drop'],\n  'Saturday 00:05 WIB': ['week-close'],\n  'Weekend every 2h': ['week-finalize'],\n};\n\n// $prevNode.name is the trigger that started this execution.\nconst source = $prevNode.name;\nconst jobs = byTrigger[source];\nif (!jobs) throw new Error(`No Arena jobs mapped for trigger \"${source}\"`);\n\nreturn jobs.map((job) => ({ json: { job, source } }));"
       },
       "id": "route",
       "name": "Which jobs are due",
@@ -187,6 +187,46 @@
         180,
         180
       ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "b7c1a2d4-5e6f-4a80-9b12-3c4d5e6f7a80",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -620,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "20 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c8d2b3e5-6f70-4b91-ac23-4d5e6f708b91",
+      "name": "Every 4 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -620,
+        1160
+      ]
     }
   ],
   "connections": {
@@ -202,17 +242,6 @@
       ]
     },
     "Daily 01:30 WIB": {
-      "main": [
-        [
-          {
-            "node": "Which jobs are due",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sunday 09:00 WIB": {
       "main": [
         [
           {
@@ -272,6 +301,39 @@
         [
           {
             "node": "Summarise the run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sunday hourly 09:00-20:00 WIB": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 4 hours": {
+      "main": [
+        [
+          {
+            "node": "Which jobs are due",
             "type": "main",
             "index": 0
           }

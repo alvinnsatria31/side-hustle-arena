@@ -26,7 +26,7 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
       balance: sql<number>`coalesce(sum(${pointLedger.amount}), 0)`.mapWith(Number),
       lifetimeEarned: sql<number>`coalesce(sum(case when ${pointLedger.amount} > 0 and ${pointLedger.entryType} not in ('ADMIN_REVERSAL', 'REWARD_REDEMPTION') and coalesce(${pointLedger.referenceType}, '') not in ('redemption', 'reward_redemption', 'redemption_refund') then ${pointLedger.amount} else 0 end), 0)`.mapWith(Number),
     }).from(pointLedger).where(eq(pointLedger.userId, userId)),
-    db.select({ id: skillEvidence.id, skillId: skills.id, name: skills.name, score: skillEvidence.score, summary: skillEvidence.evidenceSummary, projectSlug: projects.slug, projectTitle: projects.title, weekCode: weeks.weekCode })
+    db.select({ id: skillEvidence.id, skillId: skills.id, name: skills.name, score: skillEvidence.score, attribution: skillEvidence.attribution, criterionCount: skillEvidence.criterionCount, summary: skillEvidence.evidenceSummary, projectSlug: projects.slug, projectTitle: projects.title, weekCode: weeks.weekCode })
       .from(skillEvidence)
       .innerJoin(weeklyRankings, and(eq(skillEvidence.reviewId, weeklyRankings.reviewId), eq(skillEvidence.userId, weeklyRankings.userId), eq(skillEvidence.weekId, weeklyRankings.weekId), eq(skillEvidence.projectId, weeklyRankings.projectId)))
       .innerJoin(weeks, and(eq(skillEvidence.weekId, weeks.id), eq(weeks.status, "FINALIZED")))

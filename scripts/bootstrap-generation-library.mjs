@@ -19,6 +19,13 @@
  * (which is what generation actually needs) is established immediately and the
  * wording can be corrected afterwards in the console's project editor.
  *
+ * BECAUSE the text is placeholder, the template is registered NEEDS_CURATION,
+ * never HIGH_QUALITY. It freezes the rubric and nothing more: the generator
+ * will not select it as a fallback candidate, and the strict validator refuses
+ * to let anyone re-tag it as usable until every marker is replaced. Running
+ * this script therefore unblocks generation without ever making unwritten
+ * content publishable — which is what the old HIGH_QUALITY tag quietly did.
+ *
  * Run once per database:
  *   npm run db:bootstrap:library
  *
@@ -124,14 +131,18 @@ async function main() {
     try {
       await registerLibraryTemplate({
         projectId: project.id,
-        tag: "HIGH_QUALITY",
+        // NOT HIGH_QUALITY. This package is structurally valid but its prose is
+        // still placeholder text; NEEDS_CURATION freezes the base rubric — the
+        // only thing generation actually needs from it — while keeping it out
+        // of the fallback pool, so it can never reach a participant unedited.
+        tag: "NEEDS_CURATION",
         package: packageFor(project, skills, rubric, requirements),
         reason: "Bootstrap base rubric for project generation",
         actorSubject,
         actorType: "ADMIN",
       });
       registered += 1;
-      console.log(`OK    ${division.slug} — frozen from "${project.title}"`);
+      console.log(`OK    ${division.slug} — base rubric frozen from "${project.title}" (template tagged NEEDS_CURATION; edit its text and re-tag before it can be used as generation fallback)`);
     } catch (error) {
       blocked.push(division.slug);
       console.log(`BLOCK ${division.slug} — ${error?.message ?? error}`);

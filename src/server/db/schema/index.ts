@@ -4,6 +4,7 @@ export * from "./arena-core";
 export * from "./automation";
 export * from "./enums";
 export * from "./identity";
+export * from "./jobs";
 export * from "./notifications";
 export * from "./ops";
 export * from "./projects";

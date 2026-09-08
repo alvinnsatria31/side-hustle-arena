@@ -15,6 +15,7 @@ import type { adminJobCatalogue, automationReadiness, listAutomationRuns } from 
 import type { launchProjectRun } from '@/server/admin/launch';
 import type { listAuditLog } from '@/server/admin/audit';
 import type { listAdminDivisions, listAdminProjects } from '@/server/admin/content';
+import type { getJobSourceStatus, syncJobSource } from '@/server/career/jobs/sync-service';
 import type { previewProject } from '@/server/generation/service';
 
 /** Every `Date` becomes an ISO string over the wire; pages format them themselves. */
@@ -235,6 +236,20 @@ export const runAdminJobClient = (job: string) =>
   adminRequest<{ result: AdminJobResult }>('/api/internal/admin/jobs', {
     method: 'POST',
     body: JSON.stringify({ job }),
+  }).then((r) => r.result);
+
+// ---------------------------------------------------------- jobs pipeline
+
+export type AdminJobSource = Serialized<Awaited<ReturnType<typeof getJobSourceStatus>>[number]>;
+export type AdminJobSyncOutcome = Serialized<Awaited<ReturnType<typeof syncJobSource>>>;
+
+export const getAdminJobSources = () =>
+  adminRequest<{ sources: AdminJobSource[] }>('/api/internal/admin/job-sources').then((r) => r.sources);
+
+export const runAdminJobSourceAction = (sourceId: string, action: 'sync' | 'enable' | 'disable') =>
+  adminRequest<{ result: AdminJobSyncOutcome | { id: string; slug: string; isActive: boolean } }>('/api/internal/admin/job-sources', {
+    method: 'POST',
+    body: JSON.stringify({ sourceId, action }),
   }).then((r) => r.result);
 
 // --------------------------------------------------------------- projects

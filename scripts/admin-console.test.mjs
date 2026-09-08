@@ -87,15 +87,15 @@ async function payload(response) {
 // database, so it is recorded rather than run.
 const schedulerMock = {
   JOBS: Object.fromEntries(["week-close", "week-finalize", "email-flush", "week-notifications", "session-cleanup",
-    "storage-cleanup", "project-drop", "project-generate", "reviews-run"]
+    "storage-cleanup", "project-drop", "project-generate", "reviews-run", "jobs-sync"]
     .map(job => [job, async () => { calls.push(job); return { job, done: true, detail: { skipped: "test" } }; }])),
 };
 const jobMocks = {
   "@/server/scheduler/service": schedulerMock,
   "@/server/reviews/audit": { writeAudit: async () => {} },
   "@/server/db/client": { getDb: () => ({}) },
-  "@/server/db/schema": { runs: {} },
-  "drizzle-orm": { desc: () => {} },
+  "@/server/db/schema": { runs: {}, jobSources: {} },
+  "drizzle-orm": { desc: () => {}, eq: () => {}, sql: () => {} },
 };
 
 test("every scheduled job the timers can call is mapped to an admin scope", () => {

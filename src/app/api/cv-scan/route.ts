@@ -44,8 +44,21 @@ export async function POST(request: Request) {
     console.warn("cv-scan rate limiter fell back to in-memory counting; the shared counter is unavailable.");
   }
   if (!limit.allowed) {
+    if (limit.scope === "global") {
+      // Not this caller's fault, and worth saying differently: the endpoint has
+      // spent its hourly budget, which is an operational event rather than a
+      // misbehaving visitor.
+      console.warn("cv-scan refused: the endpoint's hourly spend cap is exhausted.");
+    }
     return Response.json(
-      { error: { code: "RATE_LIMITED", message: "Terlalu banyak permintaan. Coba lagi nanti." } },
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: limit.scope === "global"
+            ? "Kuota pemindaian CV untuk jam ini sudah penuh. Coba lagi nanti."
+            : "Terlalu banyak permintaan. Coba lagi nanti.",
+        },
+      },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(limit.retryAfterSeconds) } },
     );
   }

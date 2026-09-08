@@ -54,6 +54,15 @@ export const projectSkills = arena.table("project_skills", {
 export const projectRubricCriteria = arena.table("project_rubric_criteria", {
   id: uuid("id").defaultRandom().primaryKey(),
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  /**
+   * Which skill this criterion measures, when a curator has said so.
+   *
+   * Nullable because most existing rubrics predate the link, and an unlinked
+   * criterion is an honest "not attributed yet" — finalization records the
+   * project score for that skill and labels it PROJECT rather than pretending
+   * the criterion measured it.
+   */
+  skillId: uuid("skill_id").references(() => skills.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
   weight: numeric("weight").notNull(),

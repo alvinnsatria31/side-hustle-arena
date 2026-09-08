@@ -216,10 +216,29 @@ test("upload flow: failed finalize retries clean; mixed files+links submit immut
   assert.equal(first.version.reviewAttemptNumber, 1);
 
   // Draft churn after submit cannot rewrite v1; v2 snapshots the new mix.
+  //
+  // v1 references an immutable SNAPSHOT of the file, not the draft object it
+  // was uploaded to (audit finding A01). Two consequences, and both are checked
+  // here because together they are the whole point:
+  //   - the snapshot still holds the submitted bytes, so the review is safe;
+  //   - the draft object is no longer referenced by anything, so deleting the
+  //     draft item releases it. It used to be retained, because the version row
+  //     pointed at it — which is exactly what made a replayed presigned PUT
+  //     able to change what a reviewer graded.
+  const [v1file] = await sql`
+    select storage_key, checksum, file_size_bytes from arena.submission_version_items
+    where submission_version_id = ${first.version.id} and item_type = 'FILE'`;
+  assert.ok(v1file, "the submitted version must carry its file item");
+  assert.notEqual(v1file.storage_key, grow2.storage_key, "a version must not reference the overwritable draft key");
+  assert.match(v1file.storage_key, /\/snapshots\//);
+  assert.ok(v1file.checksum, "the version must record the checksum of the frozen bytes");
+  await storageApi.headPrivateObject(v1file.storage_key);
+
   const fileItem = draft.items.find((i) => i.itemType === "FILE");
   await submissionApi.deleteArenaSubmissionItem({ userId: userA, enrollmentId: enrollmentA, itemId: fileItem.id });
-  // Referenced object survives the draft delete (retention guard).
-  await storageApi.headPrivateObject(grow2.storage_key);
+  // The snapshot survives; the draft object is released.
+  await storageApi.headPrivateObject(v1file.storage_key);
+  await assert.rejects(() => storageApi.headPrivateObject(grow2.storage_key), /not\s*found|no such key|404/i);
   const again = await submissionApi.createArenaUploadIntent({ userId: userA, enrollmentId: enrollmentA, input: { requirementId: fileReqId, filename: "v2.pdf", mimeType: "application/pdf", sizeBytes: 47 } });
   const [arow] = await sql`select storage_key from arena.upload_intents where id = ${again.intentId}`;
   orphanKeys.push(arow.storage_key);

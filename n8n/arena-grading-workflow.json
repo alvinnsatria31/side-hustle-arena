@@ -43,7 +43,7 @@
         "specifyBody": "json",
         "jsonBody": "={\"workerId\": \"n8n-grading\"}",
         "options": {
-          "timeout": 30000
+          "timeout": 90000
         }
       },
       "id": "claim",
@@ -186,9 +186,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId, workerId: 'n8n-grading', output: $json.output }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId, workerId: 'n8n-grading', model: $env.AI_REVIEW_MODEL, output: $json.output }) }}",
         "options": {
-          "timeout": 120000
+          "timeout": 90000
         }
       },
       "id": "complete",
@@ -217,7 +217,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId ?? $('Build blind prompt').first().json.jobId, workerId: 'n8n-grading', code: $json.code ?? 'MODEL_CALL_FAILED', message: ($json.message ?? 'model call failed').toString().slice(0, 500) }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 90000
         }
       },
       "id": "fail",

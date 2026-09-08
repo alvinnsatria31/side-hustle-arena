@@ -9,7 +9,12 @@ export async function cleanupUnusedObjects(
   const result = { scanned: candidates.length, eligible: 0, deleted: 0, skipped: 0, failed: 0, dryRun: options.dryRun !== false };
   const keyPattern = new RegExp(`^arena/${options.environment}/(?:snapshots/)?[a-f0-9-]{36}$`);
   for (const candidate of candidates) {
-    if (candidate.consumedAt || !Number.isFinite(candidate.expiresAt.getTime()) || !Number.isFinite(options.now.getTime())
+    // A consumed intent is NOT automatically safe. Consuming it only means a
+    // draft item was created from it; if that draft item was later deleted and
+    // the object delete failed, the bytes are orphaned in the bucket with
+    // nothing left pointing at them. `isReferenced` — not `consumedAt` — is
+    // what decides, and it is re-checked under the row lock before deletion.
+    if (!Number.isFinite(candidate.expiresAt.getTime()) || !Number.isFinite(options.now.getTime())
       || candidate.expiresAt.getTime() + UNUSED_OBJECT_GRACE_MS >= options.now.getTime()
       || !keyPattern.test(candidate.storageKey) || await dependencies.isReferenced(candidate.storageKey)) {
       result.skipped++;

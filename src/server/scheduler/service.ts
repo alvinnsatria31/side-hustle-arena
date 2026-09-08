@@ -12,8 +12,11 @@ import { cleanupExpiredUploads } from "@/server/storage/cleanup";
 import { generateWeek, prepareScheduledWeek, publishWeek } from "@/server/generation/service";
 import { createReviewProvider } from "@/server/reviews/model-router";
 import { runConfiguredReviewJob } from "@/server/reviews/worker";
+import { sweepAbandonedReviewJobs } from "@/server/reviews/queue-service";
 import { generationConfig } from "@/server/generation/core";
 import { createGenerationProvider } from "@/server/generation/ai-provider";
+import { EXECUTION_CONTRACT, createExecutionBudget, isDeadlineError } from "@/server/ops/execution-budget";
+import { hideOpeningsForInactiveSources, syncDueJobSources } from "@/server/career/jobs/sync-service";
 
 const ACTOR = "scheduler";
 
@@ -55,13 +58,17 @@ export async function runWeekClose(now = new Date()): Promise<JobResult> {
  */
 export async function runWeekFinalize(now = new Date()): Promise<JobResult> {
   const db = getDb();
+  // A job stranded past its attempt budget counts as "open" and would block
+  // finalization forever. Retire those first so the week can proceed and the
+  // affected version is visibly FAILED rather than silently pending.
+  const swept = await sweepAbandonedReviewJobs(now, db);
   const pending = await db
     .select({ id: weeks.id, weekCode: weeks.weekCode })
     .from(weeks)
     .where(eq(weeks.status, "FINALIZING"))
     .orderBy(asc(weeks.submissionDeadlineAt));
 
-  if (pending.length === 0) return { job: "week-finalize", done: true, detail: { skipped: "no week awaiting finalization" } };
+  if (pending.length === 0) return { job: "week-finalize", done: true, detail: { skipped: "no week awaiting finalization", sweptJobs: swept.failed.length } };
 
   const finalized: string[] = [];
   const waiting: string[] = [];
@@ -77,30 +84,77 @@ export async function runWeekFinalize(now = new Date()): Promise<JobResult> {
       throw error;
     }
   }
-  return { job: "week-finalize", done: true, detail: { finalized, waiting } };
+  return { job: "week-finalize", done: true, detail: { finalized, waiting, sweptJobs: swept.failed.length } };
 }
 
-/** Drain queued EMAIL deliveries. No provider key configured leaves them PENDING. */
-export async function runEmailFlush(): Promise<JobResult> {
-  return { job: "email-flush", done: true, detail: await flushPendingEmails({ limit: 100 }) };
+/**
+ * Drain queued EMAIL deliveries. No provider key configured leaves them PENDING.
+ *
+ * One batch is capped at 100 messages, which is not the same thing as "the
+ * backlog is empty". A single announcement to more than 100 participants used
+ * to need as many ticks as the schedule happened to provide, and the schedule
+ * was daily — so a backlog could outlive the 23h idempotency window that
+ * decides whether a failed message may be retried at all. The tick now keeps
+ * draining while there is work and budget, and reports what it left behind.
+ */
+export async function runEmailFlush(_now = new Date(), deps = { flush: flushPendingEmails, budgetMs: EXECUTION_CONTRACT.outboxBudgetMs, clock: () => Date.now() }): Promise<JobResult> {
+  const budget = createExecutionBudget(deps.budgetMs, { now: deps.clock });
+  const totals = { sent: 0, failed: 0, skipped: 0, held: 0 };
+  let batches = 0;
+  let unconfigured = false;
+  let drained = false;
+  while (budget.hasRoomFor(2_000)) {
+    const batch = await deps.flush({ limit: 100 });
+    batches += 1;
+    if (batch.unconfigured) { unconfigured = true; break; }
+    for (const key of ["sent", "failed", "skipped", "held"] as const) totals[key] += batch[key] ?? 0;
+    if ((batch.sent + batch.failed + batch.skipped + batch.held) === 0) { drained = true; break; }
+  }
+  return {
+    job: "email-flush",
+    done: true,
+    detail: { ...totals, batches, ...(unconfigured ? { unconfigured: true } : {}), backlogRemaining: !unconfigured && !drained },
+  };
 }
 
-/** Recover missed broadcasts from durable week state; events dedupe across ticks. */
-export async function runWeekNotifications(now = new Date()): Promise<JobResult> {
+/**
+ * Recover missed broadcasts from durable week state; events dedupe across ticks.
+ *
+ * One broadcast batch covers at most 100 recipients, so a cohort larger than
+ * that needs several rounds. Waiting for the next tick was fine when ticks were
+ * frequent and wrong when they were daily — a deadline reminder that reaches
+ * half a cohort a day late is not a reminder. Rounds now repeat inside the
+ * invocation while a batch comes back full and the budget allows.
+ */
+export async function runWeekNotifications(now = new Date(), deps = { budgetMs: EXECUTION_CONTRACT.outboxBudgetMs, clock: () => Date.now(), broadcast: broadcastWeekNotification }): Promise<JobResult> {
+  const budget = createExecutionBudget(deps.budgetMs, { now: deps.clock });
   const open = await getDb().select().from(weeks).where(and(eq(weeks.status, "OPEN"),
     lte(weeks.opensAt, now), gt(weeks.submissionDeadlineAt, now))).orderBy(asc(weeks.opensAt));
   const results = [];
+  let incomplete = false;
   for (const week of open) {
     for (const notice of scheduledWeekNotices(week, now)) {
-      try {
-        results.push({ weekId: week.id, type: notice.type, ...await broadcastWeekNotification({ ...notice, now }) });
-      } catch (error) {
-        if (!(error instanceof ArenaDomainError)) throw error;
-        results.push({ weekId: week.id, type: notice.type, failed: 1, message: error.message });
+      let rounds = 0;
+      for (;;) {
+        if (!budget.hasRoomFor(2_000)) { incomplete = true; break; }
+        try {
+          const result = await deps.broadcast({ ...notice, now });
+          rounds += 1;
+          results.push({ weekId: week.id, type: notice.type, round: rounds, ...result });
+          if (!result.batchFull) break;
+        } catch (error) {
+          if (!(error instanceof ArenaDomainError)) throw error;
+          results.push({ weekId: week.id, type: notice.type, failed: 1, message: error.message });
+          break;
+        }
       }
     }
   }
-  return { job: "week-notifications", done: results.every((result) => !result.failed && !("batchFull" in result && result.batchFull)), detail: { results } };
+  return {
+    job: "week-notifications",
+    done: !incomplete && results.every((result) => !result.failed && !("batchFull" in result && result.batchFull)),
+    detail: { results, ...(incomplete ? { stopped: "time budget reached; the next tick continues" } : {}) },
+  };
 }
 
 /**
@@ -129,31 +183,48 @@ const projectJobs = {
   provider: createGenerationProvider,
   generate: generateWeek,
   publish: publishWeek,
+  budgetMs: EXECUTION_CONTRACT.drainBudgetMs,
+  clock: () => Date.now(),
   due: async (now: Date) => getDb().select({ id: weeks.id, weekCode: weeks.weekCode }).from(weeks)
     .where(and(inArray(weeks.status, ["DRAFT", "PREVIEW", "SCHEDULED"]),
       lte(weeks.opensAt, now), gt(weeks.submissionDeadlineAt, now)))
     .orderBy(asc(weeks.opensAt)),
 };
 
-/** Prepare Sunday's preview. Publication is a separate, opening-time-gated job. */
+/**
+ * Prepare Sunday's preview. Publication is a separate, opening-time-gated job.
+ *
+ * Bounded by the invocation budget and safe to re-run: divisions already
+ * prepared report `skipped`, so repeated ticks during the generation window
+ * finish the week without ever regenerating what is already there.
+ */
 export async function runProjectGenerate(now = new Date(), deps = projectJobs): Promise<JobResult> {
   const job = "project-generate";
   if (!deps.config().enabled) return { job, done: false, detail: { skipped: "generation disabled" } };
   const actor = { actorSubject: ACTOR, actorType: "AUTOMATION" as const };
+  const budget = createExecutionBudget(deps.budgetMs, { now: deps.clock });
   try {
     const prepared = await deps.prepare({ ...actor, now });
     if (!("weekId" in prepared)) {
       return { job, done: false, detail: { skipped: prepared.skipped } };
     }
     const provider = deps.provider() ?? undefined;
-    const generated = await deps.generate({ ...actor, weekId: prepared.weekId, provider, now });
+    const generated = await deps.generate({ ...actor, weekId: prepared.weekId, provider, now, budget });
+    const deferred = "deferredDivisions" in generated ? generated.deferredDivisions ?? 0 : 0;
     return {
-      job, done: generated.results.length > 0 && generated.results.every((result) => !("failed" in result)),
-      detail: { weekId: prepared.weekId, created: prepared.created, provider: provider?.name ?? "library-only", results: generated.results },
+      job,
+      done: deferred === 0 && generated.results.length > 0 && generated.results.every((result) => !("failed" in result)),
+      detail: {
+        weekId: prepared.weekId, created: prepared.created, provider: provider?.name ?? "library-only", results: generated.results,
+        ...(deferred ? { deferredDivisions: deferred, stopped: "time budget reached; the next tick continues" } : {}),
+      },
     };
   } catch (error) {
     if (error instanceof ArenaDomainError) {
       return { job, done: false, detail: { failed: error.code, message: error.message } };
+    }
+    if (isDeadlineError(error)) {
+      return { job, done: false, detail: { stopped: "time budget reached; the next tick continues" } };
     }
     throw error;
   }
@@ -197,7 +268,7 @@ export async function runStorageCleanup(): Promise<JobResult> {
  * trigger continue. Frequent small ticks, not one long drain.
  */
 const REVIEW_DRAIN_MAX_JOBS = Number(process.env.ARENA_REVIEW_DRAIN_MAX_JOBS ?? 3);
-const REVIEW_DRAIN_BUDGET_MS = Number(process.env.ARENA_REVIEW_DRAIN_BUDGET_MS ?? 45_000);
+const REVIEW_DRAIN_BUDGET_MS = Number(process.env.ARENA_REVIEW_DRAIN_BUDGET_MS ?? EXECUTION_CONTRACT.drainBudgetMs);
 
 const reviewJobs = {
   provider: () => createReviewProvider("review"),
@@ -206,18 +277,6 @@ const reviewJobs = {
   budgetMs: REVIEW_DRAIN_BUDGET_MS,
   clock: () => Date.now(),
 };
-
-/**
- * Did this throw because a deadline cut it short?
- *
- * `AbortSignal.timeout` rejects with a `TimeoutError` DOMException and an
- * explicit abort with `AbortError`; undici surfaces both through fetch. Node
- * builds without a global `DOMException` still name their errors the same way,
- * so the name is what we match on rather than the class.
- */
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-}
 
 /**
  * Review whatever is queued, using the configured AI provider (PRD §20, §43).
@@ -259,7 +318,7 @@ export async function runReviewsRun(_now = new Date(), deps = reviewJobs): Promi
       // its own provider ceiling instead, overrunning the invocation.
       completed = await deps.runOne({ budgetMs: remainingMs });
     } catch (error) {
-      if (isAbortError(error) && deps.clock() >= deadline) {
+      if (isDeadlineError(error) && deps.clock() >= deadline) {
         // Out of budget, not broken. The job was handed back for retry, so the
         // next tick picks it up — reporting this as a failure would make an
         // ordinary busy tick look like a provider outage.
@@ -283,6 +342,45 @@ export async function runReviewsRun(_now = new Date(), deps = reviewJobs): Promi
   };
 }
 
+/**
+ * Pull new openings from every connected jobs provider.
+ *
+ * Idempotent at three levels, because this is the job most likely to be
+ * triggered twice: a per-source lease means two workers never page one feed at
+ * once, the run row is keyed so a repeated trigger resumes rather than forks,
+ * and the opening upsert is keyed on (source, external id) so re-reading a
+ * page updates instead of duplicating.
+ *
+ * "No sources configured" is reported as skipped, not as a failure — an
+ * environment with no provider connected should stay quiet rather than alarm
+ * every tick.
+ */
+export async function runJobsSync(now = new Date(), deps = { sync: syncDueJobSources, hide: hideOpeningsForInactiveSources, budgetMs: EXECUTION_CONTRACT.drainBudgetMs, clock: () => Date.now() }): Promise<JobResult> {
+  const job = "jobs-sync";
+  const budget = createExecutionBudget(deps.budgetMs, { now: deps.clock });
+  // A source switched off should stop being recommended promptly, without
+  // claiming the roles it listed have all closed.
+  const hidden = await deps.hide(undefined, now);
+  const { synced, deferred } = await deps.sync({ triggeredBy: ACTOR, now, budget });
+  if (!synced.length && !deferred) {
+    return { job, done: true, detail: { skipped: "no active jobs source is due", hiddenFromDisabledSources: hidden } };
+  }
+  const failed = synced.filter((outcome) => outcome.status === "FAILED");
+  return {
+    job,
+    done: failed.length === 0 && deferred === 0,
+    detail: {
+      hiddenFromDisabledSources: hidden,
+      results: synced.map((outcome) => ({
+        source: outcome.sourceSlug, status: outcome.status, ...outcome.totals,
+        ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
+        ...(outcome.skipped ? { skipped: outcome.skipped } : {}),
+      })),
+      ...(deferred ? { deferredSources: deferred, stopped: "time budget reached; the next tick continues" } : {}),
+    },
+  };
+}
+
 export const JOBS = {
   "week-close": runWeekClose,
   "week-finalize": runWeekFinalize,
@@ -293,6 +391,7 @@ export const JOBS = {
   "project-drop": runProjectDrop,
   "project-generate": runProjectGenerate,
   "reviews-run": runReviewsRun,
+  "jobs-sync": runJobsSync,
 } satisfies Record<string, (now?: Date) => Promise<JobResult>>;
 
 export type JobName = keyof typeof JOBS;

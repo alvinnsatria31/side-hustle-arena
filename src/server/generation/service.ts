@@ -5,13 +5,22 @@ import { divisions, featureFlags, logs, projects, projectRubricCriteria, project
 import { ArenaDomainError } from "@/server/arena/errors";
 import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, rubricHash, validatePackage, weeklyWindow,
   type BaseCriterion, type GenerationProvider, type LibraryEntry, type ProjectPackage } from "./core";
+import { EXECUTION_CONTRACT, type ExecutionBudget } from "@/server/ops/execution-budget";
 
 type Db = ReturnType<typeof getDb>;
 type Store = Pick<Db, "select" | "insert" | "update" | "delete" | "execute">;
 type Actor = { actorSubject: string; actorType?: "ADMIN" | "AUTOMATION" };
 type Options = Actor & { db?: Db; now?: Date };
 type ValidationRecord = { package: ProjectPackage; contentHash: string; baseRubricHash: string; source: string; sourceProjectId?: string };
-type LibraryRecord = { tag: "HIGH_QUALITY" | "EVERGREEN" | "RETIRED"; package: ProjectPackage };
+/**
+ * NEEDS_CURATION is a real state, not a synonym for RETIRED: the template is
+ * structurally valid and its rubric is authoritative (that is what unblocks
+ * generation for the division), but its prose is still unwritten. It is
+ * excluded from the fallback pool, so it can never be published to a
+ * participant, and it becomes usable only when a curator replaces the
+ * placeholder text and re-tags it — which the strict validator enforces.
+ */
+type LibraryRecord = { tag: "HIGH_QUALITY" | "EVERGREEN" | "NEEDS_CURATION" | "RETIRED"; package: ProjectPackage };
 
 // The global transaction lock covers only local writes; provider calls happen outside it.
 async function locked<T>(db: Db, fn: (tx: Store) => Promise<T>): Promise<T> {
@@ -65,7 +74,7 @@ async function storedPackage(db: Store, project: typeof projects.$inferSelect, s
     mission: project.mission ?? "", objective: project.objective ?? "", difficulty: project.difficulty,
     estimatedMinutes: project.estimatedMinutes ?? 0,
     skills: projectSkillRows.map((s) => ({ skillId: s.skillId, weight: Number(s.weight ?? 1) })),
-    rubric: rubric.map((r) => ({ name: r.name, description: r.description ?? "", weight: Number(r.weight), maxScore: Number(r.maxScore), reviewInstruction: r.reviewInstruction ?? "" })),
+    rubric: rubric.map((r) => ({ name: r.name, description: r.description ?? "", weight: Number(r.weight), maxScore: Number(r.maxScore), reviewInstruction: r.reviewInstruction ?? "", skillId: r.skillId })),
     requirements: requirements.map((r) => ({ label: r.label, type: r.type as "FILE" | "LINK", required: r.required,
       minItems: r.minItems, maxItems: r.maxItems, allowedMimeTypes: r.allowedMimeTypes ?? [], allowedLinkTypes: r.allowedLinkTypes ?? [], instructions: r.instructions ?? "" })) as ProjectPackage["requirements"],
     resources: supplemental?.resources ?? [], fingerprint: supplemental?.fingerprint as ProjectPackage["fingerprint"],
@@ -99,7 +108,10 @@ async function libraryEntries(db: Store, divisionId: string): Promise<LibraryEnt
     if (!row.entityId || seen.has(row.entityId)) continue;
     seen.add(row.entityId);
     const record = row.metadata as LibraryRecord;
-    if (record.tag !== "RETIRED" && record.package.divisionId === divisionId) result.push({ projectId: row.entityId, tag: record.tag, package: record.package });
+    // Only curated tags may be chosen as a generation candidate.
+    if ((record.tag === "HIGH_QUALITY" || record.tag === "EVERGREEN") && record.package.divisionId === divisionId) {
+      result.push({ projectId: row.entityId, tag: record.tag, package: record.package });
+    }
   }
   return result;
 }
@@ -124,7 +136,7 @@ async function writeContent(db: Store, projectId: string, p: ProjectPackage) {
   await db.delete(projectRubricCriteria).where(eq(projectRubricCriteria.projectId, projectId));
   await db.delete(projectSubmissionRequirements).where(eq(projectSubmissionRequirements.projectId, projectId));
   await db.insert(projectSkills).values(p.skills.map((s) => ({ projectId, skillId: s.skillId, weight: String(s.weight) })));
-  await db.insert(projectRubricCriteria).values(p.rubric.map((r, sortOrder) => ({ ...r, projectId, sortOrder, weight: String(r.weight), maxScore: String(r.maxScore) })));
+  await db.insert(projectRubricCriteria).values(p.rubric.map((r, sortOrder) => ({ ...r, projectId, sortOrder, weight: String(r.weight), maxScore: String(r.maxScore), skillId: r.skillId ?? null })));
   await db.insert(projectSubmissionRequirements).values(p.requirements.map((r, sortOrder) => ({ ...r, projectId, sortOrder })));
 }
 
@@ -152,7 +164,15 @@ export async function registerLibraryTemplate(input: Options & { projectId: stri
     }
     const frozen = await baseRubric(tx, project.divisionId);
     const skillRows = await tx.select({ id: skills.id }).from(skills);
-    const p = ordered(validatePackage(input.package ?? stored, { divisionId: project.divisionId, skillIds: skillRows.map((s) => s.id), baseRubric: frozen ?? stored.rubric }));
+    // Placeholder prose is tolerated only for a NEEDS_CURATION registration,
+    // whose purpose is to freeze the base rubric. Promoting the same template
+    // to HIGH_QUALITY or EVERGREEN runs the strict validator, so a curator
+    // cannot mark unwritten content publishable by changing one word.
+    const p = ordered(validatePackage(
+      input.package ?? stored,
+      { divisionId: project.divisionId, skillIds: skillRows.map((s) => s.id), baseRubric: frozen ?? stored.rubric },
+      { allowPlaceholders: input.tag === "NEEDS_CURATION" },
+    ));
     if (!frozen) await audit(tx, input, "rubric-frozen", "division", project.divisionId, { rubric: p.rubric.map(({ name, weight, maxScore }) => ({ name, weight, maxScore })), sourceProjectId: project.id }, now);
     await audit(tx, input, "library-tagged", "project_library", project.id, { tag: input.tag, package: p, reason: input.reason,
       contentHash: contentHash(p), baseRubricHash: rubricHash(p.rubric) }, now);
@@ -219,13 +239,31 @@ export async function generateDivision(input: Options & { weekId: string; divisi
   });
 }
 
-export async function generateWeek(input: Options & { weekId: string; divisionId?: string; provider?: GenerationProvider }) {
+/**
+ * Generate every active division for a week, resumably.
+ *
+ * Six divisions, each allowed up to three provider attempts, cannot fit in one
+ * 60s invocation — and the old loop had no idea it was inside one, so a slow
+ * provider meant the request was killed partway through with no record of how
+ * far it got. `generateDivision` is already idempotent per division (an
+ * already-prepared division reports `skipped`), so the fix is not to make this
+ * faster but to make it stop cleanly: take divisions while there is budget for
+ * one more, commit what was done, and say plainly that a later tick continues.
+ * That is why the generation trigger fires repeatedly during the Sunday
+ * window rather than once.
+ */
+export async function generateWeek(input: Options & { weekId: string; divisionId?: string; provider?: GenerationProvider; budget?: ExecutionBudget }) {
   const db = input.db ?? getDb();
   const active = await db.select().from(divisions).where(eq(divisions.isActive, true)).orderBy(asc(divisions.sortOrder));
   const selected = input.divisionId ? active.filter((d) => d.id === input.divisionId) : active;
   if (!selected.length) throw new ArenaDomainError("WEEK_NOT_READY", "No active requested divisions exist.");
   const results = [];
+  let remaining = 0;
   for (const division of selected) {
+    if (input.budget && !input.budget.hasRoomFor(EXECUTION_CONTRACT.divisionBudgetMs)) {
+      remaining = selected.length - results.length;
+      break;
+    }
     try { results.push({ divisionId: division.id, ...await generateDivision({ ...input, divisionId: division.id, db }) }); }
     catch (error) {
       if (!(error instanceof ArenaDomainError)) throw error;
@@ -233,7 +271,7 @@ export async function generateWeek(input: Options & { weekId: string; divisionId
       results.push({ divisionId: division.id, failed: error.message });
     }
   }
-  return { weekId: input.weekId, results };
+  return { weekId: input.weekId, results, ...(remaining ? { deferredDivisions: remaining } : {}) };
 }
 
 export async function previewWeek(input: { weekId: string; db?: Db }) {

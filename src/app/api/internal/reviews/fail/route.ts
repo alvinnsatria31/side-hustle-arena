@@ -12,7 +12,15 @@ const failSchema = z.object({
   message: z.string().trim().min(1).max(500),
 });
 
-/** Worker-reported failure: retries with backoff, never consumes a user attempt (PRD §42). */
+/**
+ * Worker-reported failure: retries with backoff, never consumes a user attempt
+ * (PRD §42).
+ *
+ * A callback that arrives after the job was completed or re-leased answers 200
+ * with `applied: false`. It is not an error the worker can do anything about,
+ * and returning 409 would make well-behaved workers retry a report that must
+ * never be obeyed.
+ */
 export async function POST(request: Request) {
   try {
     requireAutomationWorker(request);

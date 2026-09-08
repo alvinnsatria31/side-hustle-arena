@@ -34,14 +34,32 @@ function inferFileType(filename: string, mime: string): OfficeFileType | undefin
   return undefined;
 }
 
-export async function extractDocumentText(bytes: Buffer, filename: string, mime: string): Promise<string> {
+/** Per-call ceiling when a caller has no budget of its own to impose. */
+const DEFAULT_EXTRACTION_TIMEOUT_MS = 30_000;
+
+/**
+ * Extraction used to give itself 60s per document and 60s per image, with no
+ * knowledge of the invocation it ran inside — five items could therefore burn
+ * five minutes inside a 60s request. The caller now passes its remaining
+ * budget, and whichever deadline comes first wins.
+ */
+export async function extractDocumentText(
+  bytes: Buffer,
+  filename: string,
+  mime: string,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<string> {
   if (!bytes.length || bytes.length > 20 * 1024 * 1024) throw new Error('Invalid document size.');
+  options.signal?.throwIfAborted();
+  const deadline = AbortSignal.timeout(Math.max(1, options.timeoutMs ?? DEFAULT_EXTRACTION_TIMEOUT_MS));
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
   if (mime.startsWith('image/')) {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker(process.env.ARENA_OCR_LANGUAGE || 'eng');
-    const timer = setTimeout(() => { void worker.terminate(); }, 60000);
+    const stop = () => { void worker.terminate(); };
+    signal.addEventListener('abort', stop, { once: true });
     try { return (await worker.recognize(bytes)).data.text.trim(); }
-    finally { clearTimeout(timer); await worker.terminate(); }
+    finally { signal.removeEventListener('abort', stop); await worker.terminate(); }
   }
   if (mime === 'text/plain') return new TextDecoder('utf-8', { fatal: true }).decode(bytes).trim();
   const { parseOffice } = await import('officeparser');
@@ -51,7 +69,7 @@ export async function extractDocumentText(bytes: Buffer, filename: string, mime:
   // We always know the extension/MIME from the upload, so pass it explicitly.
   const fileType = inferFileType(filename, mime);
   const ast = await parseOffice(bytes, {
-    fileType, abortSignal: AbortSignal.timeout(60000), ocr: false,
+    fileType, abortSignal: signal, ocr: false,
     decompressionLimits: { maxUncompressedBytes: 80 * 1024 * 1024, maxZipEntries: 3000 },
   });
   const text = ast.toText().trim();

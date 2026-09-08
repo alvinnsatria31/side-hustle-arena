@@ -99,6 +99,29 @@ suites needing a live database, and a short list of known exclusions. The
 database-backed suites (`test:e2e:*`, `test:arena:*`, `test:scheduler`, …) are
 listed in `package.json` and need a real `DATABASE_URL`.
 
+### The isolated local sandbox
+
+Loopback Postgres and MinIO, no shared environment and no credentials of any
+kind. This is the routine local check:
+
+```bash
+node scripts/local-dev.mjs --setup-only   # start containers, migrate, seed
+npm run test:local:all                    # lifecycle + jobs + privacy/limits
+npm run test:browser:local                # Playwright against the sandbox
+npm run db:seed:jobs:fixture              # a jobs provider that needs no vendor
+```
+
+`npm run test:local:lifecycle` drives enrol → workspace → real presigned upload
+→ submit → review → finalize → points, and replays the upload URL with
+equal-size different bytes to prove the reviewed artifact cannot be swapped.
+It replaces the old `scripts/true-e2e-test.mjs`, which claimed more than it
+tested.
+
+`playwright.config.ts` (`test:e2e:browser`) is the *other* browser suite: it
+drives the shared cloud development database and the live bucket, so it needs
+that environment. `playwright.sandbox.config.ts` (`test:browser:local`) needs
+nothing but Docker.
+
 ## Layout
 
 ```
@@ -111,7 +134,8 @@ src/components/  shared UI
 drizzle/         generated SQL migrations
 scripts/         test suites, migration and seed tooling, local sandbox
 n8n/             scheduler and ad-hoc launch workflows
-e2e/             Playwright
+e2e/             Playwright against the shared dev environment
+e2e-local/       Playwright against the isolated sandbox
 docs/backend/    contracts, audits, operations
 ```
 
@@ -120,12 +144,27 @@ docs/backend/    contracts, audits, operations
 Jobs live at `GET /api/cron/<job>` behind a bearer token. n8n is the real
 scheduler — Vercel's Hobby plan cannot fire below daily granularity, and the
 review drain needs a couple of minutes. n8n only says *when*; the Arena decides
-and does everything else. See `docs/backend/N8N_TRIGGER_ONLY.md`.
+and does everything else.
+
+Three cadences are load-bearing rather than cosmetic, and are asserted by
+`scripts/automation-contract.test.mjs`: `email-flush` every 15 minutes (a failed
+message may only be retried inside the provider's 23h idempotency window),
+`project-generate` hourly through the Sunday window (six divisions do not fit in
+one 60s invocation), and `jobs-sync` every four hours. Every timeout in the
+pipeline comes from one place — `src/server/ops/execution-budget.ts`.
+
+See `docs/backend/N8N_SEKOLAH_KARIR_MIGRATION.md` for the current shape;
+`docs/backend/N8N_TRIGGER_ONLY.md` still describes the *rule* correctly but its
+job list and cadences are out of date.
 
 ## Where to read next
 
-- `docs/backend/IMPLEMENTATION_AUDIT_2026-09-07.md` — what is built, what is
-  unproven, and what is still open.
+- `docs/backend/REMEDIATION_2026-09-08.md` — the most recent record of what
+  changed and what is still open. Start here.
+- `docs/backend/IMPLEMENTATION_AUDIT_2026-09-08.md` — the audit it answers.
+- `docs/backend/JOBS_PIPELINE.md` — connecting a real jobs provider, and running
+  the pipeline.
+- `docs/backend/SHOWCASE_CONSENT.md` — consent, account deletion, retention.
 - `docs/backend/ADMIN_OPERATIONS.md` — admin authorization and the console.
 - `docs/backend/N8N_TRIGGER_ONLY.md` — the scheduler contract.
 - `AGENTS.md` — this Next.js version differs from what most tools assume; read

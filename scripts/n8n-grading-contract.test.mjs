@@ -270,13 +270,27 @@ test("n8n grading contract: a worker-reported failure retries without spending a
   assert.equal(version.review_attempt_number, 1);
 
   // A worker that no longer holds the lease cannot report on the job.
+  //
+  // The answer is 200 with `applied: false`, not an error status. A stale
+  // report is not something the worker can fix by retrying, and a 4xx/5xx would
+  // make a well-behaved workflow retry a report that must never be obeyed. What
+  // matters is that the job does not move.
+  const before = (await sql`select status, attempt_count from arena.review_jobs where id = ${job.jobId}`)[0];
   const stale = await post(failRoute, {
     jobId: job.jobId,
     workerId: "someone-else",
     code: "MODEL_TIMEOUT",
     message: "stale worker should be refused",
   });
-  assert.notEqual(stale.status, 200);
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body.data.recorded.applied, false, "a stale report must not be applied");
+  // The job is already back in RETRY from the legitimate failure above, so the
+  // lease check reports NOT_PROCESSING before it even gets to the worker id.
+  // Either is a correct refusal; what must never happen is that it is applied.
+  assert.ok(["WRONG_WORKER", "NOT_PROCESSING", "SETTLED"].includes(stale.body.data.recorded.reason),
+    `unexpected refusal reason ${stale.body.data.recorded.reason}`);
+  const after = (await sql`select status, attempt_count from arena.review_jobs where id = ${job.jobId}`)[0];
+  assert.deepEqual(after, before, "a stale report must leave the job exactly as it was");
   } finally {
     await cleanup(ids);
   }

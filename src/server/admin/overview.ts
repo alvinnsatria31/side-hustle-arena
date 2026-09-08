@@ -12,6 +12,7 @@ import { catalog, logs, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "@/server/reviews/audit";
 import { getReviewQueueDepth } from "@/server/reviews/queue-service";
+import { getAutomationHealth } from "@/server/ops/automation-health";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -46,6 +47,10 @@ export async function getOpsOverview(db: Db = getDb()) {
   const flags = await Promise.all(
     ARENA_FEATURES.map(async (feature) => ({ ...feature, state: await getArenaFeatureState(feature.key, db) })),
   );
+  // Depth answers "how much is queued"; health answers "is anything wrong".
+  // A queue of zero is fine when everything drained and alarming when nothing
+  // has run for a day, and only one of those is visible from a count.
+  const health = await getAutomationHealth(db);
   const first = (rows: unknown) => (rows as Array<{ n: number }>)[0]?.n ?? 0;
   return {
     week: week ? { id: week.id, weekCode: week.weekCode, status: week.status, deadlineAt: week.submissionDeadlineAt } : null,
@@ -59,6 +64,7 @@ export async function getOpsOverview(db: Db = getDb()) {
       total: catalogRows.length,
     },
     redemptions: ((redemptionRows as unknown) as Array<{ status: string; n: number }>).map((row) => ({ status: row.status, count: row.n })),
+    health,
     recentAudit: auditRows,
   };
 }

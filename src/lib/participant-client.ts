@@ -29,6 +29,14 @@ export const setParticipantAvatar = (avatarId: string) =>
 export const getParticipantInbox = (unreadOnly = false, limit = 20) => participantRequest<ParticipantInbox>(`/api/arena/notifications?limit=${limit}${unreadOnly ? '&unread=1' : ''}`);
 export const readParticipantInbox = (eventIds?: string[]) => participantRequest('/api/arena/notifications', { method: 'POST', body: JSON.stringify(eventIds ? { eventIds } : { all: true }) });
 
+/** Privacy: Showcase consent and account deletion. Both act on the session's own user. */
+export const getParticipantPrivacy = () =>
+  participantRequest<{ showcaseConsent: boolean; showcaseConsentAt: string | null; showcaseConsentSource: string | null; accountDeleted: boolean }>('/api/arena/me/privacy');
+export const setParticipantShowcaseConsent = (showcaseConsent: boolean) =>
+  participantRequest<{ consented: boolean; consentedAt: string | null }>('/api/arena/me/privacy', { method: 'POST', body: JSON.stringify({ showcaseConsent }) });
+export const deleteParticipantAccount = (confirm: string) =>
+  participantRequest<{ deleted: boolean; anonymizedAt: string }>('/api/arena/me/privacy', { method: 'DELETE', body: JSON.stringify({ confirm }) });
+
 // Ignore superseded responses when a filter changes or a mutation triggers a refresh.
 export function useParticipantResource<T>(loader: () => Promise<T>) {
   const [state, setState] = useState<{ data: T | null; error: Error | null; loading: boolean }>({ data: null, error: null, loading: true });

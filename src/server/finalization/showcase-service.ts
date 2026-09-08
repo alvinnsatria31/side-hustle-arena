@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import {
   divisions,
@@ -38,6 +38,15 @@ type Db = ReturnType<typeof getDb>;
  * nobody records how a participant worked. It is dropped rather than invented;
  * a real case study needs participant consent and a place to write it, which is
  * a product decision, not a query.
+ *
+ * CONSENT
+ *
+ * Every read here is gated on `users.showcase_consent_at`. Ranking well is not
+ * agreement to be featured, and this surface names a person and shows their
+ * face — so it is private by default and published only on a positive,
+ * revocable act. A participant who has not opted in simply is not here; the
+ * page says how many entries are withheld rather than silently showing fewer.
+ * See `showcase-consent.ts` for the rule and why the leaderboard differs.
  */
 
 /** Ranks 1..N are all "top projects"; the page features rank 1 and lists the rest. */
@@ -109,7 +118,15 @@ async function loadEntries(
     })
     .from(weeklyRankings)
     .innerJoin(weeks, and(eq(weeks.id, weeklyRankings.weekId), eq(weeks.status, "FINALIZED")))
-    .innerJoin(users, eq(users.id, weeklyRankings.userId))
+    .innerJoin(users, and(
+      eq(users.id, weeklyRankings.userId),
+      // The consent gate, in the join rather than in a filter afterwards: a
+      // non-consenting participant is never loaded, so no later code path can
+      // accidentally render one.
+      isNotNull(users.showcaseConsentAt),
+      isNull(users.anonymizedAt),
+      eq(users.status, "ACTIVE"),
+    ))
     .innerJoin(projects, eq(projects.id, weeklyRankings.projectId))
     .innerJoin(divisions, eq(divisions.id, projects.divisionId))
     .where(where)
@@ -164,18 +181,32 @@ async function loadEntries(
 }
 
 /**
- * The most recently finalized week's top ranks. Returns an empty list before the
- * first finalization — the page says so rather than inventing a winner.
+ * The most recently finalized week's top ranks, from participants who opted in.
+ * Returns an empty list before the first finalization — the page says so rather
+ * than inventing a winner — and `withheld` counts the ranked participants who
+ * have not consented, so an empty showcase is explained rather than mysterious.
  */
 export async function getLatestSpotlight(db: Db = getDb()): Promise<SpotlightDetail[]> {
+  return (await getLatestSpotlightWithConsent(db)).entries;
+}
+
+export async function getLatestSpotlightWithConsent(db: Db = getDb()): Promise<{ entries: SpotlightDetail[]; withheld: number }> {
   const [latest] = await db
     .select({ id: weeks.id })
     .from(weeks)
     .where(eq(weeks.status, "FINALIZED"))
-    .orderBy(desc(weeks.finalizedAt), desc(weeks.opensAt))
+    // NULLS LAST is load-bearing: Postgres sorts NULLs FIRST under DESC, so a
+    // week marked FINALIZED without a finalization timestamp would be picked as
+    // the most recent one and the Showcase would feature the wrong week.
+    .orderBy(sql`${weeks.finalizedAt} desc nulls last`, desc(weeks.opensAt))
     .limit(1);
-  if (!latest) return [];
-  return loadEntries(eq(weeklyRankings.weekId, latest.id), SPOTLIGHT_RANK_LIMIT, db);
+  if (!latest) return { entries: [], withheld: 0 };
+  const entries = await loadEntries(eq(weeklyRankings.weekId, latest.id), SPOTLIGHT_RANK_LIMIT, db);
+  const [ranked] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(weeklyRankings)
+    .where(and(eq(weeklyRankings.weekId, latest.id), lte(weeklyRankings.rank, SPOTLIGHT_RANK_LIMIT)));
+  return { entries, withheld: Math.max(0, (ranked?.count ?? 0) - entries.length) };
 }
 
 export async function getSpotlightEntry(slug: string, db: Db = getDb()): Promise<SpotlightDetail | null> {
@@ -220,7 +251,12 @@ export async function listSpotlightHistory(limit = 8, db: Db = getDb()): Promise
     })
     .from(weeklyRankings)
     .innerJoin(weeks, and(eq(weeks.id, weeklyRankings.weekId), eq(weeks.status, "FINALIZED")))
-    .innerJoin(users, eq(users.id, weeklyRankings.userId))
+    .innerJoin(users, and(
+      eq(users.id, weeklyRankings.userId),
+      isNotNull(users.showcaseConsentAt),
+      isNull(users.anonymizedAt),
+      eq(users.status, "ACTIVE"),
+    ))
     .innerJoin(projects, eq(projects.id, weeklyRankings.projectId))
     .where(eq(weeklyRankings.rank, 1))
     .orderBy(desc(weeks.opensAt))
