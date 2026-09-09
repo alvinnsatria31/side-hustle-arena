@@ -105,6 +105,14 @@ export function toArenaErrorResponse(error: unknown) {
     };
   }
 
+  // An error that is not a domain error is, by definition, one nobody
+  // anticipated — a dead database, a malformed credential, a bug. The response
+  // stays deliberately opaque so it leaks nothing to the caller, but it must
+  // still be recorded: swallowing it silently leaves a 500 with no trace
+  // anywhere, which on a self-hosted box means `docker logs` shows a healthy
+  // server and no reason for the failure. Server-side only.
+  console.error("[arena] unhandled error:", error);
+
   return {
     status: 500,
     body: { error: { code: "INTERNAL_ERROR", message: "An unexpected server error occurred." } },

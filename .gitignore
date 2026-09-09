@@ -5,6 +5,10 @@ dist/
 build/
 .env*
 !.env.example
+
+# Filled deploy env lives only on the VPS / operator machine, never in git.
+# The tracked template is arena.env.sample.
+/deploy/sk-vps/arena.env
 .DS_Store
 *.log
 npm-debug.log*

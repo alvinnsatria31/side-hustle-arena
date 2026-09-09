@@ -1,0 +1,35 @@
+# Keep the build context small and free of anything host- or secret-specific.
+.git
+.github
+node_modules
+.next
+out
+dist
+build
+
+# Local env — real values arrive at runtime via the deploy env file
+.env
+.env.*
+!.env.example
+
+# Tests, fixtures, tooling that the production build never needs
+e2e
+e2e-local
+test-results
+playwright-report
+blob-report
+qa-files
+graphify-out
+scripts/_*.mjs
+docs
+*.md
+
+# Editor / OS noise
+.vscode
+.idea
+.DS_Store
+*.log
+.claude
+.commandcode
+.superpowers
+.vercel
