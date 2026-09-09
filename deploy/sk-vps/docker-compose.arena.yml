@@ -1,0 +1,180 @@
+name: sk-arena
+
+# Sekolah Karir career product (Arena + CV Scanner + Jobs + Career Report),
+# self-hosted after leaving Vercel. Runbook: docs/backend/DEPLOY_SK_VPS.md
+#
+# Layout mirrors the other stacks under /opt/sekolah-karir-automation:
+#   - the app publishes only to 127.0.0.1
+#   - it joins n8n-net so the scheduler/grading workflows reach it in-cluster
+#     as http://sk-arena:3000 (no public round-trip for automation)
+#   - sk-arena-caddy is the ONLY container on this box that binds 0.0.0.0 —
+#     it terminates TLS for arena.sekolahkarir.id and proxies to the app
+#
+# Image is built off-box (this VPS has ~1.8 GB free and `next build` will OOM)
+# and loaded with `docker load`. See deploy/sk-vps/build-and-ship.sh
+
+services:
+  # Postgres lives on this box rather than a managed provider: the Neon free
+  # tier's data-transfer quota was exhausted and refused every query (SQLSTATE
+  # 53000), the second metered wall hit in one day. A local database has no
+  # transfer quota at all, and sits ~0.1ms from the app instead of across the
+  # network. The trade is that backups are ours to run — see the pg_dump cron
+  # in docs/backend/DEPLOY_SK_VPS.md.
+  sk-arena-db:
+    image: postgres:16-alpine
+    container_name: sk-arena-db
+    restart: unless-stopped
+    env_file:
+      - arena.env
+    environment:
+      POSTGRES_DB: arena
+      POSTGRES_USER: arena
+      # POSTGRES_PASSWORD comes from arena.env
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - arena_db_data:/var/lib/postgresql/data
+    # Loopback only, so migrations and dumps can reach it through an SSH
+    # tunnel. Nothing outside this box can connect.
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - default
+    mem_limit: 512m
+    # Tuned small deliberately: this box has 3.6 GB total across a dozen
+    # containers, so Postgres takes a modest slice rather than the defaults.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arena -d arena"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  sk-arena:
+    image: sk-arena:local
+    container_name: sk-arena
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      sk-arena-db:
+        condition: service_healthy
+    env_file:
+      - arena.env
+    environment:
+      APP_ENV: production
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - default
+      - n8n-net
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # One-shot schema migrator. Not part of the running stack — it sits behind a
+  # profile so `up -d` never starts it. Run explicitly:
+  #   docker compose -f docker-compose.arena.yml --profile tools \
+  #     run --rm sk-arena-migrate
+  # DATABASE_URL is taken from LOCAL_DATABASE_URL inside the container so the
+  # credential is never handled outside arena.env.
+  sk-arena-migrate:
+    image: node:22-bookworm-slim
+    profiles:
+      - tools
+    depends_on:
+      sk-arena-db:
+        condition: service_healthy
+    env_file:
+      - arena.env
+    working_dir: /work
+    volumes:
+      - ./migrate:/work
+    networks:
+      - default
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        export DATABASE_URL="$$LOCAL_DATABASE_URL"
+        npm i --no-save --no-audit --no-fund drizzle-orm postgres >/dev/null 2>&1
+        node migrate-runner.mjs
+
+  # One-shot content seed. Same profile/credential handling as the migrator.
+  #   docker compose -f docker-compose.arena.yml --profile tools \
+  #     run --rm sk-arena-seed
+  #
+  # APP_ENV is development ONLY because both seed scripts assert it before they
+  # will touch a database — a guard against seeding by accident. The content
+  # they write is what production actually served (see
+  # docs/backend/END_TO_END_AUDIT_2026-09-09.md): the same three divisions and
+  # three projects, down to the slugs. Idempotent, so re-running is safe.
+  sk-arena-seed:
+    image: node:22-bookworm-slim
+    profiles:
+      - tools
+    depends_on:
+      sk-arena-db:
+        condition: service_healthy
+    env_file:
+      - arena.env
+    environment:
+      APP_ENV: development
+    working_dir: /work
+    volumes:
+      - ./migrate:/work
+    networks:
+      - default
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        export DATABASE_URL="$$LOCAL_DATABASE_URL"
+        npm i --no-save --no-audit --no-fund postgres @next/env >/dev/null 2>&1
+        node seed-arena-core.mjs
+        node seed-rewards-catalog.mjs
+
+  sk-arena-caddy:
+    image: caddy:2-alpine
+    container_name: sk-arena-caddy
+    restart: unless-stopped
+    depends_on:
+      - sk-arena
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - default
+    mem_limit: 64m
+
+volumes:
+  arena_db_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    name: sk-arena_default
+  n8n-net:
+    external: true
+    name: sekolah-karir-automation_n8n-net

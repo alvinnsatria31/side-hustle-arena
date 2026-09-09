@@ -1,0 +1,53 @@
+# Reverse proxy + automatic HTTPS for the self-hosted career product.
+# This is the only public entrypoint on the Sekolah Karir VPS.
+#
+# Automatic TLS needs ports 80 and 443 reachable from the internet AND
+# arena.sekolahkarir.id pointing at this box (A record). Until DNS is cut over,
+# Caddy will retry the ACME challenge and serve its internal cert.
+
+{
+	# Used for Let's Encrypt expiry notices. Override with ACME_EMAIL in
+	# arena.env if a different mailbox should own the cert.
+	email {$ACME_EMAIL:ops@sekolahkarir.id}
+}
+
+arena.sekolahkarir.id {
+	encode zstd gzip
+
+	# Browser-facing hardening. Automation (n8n) never comes through here — it
+	# talks to sk-arena:3000 directly over n8n-net.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Uploads go straight to object storage via presigned URLs, so request
+	# bodies through the app stay small. Cap anyway.
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy sk-arena:3000 {
+		# Next.js streams responses (Server Components, Server Actions). Caddy
+		# does not buffer by default; -1 makes that explicit and immediate.
+		flush_interval -1
+
+		# Slow CV scans are capped at 60s server-side; leave headroom.
+		transport http {
+			read_timeout 75s
+			write_timeout 75s
+		}
+
+		health_uri /api/health
+		health_interval 15s
+		health_timeout 5s
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

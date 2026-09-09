@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  /**
+   * Self-hosted deployment (Sekolah Karir VPS, Docker). `next build` emits
+   * `.next/standalone` with a minimal `server.js` and only the traced
+   * `node_modules`, so the runtime image needs no `npm install`. See
+   * docs/backend/DEPLOY_SK_VPS.md. Vercel ignores this key, so it is safe to
+   * keep set while both targets exist.
+   */
+  output: "standalone",
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
