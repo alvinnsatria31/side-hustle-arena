@@ -165,7 +165,7 @@ export async function chooseCandidate(input: {
   context: GenerationContext; history: HistoryPackage[]; library: LibraryEntry[];
   provider?: GenerationProvider; threshold?: number; timeoutMs?: number;
 }) {
-  const attempts: Array<{ attempt: number; outcome: string; reason?: string }> = [];
+  const attempts: Array<{ attempt: number; outcome: string; reason?: string; issues?: string[] }> = [];
   const rejectedLibrary: Array<{ projectId: string; reason: string }> = [];
   const validate = (value: unknown) => {
     const p = validatePackage(value, input.context);
@@ -195,10 +195,19 @@ export async function chooseCandidate(input: {
         // operator unable to tell a rubric the model failed to copy from a
         // brief that came back too close to last week's. One says fix the
         // prompt, the other says the division is out of ideas.
+        //
+        // The schema failure needs its `issues` as well as its message: every
+        // Zod rejection carries the same sentence, so the message alone says
+        // only "the shape was wrong somewhere" — the field paths are the part
+        // that names which key the model got wrong.
+        const issues = error instanceof ArenaDomainError
+          ? (error.details?.issues as Array<{ path: string; message: string }> | undefined)
+          : undefined;
         attempts.push({
           attempt,
           outcome,
           ...(error instanceof Error && error.message !== "timeout" ? { reason: error.message } : {}),
+          ...(issues?.length ? { issues: issues.slice(0, 8).map((i) => `${i.path}: ${i.message}`) } : {}),
         });
       } finally { if (timer) clearTimeout(timer); }
     }
