@@ -29,8 +29,21 @@ export const packageSchema = z.object({
   requirements: z.array(z.object({
     label, type: z.enum(["FILE", "LINK"]), required: z.boolean(),
     minItems: z.number().int().min(0).max(5), maxItems: z.number().int().min(1).max(5),
-    allowedMimeTypes: z.array(z.enum(supportedFileMimeTypes)).max(8),
-    allowedLinkTypes: z.array(label).max(20), instructions: text,
+    /**
+     * Both lists default to empty because only one of them applies to any
+     * given deliverable: a LINK has no MIME types, a FILE has no link types.
+     * Requiring both keys on every requirement contradicted the generation
+     * prompt, which asks for "allowedMimeTypes for FILE, allowedLinkTypes for
+     * LINK" — the model omitted the inapplicable one, exactly as instructed,
+     * and every package it produced was rejected for a missing key that had
+     * nothing to describe.
+     *
+     * The real rule is enforced below in validatePackage, where a FILE
+     * requirement with no MIME types is still refused. Defaulting here accepts
+     * the natural shape without weakening that.
+     */
+    allowedMimeTypes: z.array(z.enum(supportedFileMimeTypes)).max(8).default([]),
+    allowedLinkTypes: z.array(label).max(20).default([]), instructions: text,
   }).strict()).min(1).max(10),
   resources: z.array(z.object({ label, url: z.url().max(2048).refine((value) => {
     const url = new URL(value);
@@ -196,19 +209,26 @@ export async function chooseCandidate(input: {
         // brief that came back too close to last week's. One says fix the
         // prompt, the other says the division is out of ideas.
         //
+        // Only OUR rejection text is recorded. A provider's exception message
+        // is attacker- and vendor-controlled and can carry a key in a URL, an
+        // internal hostname, or a token echoed back in an error body — none of
+        // which may reach an audit row that operators read and export. So an
+        // ArenaDomainError, which this module wrote, is quoted; anything the
+        // provider threw is counted and its message dropped.
+        //
         // The schema failure needs its `issues` as well as its message: every
         // Zod rejection carries the same sentence, so the message alone says
         // only "the shape was wrong somewhere" — the field paths are the part
         // that names which key the model got wrong.
-        const issues = error instanceof ArenaDomainError
-          ? (error.details?.issues as Array<{ path: string; message: string }> | undefined)
-          : undefined;
-        attempts.push({
-          attempt,
-          outcome,
-          ...(error instanceof Error && error.message !== "timeout" ? { reason: error.message } : {}),
-          ...(issues?.length ? { issues: issues.slice(0, 8).map((i) => `${i.path}: ${i.message}`) } : {}),
-        });
+        if (error instanceof ArenaDomainError) {
+          const issues = error.details?.issues as Array<{ path: string; message: string }> | undefined;
+          attempts.push({
+            attempt, outcome, reason: error.message,
+            ...(issues?.length ? { issues: issues.slice(0, 8).map((i) => `${i.path}: ${i.message}`) } : {}),
+          });
+        } else {
+          attempts.push({ attempt, outcome });
+        }
       } finally { if (timer) clearTimeout(timer); }
     }
   }
