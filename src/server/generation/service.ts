@@ -198,8 +198,9 @@ export async function generateDivision(input: Options & { weekId: string; divisi
     return { week, context, run: claimed, previousId: current?.id, history: await recentHistory(tx, week), library: await libraryEntries(tx, input.divisionId) };
   });
   if (!("run" in prepared) || !prepared.run) return prepared;
+  const generation = generationConfig();
   const chosen = await chooseCandidate({ context: prepared.context, history: prepared.history, library: prepared.library,
-    provider: input.provider, threshold: generationConfig().threshold });
+    provider: input.provider, threshold: generation.threshold, timeoutMs: generation.providerTimeoutMs });
   return locked(db, async (tx) => {
     const [run] = await tx.select().from(runs).where(eq(runs.id, prepared.run.id));
     if (run?.status !== "RUNNING" || run.startedAt.getTime() !== prepared.run.startedAt.getTime()) return { skipped: "generation lease superseded" };

@@ -183,7 +183,14 @@ export async function chooseCandidate(input: {
         attempts.push({ attempt, outcome: "validated" });
         return { source: "provider" as const, provider: input.provider.name, package: p, attempts, rejectedLibrary };
       } catch (error) {
-        attempts.push({ attempt, outcome: error instanceof ArenaDomainError ? "invalid_or_duplicate" : "provider_failed" });
+        // Timeout is called out separately because it is the one failure the
+        // operator causes and can fix. Folded into `provider_failed` it reads
+        // as a broken provider, and a week held by a deadline that is simply
+        // too short looks identical to one held by an outage.
+        const outcome = error instanceof ArenaDomainError ? "invalid_or_duplicate"
+          : error instanceof Error && error.message === "timeout" ? "provider_timeout"
+          : "provider_failed";
+        attempts.push({ attempt, outcome });
       } finally { if (timer) clearTimeout(timer); }
     }
   }
@@ -250,5 +257,19 @@ export function generationConfig(env: NodeJS.ProcessEnv = process.env) {
     windowWeeks: number("ARENA_GENERATION_WINDOW_WEEKS", 12, 8, 12),
     threshold: number("ARENA_GENERATION_SIMILARITY_THRESHOLD", 0.8, 0.5, 1),
     previewHours: number("ARENA_GENERATION_PREVIEW_HOURS", 6, 1, 48),
+    /**
+     * How long one provider attempt may take.
+     *
+     * The 15s default this replaces made generation impossible rather than
+     * slow: writing a whole project package — case background, role, mission,
+     * objective, rubric prose, requirements, resources — is a large completion,
+     * and a reasoning model cannot finish it in fifteen seconds. Every attempt
+     * aborted mid-flight and was recorded as `provider_failed`, which reads
+     * like a broken provider rather than a deadline the caller set.
+     *
+     * Generation runs in a scheduled job, not a page request, so nobody is
+     * waiting on it. The real bound is the job's own execution budget.
+     */
+    providerTimeoutMs: number("ARENA_GENERATION_TIMEOUT_MS", 90_000, 15_000, 240_000),
   };
 }
