@@ -165,7 +165,7 @@ export async function chooseCandidate(input: {
   context: GenerationContext; history: HistoryPackage[]; library: LibraryEntry[];
   provider?: GenerationProvider; threshold?: number; timeoutMs?: number;
 }) {
-  const attempts: Array<{ attempt: number; outcome: string }> = [];
+  const attempts: Array<{ attempt: number; outcome: string; reason?: string }> = [];
   const rejectedLibrary: Array<{ projectId: string; reason: string }> = [];
   const validate = (value: unknown) => {
     const p = validatePackage(value, input.context);
@@ -190,7 +190,16 @@ export async function chooseCandidate(input: {
         const outcome = error instanceof ArenaDomainError ? "invalid_or_duplicate"
           : error instanceof Error && error.message === "timeout" ? "provider_timeout"
           : "provider_failed";
-        attempts.push({ attempt, outcome });
+        // Carry the reason, for the same argument the library loop below makes
+        // and this branch never applied: "invalid_or_duplicate" leaves an
+        // operator unable to tell a rubric the model failed to copy from a
+        // brief that came back too close to last week's. One says fix the
+        // prompt, the other says the division is out of ideas.
+        attempts.push({
+          attempt,
+          outcome,
+          ...(error instanceof Error && error.message !== "timeout" ? { reason: error.message } : {}),
+        });
       } finally { if (timer) clearTimeout(timer); }
     }
   }
