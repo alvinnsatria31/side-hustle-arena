@@ -15,11 +15,11 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// The Hobby plan caps a function at 60s and clamps anything larger, so asking
-// for more than this is a promise the platform will not keep. The analyzer
-// budgets against the same ceiling: 45s for the model call, leaving the rest
-// for extraction and the response.
-export const maxDuration = 60;
+// Was 60 because the Hobby plan clamped anything larger. Self-hosted nothing
+// clamps it, so this is now only a runaway guard and sits deliberately above
+// the analyzer's own 90s budget — the timeout that fires should be ours, which
+// returns a readable Indonesian message, never a bare proxy 504.
+export const maxDuration = 120;
 
 /** Messages here are shown to the person who uploaded, so they are in Indonesian. */
 function fail(message: string, status: number, extra: Record<string, unknown> = {}) {

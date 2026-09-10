@@ -35,10 +35,12 @@ arena.sekolahkarir.id {
 		# does not buffer by default; -1 makes that explicit and immediate.
 		flush_interval -1
 
-		# Slow CV scans are capped at 60s server-side; leave headroom.
+		# The timeouts must nest, longest outermost, or the wrong one fires:
+		# analyzer 90s < route maxDuration 120s < this. A proxy that gives up
+		# first replaces our readable Indonesian error with a bare 504.
 		transport http {
-			read_timeout 75s
-			write_timeout 75s
+			read_timeout 150s
+			write_timeout 150s
 		}
 
 		health_uri /api/health
