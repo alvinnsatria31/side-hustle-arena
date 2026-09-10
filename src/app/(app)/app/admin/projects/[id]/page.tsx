@@ -23,6 +23,9 @@ type Draft = {
   estimatedMinutes: string;
 };
 
+/** Per-criterion prose the reviewer reads. Keyed by the criterion's position. */
+type RubricDraft = Array<{ description: string; reviewInstruction: string }>;
+
 const FIELDS: Array<{ key: keyof Draft; label: string; rows?: number }> = [
   { key: 'title', label: 'Judul' },
   { key: 'shortDescription', label: 'Deskripsi singkat', rows: 2 },
@@ -38,15 +41,26 @@ const FIELDS: Array<{ key: keyof Draft; label: string; rows?: number }> = [
  * It submits the whole package back through the domain's `edit` action rather
  * than patching columns, because the validation record's content hash is what
  * `publishWeek` checks — a direct column write would publish-block the project
- * it just "fixed". Rubric, skills and requirements are shown but not edited
- * here: they are hash-frozen per division, so changing them is a separate,
- * riskier operation than fixing wording before a launch.
+ * it just "fixed".
+ *
+ * The rubric is partly editable, and the split is not arbitrary: `rubricHash`
+ * covers only `name`, `weight` and `maxScore`, so those three are frozen per
+ * division and shown read-only. `description` and `reviewInstruction` are
+ * outside that hash and editable here — which matters, because they are the
+ * only text the reviewer model is given about what a criterion means. A
+ * criterion called "Evidence" with empty prose is a grade with nothing behind
+ * it, and before this the console rendered neither field, so a curator could
+ * not even see what the generator had written.
+ *
+ * Skills and requirement bounds stay read-only: they change what a submission
+ * must contain, which is a different decision from wording a brief.
  */
 export default function AdminProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const detail = useAdminResource(useCallback(() => getAdminProject(id), [id]));
 
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [rubricDraft, setRubricDraft] = useState<RubricDraft | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +74,14 @@ export default function AdminProjectDetailPage({ params }: { params: Promise<{ i
       roleDescription: pkg.roleDescription, mission: pkg.mission, objective: pkg.objective,
       estimatedMinutes: String(pkg.estimatedMinutes),
     });
+    setRubricDraft(pkg.rubric.map((c) => ({
+      description: c.description ?? '',
+      reviewInstruction: c.reviewInstruction ?? '',
+    })));
   }, [detail.data]);
 
   const save = async () => {
-    if (!draft || !detail.data) return;
+    if (!draft || !rubricDraft || !detail.data) return;
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -73,11 +91,33 @@ export default function AdminProjectDetailPage({ params }: { params: Promise<{ i
       setBusy(false);
       return;
     }
+    // The package schema requires 10+ characters for both fields. Catching it
+    // here names the offending criterion; the server would only report that
+    // validation failed somewhere in the package.
+    const thin = rubricDraft.findIndex(
+      (c) => c.description.trim().length < 10 || c.reviewInstruction.trim().length < 10,
+    );
+    if (thin !== -1) {
+      setError(
+        `Kriteria "${detail.data.package.rubric[thin].name}": penjelasan dan instruksi penilaian masing-masing minimal 10 karakter.`,
+      );
+      setBusy(false);
+      return;
+    }
     try {
       await editAdminProject({
         projectId: id,
         reason,
-        package: { ...detail.data.package, ...draft, estimatedMinutes: minutes },
+        package: {
+          ...detail.data.package,
+          ...draft,
+          estimatedMinutes: minutes,
+          rubric: detail.data.package.rubric.map((criterion, index) => ({
+            ...criterion,
+            description: rubricDraft[index].description.trim(),
+            reviewInstruction: rubricDraft[index].reviewInstruction.trim(),
+          })),
+        },
       });
       setReason('');
       setSaved(true);
@@ -160,40 +200,83 @@ export default function AdminProjectDetailPage({ params }: { params: Promise<{ i
               <div>
                 <Button loading={busy} disabled={locked || !reason.trim()} onClick={save}>Simpan perubahan</Button>
                 <p className="mt-2 text-[11.5px] text-sk-muted">
-                  Menyimpan akan memvalidasi ulang paket dan mengembalikan status preview ke PENDING, jadi
-                  setujui lagi sebelum publikasi.
+                  Menyimpan mencakup konten di atas <em>dan</em> rubrik di bawah, lalu memvalidasi ulang
+                  paket dan mengembalikan status preview ke PENDING — jadi setujui lagi sebelum publikasi.
                 </p>
               </div>
             </div>
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="p-6">
-              <PanelHeading>Rubrik</PanelHeading>
-              <ul className="space-y-3">
-                {detail.data.package.rubric.map((criterion, index) => (
-                  <li key={`${criterion.name}-${index}`} className="text-sm">
-                    <p className="font-semibold text-sk-navy">{criterion.name}</p>
-                    <p className="text-xs text-sk-muted">Bobot {criterion.weight} · Maks {criterion.maxScore}</p>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+          <Card className="mb-6 p-6">
+            <PanelHeading>Rubrik penilaian</PanelHeading>
+            <p className="mb-4 text-[12px] text-sk-muted">
+              Ini satu-satunya teks yang dibaca reviewer AI tentang arti tiap kriteria. Nama, bobot
+              dan skor maksimum dibekukan per divisi, jadi tidak bisa diubah di sini.
+            </p>
+            <ul className="space-y-5">
+              {detail.data.package.rubric.map((criterion, index) => (
+                <li key={`${criterion.name}-${index}`} className="border-l-2 border-sk-border pl-4">
+                  <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[13px] font-semibold text-sk-navy">{criterion.name}</span>
+                    <span className="text-xs text-sk-muted">Bobot {criterion.weight} · Maks {criterion.maxScore}</span>
+                  </div>
+                  {rubricDraft?.[index] && (
+                    <div className="grid gap-3">
+                      <label className="block">
+                        <span className="mb-1 block text-[12px] font-semibold text-sk-navy">
+                          Penjelasan kriteria
+                        </span>
+                        <Textarea
+                          rows={3}
+                          disabled={locked}
+                          value={rubricDraft[index].description}
+                          placeholder="Apa yang diukur kriteria ini?"
+                          onChange={(e) => {
+                            const next = [...rubricDraft];
+                            next[index] = { ...next[index], description: e.target.value };
+                            setRubricDraft(next);
+                          }}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[12px] font-semibold text-sk-navy">
+                          Instruksi penilaian
+                        </span>
+                        <Textarea
+                          rows={3}
+                          disabled={locked}
+                          value={rubricDraft[index].reviewInstruction}
+                          placeholder="Bagaimana reviewer memberi skor? Apa yang membedakan skor tinggi dan rendah?"
+                          onChange={(e) => {
+                            const next = [...rubricDraft];
+                            next[index] = { ...next[index], reviewInstruction: e.target.value };
+                            setRubricDraft(next);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
 
-            <Card className="p-6">
-              <PanelHeading>Syarat submission</PanelHeading>
-              <ul className="space-y-3">
-                {detail.data.package.requirements.map((requirement, index) => (
-                  <li key={`${requirement.label}-${index}`} className="text-sm">
-                    <p className="font-semibold text-sk-navy">{requirement.label}</p>
-                    <p className="text-xs text-sk-muted">
-                      {requirement.type} · {requirement.required ? 'wajib' : 'opsional'} · {requirement.minItems}–{requirement.maxItems} item
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </div>
+          <Card className="p-6">
+            <PanelHeading>Syarat submission</PanelHeading>
+            <ul className="space-y-3">
+              {detail.data.package.requirements.map((requirement, index) => (
+                <li key={`${requirement.label}-${index}`} className="text-sm">
+                  <p className="font-semibold text-sk-navy">{requirement.label}</p>
+                  <p className="text-xs text-sk-muted">
+                    {requirement.type} · {requirement.required ? 'wajib' : 'opsional'} · {requirement.minItems}–{requirement.maxItems} item
+                  </p>
+                  {requirement.instructions && (
+                    <p className="mt-1 whitespace-pre-line text-xs text-sk-muted">{requirement.instructions}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
         </>
       )}
     </AdminShell>
