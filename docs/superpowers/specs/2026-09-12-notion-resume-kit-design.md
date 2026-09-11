@@ -1,6 +1,6 @@
 # Reward content: Template Notion & Resume Starter Kit
 
-**Date:** 2026-09-12
+**Date:** 2026-09-12 (revised the same day into the premium version)
 **Reward:** `notion-kit` (DIGITAL, 300 points, UNLIMITED)
 
 ## Goal
@@ -9,53 +9,110 @@ Produce the actual deliverable behind the `notion-kit` reward, which until now e
 
 ## Audience
 
-Arena participants: university students, final-year students, fresh graduates, and entry-to-junior career switchers in Indonesia.
+Arena participants: university students, final-year students, fresh graduates, and entry-to-junior career switchers in Indonesia, across the three Arena divisions (Data, Design, Product).
+
+## Design rules
+
+The owner asked for a premium kit that does not read as generated. Every page follows these rules:
+
+- Two colours only, Sekolah Karir blue and neutral grey. No multi-coloured callouts.
+- Native Notion icons in one colour instead of emoji. No emoji in headings or view names.
+- Short, concrete copy in the second person. No hype words and no exclamation marks.
+- Example data is fictional but plausible: invented companies, realistic numbers, no "PT Contoh".
+- One idea per section. Reference material (verbs, common mistakes) sits in toggles.
 
 ## Decisions
 
-- **One delivery link.** A single Notion page, published with "Allow duplicate as template". The admin pastes this link as the fulfilment note when marking the claim FULFILLED. No code change is needed for delivery.
-- **Tracker lives in Notion** (board by status, full table, follow-up calendar, status chart). An `.xlsx` copy is attached for participants who do not use Notion; it also opens in Google Sheets.
-- **Resumes are Word files, not Notion pages.** Notion's PDF export is not precise enough for a one-page resume. Two `.docx` templates, Bahasa Indonesia and English, each with a PDF preview.
-- **Branding stays off the resume.** Sekolah Karir branding appears on the Notion page (banner, icon, callouts) and the Excel title rows, never inside the resume body that goes to employers.
-- **Arena tie-in.** Both resumes have a "Projects & skill evidence" section with an example entry for a Side Hustle Arena project.
+- **One delivery link.** The owner publishes the home page with "Allow duplicate as template" and pastes that link as the fulfilment note. No code change is needed for delivery.
+- **Resumes are Word files, not Notion pages.** Notion's PDF export is not precise enough for a one-page resume.
+- **Branding stays off the resume.** Sekolah Karir appears on the Notion pages, the banner, and the Excel title rows, never inside a resume that goes to employers.
+- **No hyperlinks in the resumes.** A participant who retypes the visible text would keep a link to somebody else's profile.
+- **No interview-preparation guide.** That belongs to the next reward, the E-Book (600 points).
 
-## Notion page structure
+## Notion structure
 
-1. Branded banner (brand blue `#246bfd`, navy `#07152d`, Manrope), Sekolah Karir logo as the icon.
-2. Welcome callout: this is a Side Hustle Arena reward, and how to duplicate the page.
-3. "Mulai dari sini": three first steps as to-dos.
-4. Inline database **Lamaran Kerja** with example rows marked as examples.
-   - Properties: Posisi (title), Perusahaan, Status, Prioritas, Sumber, Tipe, Tanggal Apply, Follow-up, Link Lowongan, Versi CV, Kontak, Ekspektasi Gaji (rupiah), Next Step, Hari Sejak Apply (formula).
-   - Status pipeline: Wishlist, Sudah Apply, Screening HR, Tes / Case Study, Interview User, Offer, Diterima, Ditolak, Tidak Ada Kabar.
-   - Views: Board (by Status), Semua Lamaran (table), Jadwal Follow-up (calendar), Statistik (chart).
-   - Each example row carries a per-application note structure: about the role, why I fit, interview notes, questions for HR, outcome.
-5. Excel download.
-6. Sub-page **Resume Starter Kit**: resume files and previews, one-page structure, bullet formula with before/after examples, how to list an Arena project, pre-send ATS checklist, action verbs (ID/EN), common mistakes, file naming.
-7. Toggle **Cara pakai tracker**: what each status means, a weekly 15-minute routine.
+**Job Hunt Starter Kit** (home) is a dashboard:
+
+1. One grey line naming the reward, then four navigation cards: Tracker Lamaran, Resume Kit, Template Pesan, Cara Pakai.
+2. **Perlu ditindaklanjuti**: a linked list of applications whose follow-up is overdue, due today, or due within three days.
+3. **Pipeline**: a linked board of active applications.
+
+**Tracker Lamaran** holds stacked linked views, each under its own heading: Pipeline (board), Perlu ditindaklanjuti (list), Kalender follow-up (calendar), Statistik (bar chart), Semua lamaran (table). The source database sits at the bottom as a sub-page. Linked views are used because the API cannot reorder a database's own tabs, and the first tab a participant sees should be the board.
+
+The **Lamaran Kerja** database has these properties: Posisi, Perusahaan, Status, Prioritas, Sumber, Tipe, Lokasi Kerja, Tanggal Apply, Follow-up, Deadline Lamaran, Ekspektasi Gaji (rupiah), Versi CV, Kontak, Link Lowongan, Next Step, and two formulas:
+
+- **Tindak Lanjut** returns a styled label: "Terlambat" (red), "Follow-up hari ini" (orange), "N hari lagi" for up to three days ahead (blue), or "Waktunya follow-up" (orange) when an application is seven days past Sudah Apply with no follow-up date set. It is empty once the status is Diterima, Ditolak, or Tidak Ada Kabar.
+- **Hari Sejak Apply** shows the days since the application in grey.
+
+The status pipeline is Wishlist, Sudah Apply, Screening HR, Tes / Case Study, Interview User, Offer, Diterima, Ditolak, Tidak Ada Kabar. Seven example rows cover all three divisions and every active status. Each example row carries the same note structure: Lowongan (with a toggle for the full job description), Kenapa aku cocok, Persiapan, Catatan proses, Pertanyaan untuk mereka, Hasil & pelajaran.
+
+**Resume Kit**:
+
+- Tabs for Data, Design, and Product. Each tab has two columns, Bahasa Indonesia and English, and each column holds a preview image and the .docx file.
+- Guidance below the tabs:
+  - One-page anatomy.
+  - Bullet formula with before/after examples.
+  - How to list an Arena project, with one example per division.
+  - Pre-send checklist.
+  - Action verbs and common mistakes, in toggles.
+
+**Template Pesan**: six situations, each with an Indonesian tab and an English tab holding copyable code blocks:
+
+1. Application email
+2. Follow-up
+3. LinkedIn referral request, with a 300-character connection note and a follow-up message
+4. Thank-you note after an interview
+5. Asking for interview results
+6. Replying to an offer: negotiate, accept, or decline
+
+**Cara Pakai**:
+
+- First-time setup.
+- The five-step flow for one application.
+- What each status and each Tindak Lanjut label means.
+- The weekly routine.
+- The Excel download.
 
 ## Resume format (ATS-safe)
 
-A4, single column, no tables, text boxes, or images; contact details in the body, not the page header; standard fonts; section headings as plain text with a rule; dates right-aligned by tab stop; must fit on one page (verified by converting to PDF).
+- **Page and layout:** A4, one column, and no tables, text boxes, images, headers, or hyperlinks.
+- **Font and colour:** Arial throughout, with one deep blue accent for the headline and section titles.
+- **Headings:** section titles use Word's Heading 1 style so parsers and the navigation pane read the outline.
+- **Language:** the document language is set per version (id-ID or en-US), so spell-check does not flag an Indonesian resume.
+- **Dates:** right-aligned on a tab stop.
+- **Length:** each resume must fit on one page with roughly 80 to 90 percent of the page filled. The preview step refuses anything longer.
 
 ## Excel format
 
-Title rows in brand colours; a filterable table with drop-down validation for Status/Prioritas/Sumber/Tipe; colour by status; "Hari Sejak Apply" and "Perlu Follow-up" formulas; a summary sheet (counts per status, response rate); a how-to sheet.
+- **Title rows:** navy title rows at the top.
+- **Tracker table:** a filterable table with drop-downs for Status, Prioritas, Sumber, Tipe, and Lokasi Kerja, with each status coloured.
+- **Formulas:** Tindak Lanjut and Hari Sejak Apply use the same rules as the Notion formulas.
+- **Example rows:** the seven rows use dates relative to TODAY(), so their follow-up labels still show whenever the file is opened.
+- **Other sheets:** a Ringkasan sheet (counts per status, response rate, interview rate, follow-ups due) and a Cara Pakai sheet.
 
 ## Source and files
 
-`docs/rewards/notion-resume-kit/` holds the generator (`build_kit.py`), the banner source (`cover.html`, `render-cover.mjs`), and the brand assets. Generated files land in `dist/`, which the repository ignores; the copies participants receive are the ones attached in Notion.
+`docs/rewards/notion-resume-kit/` holds the generator (`build_kit.py`), the banner source (`cover.html`, `render-cover.mjs`), and the brand assets. Generated files land in `dist/`, which the repository ignores. The copies participants receive are the ones attached in Notion.
 
-To regenerate: `python docs/rewards/notion-resume-kit/build_kit.py` and `node docs/rewards/notion-resume-kit/render-cover.mjs`, then export each `.docx` to PDF in Word and confirm it is still one page before re-uploading.
+To regenerate:
 
-The Notion page lives in the owner's workspace as a private draft: https://app.notion.com/p/3d8e44db112d81a5a8c8fd8dcd40651a
+1. `python docs/rewards/notion-resume-kit/build_kit.py` builds the resumes and the Excel file.
+2. Export every `.docx` to PDF in Word.
+3. `python docs/rewards/notion-resume-kit/build_kit.py previews` renders the preview images and enforces one page.
+4. `node docs/rewards/notion-resume-kit/render-cover.mjs` renders the banner.
+5. Re-upload the changed files.
+
+The home page lives in the owner's workspace as a private draft: https://app.notion.com/p/3d8e44db112d81a5a8c8fd8dcd40651a
 
 ## Manual steps left to the owner
 
-- In Notion: Share → Publish → enable "Allow duplicate as template", then copy the public link. The API cannot toggle this.
-- Optional: make the banner a real page cover (Add cover → Upload → `dist/notion-cover.png`). The API only accepts external image URLs for covers, so the banner is placed as the first image block instead.
-- When fulfilling a `notion-kit` claim, paste that link as the fulfilment note.
+- **Cover:** add the banner as the home page cover (Add cover → Upload → `dist/notion-cover.png`). The API only accepts external image URLs for covers.
+- **Board columns:** show empty status columns on both Pipeline boards (⋯ → Group → turn off "Hide empty groups"). The API always creates boards with empty groups hidden.
+- **New-application template (optional):** in the Lamaran Kerja database, add a template from one example row's structure, so new applications start with the note sections.
+- **Publishing:** Share → Publish, enable "Allow duplicate as template", copy the public link, and paste it as the fulfilment note for `notion-kit` claims.
 
 ## Out of scope
 
-- Making links in the fulfilment note clickable on the profile (a separate code change and deploy).
+- Making links in the fulfilment note clickable on the profile (a code change and deploy).
+- Automatic delivery of digital rewards on claim.
 - The e-book and the remaining four rewards.
