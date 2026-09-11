@@ -32,10 +32,13 @@ export default function ParticipantProfile() {
     setMessage('');
     try {
       const { taken } = await takeParticipantReward(slug, retryOf);
-      setMessage(taken.delivery?.status === 'DELIVERED'
-        ? 'Reward berhasil diklaim. Kode vouchermu sudah ada di Riwayat reward di bawah.'
-        : taken.delivery?.status === 'MANUAL_REQUIRED'
-          ? 'Reward berhasil diklaim. Kode voucher sedang disiapkan tim dan akan muncul di Riwayat reward.'
+      const delivery = taken.delivery;
+      setMessage(delivery?.status === 'DELIVERED'
+        ? 'url' in delivery
+          ? 'Reward berhasil diklaim. Link-nya dikirim ke emailmu dan tersimpan di Riwayat reward di bawah.'
+          : 'Reward berhasil diklaim. Kode vouchermu sudah ada di Riwayat reward di bawah.'
+        : delivery?.status === 'MANUAL_REQUIRED'
+          ? 'Reward berhasil diklaim. Tim sedang menyiapkan penyerahannya, dan hasilnya muncul di Riwayat reward.'
           : 'Reward berhasil diklaim.');
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error('Klaim belum berhasil.'));

@@ -10,6 +10,7 @@ import {
   reverseAdminRedemption,
   setAdminInventoryQuantity,
   setAdminRewardActive,
+  setAdminRewardDeliveryUrl,
   useAdminResource,
   type AdminRedemption,
 } from '@/lib/admin-client';
@@ -227,6 +228,7 @@ function RedemptionsQueue() {
 
 type CatalogAction = { rewardId: string; title: string; isActive: boolean };
 type QuantityAction = { periodId: string; current: number; rewardTitle: string };
+type DeliveryAction = { rewardId: string; title: string; current: string | null };
 
 function InventoryPanel() {
   // Stable loader: useAdminResource refetches whenever the loader's identity
@@ -235,8 +237,10 @@ function InventoryPanel() {
   const inventory = useAdminResource(useCallback(() => getAdminInventory(), []));
   const [catalogAction, setCatalogAction] = useState<CatalogAction | null>(null);
   const [quantityAction, setQuantityAction] = useState<QuantityAction | null>(null);
+  const [deliveryAction, setDeliveryAction] = useState<DeliveryAction | null>(null);
   const [reason, setReason] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [deliveryUrl, setDeliveryUrl] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -283,6 +287,30 @@ function InventoryPanel() {
     }
   };
 
+  const submitDelivery = async () => {
+    if (!deliveryAction || !reason.trim()) {
+      setError('Alasan wajib diisi.');
+      return;
+    }
+    const url = deliveryUrl.trim();
+    if (url && !url.startsWith('https://')) {
+      setError('Link pengiriman harus berupa URL https.');
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      await setAdminRewardDeliveryUrl({ rewardId: deliveryAction.rewardId, deliveryUrl: url || null, reason });
+      setDeliveryAction(null);
+      setReason('');
+      await inventory.refresh();
+    } catch (err) {
+      setError(err instanceof ArenaApiError ? err.message : 'Aksi gagal.');
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <Card className="p-6">
       <PanelHeading>Katalog Reward</PanelHeading>
@@ -300,18 +328,41 @@ function InventoryPanel() {
                     <Badge variant="slate">{reward.pointsCost} poin</Badge>
                   </div>
                   {reward.description && <p className="mt-1 text-sm text-sk-muted">{reward.description}</p>}
+                  {reward.rewardType === 'DIGITAL' && (
+                    <p className="mt-1 break-all text-xs text-sk-muted">
+                      {reward.deliveryUrl
+                        ? <>Dikirim otomatis ke email peserta: <span className="font-mono">{reward.deliveryUrl}</span></>
+                        : <span className="text-sk-error">Link pengiriman belum diisi — klaim akan menunggu penyerahan manual.</span>}
+                    </p>
+                  )}
                 </div>
-                <Button
-                  size="sm"
-                  variant={reward.isActive ? 'destructive' : 'ghost'}
-                  onClick={() => {
-                    setCatalogAction({ rewardId: reward.id, title: reward.title, isActive: reward.isActive });
-                    setReason('');
-                    setError(null);
-                  }}
-                >
-                  {reward.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {reward.rewardType === 'DIGITAL' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setDeliveryAction({ rewardId: reward.id, title: reward.title, current: reward.deliveryUrl });
+                        setDeliveryUrl(reward.deliveryUrl ?? '');
+                        setReason('');
+                        setError(null);
+                      }}
+                    >
+                      {reward.deliveryUrl ? 'Ubah link' : 'Atur link'}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant={reward.isActive ? 'destructive' : 'ghost'}
+                    onClick={() => {
+                      setCatalogAction({ rewardId: reward.id, title: reward.title, isActive: reward.isActive });
+                      setReason('');
+                      setError(null);
+                    }}
+                  >
+                    {reward.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                  </Button>
+                </div>
               </div>
               {reward.inventoryMode === 'LIMITED' && periods.length > 0 && (
                 <div className="mt-2 space-y-1.5 pl-1">
@@ -355,6 +406,36 @@ function InventoryPanel() {
             </Button>
             <Button onClick={submitCatalog} loading={pending}>
               Konfirmasi
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={deliveryAction !== null} onClose={() => setDeliveryAction(null)} labelledBy="delivery-action-title">
+        <div className="p-7">
+          <h3 id="delivery-action-title" className="mb-2 text-lg font-bold text-sk-navy">
+            Link pengiriman — {deliveryAction?.title}
+          </h3>
+          <p className="mb-3 text-sm text-sk-muted">
+            Alamat halaman yang diterima peserta. Setiap klaim baru langsung ditandai selesai, link-nya dikirim ke email peserta, dan tersimpan
+            di profilnya. Kosongkan untuk kembali ke penyerahan manual.
+          </p>
+          <Input
+            type="url"
+            inputMode="url"
+            placeholder="https://..."
+            value={deliveryUrl}
+            onChange={(e) => setDeliveryUrl(e.target.value)}
+            className="mb-3"
+          />
+          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Alasan" rows={3} className="mb-4" />
+          {error && <p className="mb-4 text-sm text-sk-error">{error}</p>}
+          <div className="flex justify-end gap-2.5">
+            <Button variant="ghost" onClick={() => setDeliveryAction(null)} disabled={pending}>
+              Batal
+            </Button>
+            <Button onClick={submitDelivery} loading={pending}>
+              Simpan
             </Button>
           </div>
         </div>

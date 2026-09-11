@@ -3,7 +3,9 @@ import { and, eq, gt, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { catalog, inventoryPeriods, pointLedger, redemptions } from "@/server/db/schema";
 import { summarizePoints } from "./accounting";
+import { flushPendingEmails } from "@/server/notifications/service";
 import { claimRedemption } from "./redemption-service";
+import { deliverDigitalReward, type DigitalDelivery } from "./digital-delivery";
 import { deliverVoucherReward, type VoucherDelivery } from "./voucher-push";
 
 export { lockPointAccount, reconcilePointAccount } from "./accounting";
@@ -172,25 +174,45 @@ async function outOfStockSlugs(db: Db, skus: Array<{ id: string; slug: string; i
   return new Set(limited.filter((sku) => !available.has(sku.id)).map((sku) => sku.slug));
 }
 
+/** What a claim's automatic delivery reports back, per reward kind. */
+export type RewardDelivery = VoucherDelivery | DigitalDelivery;
+
 /**
  * Claim against spendable ledger balance. The shared service debits points,
  * reserves stock and records the claim atomically.
  *
- * A voucher reward (DISCOUNT / MASTERCLASS) is then delivered: its code is
- * pushed to the main site and the claim fulfilled with it. That happens after
- * the claim has committed and can never undo it — a main site that is not
- * ready leaves the claim PENDING for manual fulfilment, and an unexpected
- * failure in delivery is reported as `delivery: null`, not as a failed claim.
+ * The reward is then delivered by kind: a voucher (DISCOUNT / MASTERCLASS)
+ * pushes its code to the main site, a DIGITAL reward hands over the link the
+ * admin configured and emails it. Both happen after the claim has committed
+ * and can never undo it — an unconfigured destination leaves the claim PENDING
+ * for manual fulfilment, and an unexpected failure is reported as
+ * `delivery: null`, not as a failed claim. A reward with nothing to deliver
+ * automatically (a service, a cash payout) also reports null and stays in the
+ * admin queue, which is where a human hands it over.
  */
 export async function takeMilestone(
   input: { userId: string; slug: string; weekId?: string | null; retryOf?: string; db?: Db },
-): Promise<{ redemptionId: string; pointsSpent: number; delivery: VoucherDelivery | null }> {
+): Promise<{ redemptionId: string; pointsSpent: number; delivery: RewardDelivery | null }> {
   const taken = await claimRedemption(input);
-  let delivery: VoucherDelivery | null = null;
+  let delivery: RewardDelivery | null = null;
   try {
-    delivery = await deliverVoucherReward({ redemptionId: taken.redemptionId, db: input.db });
+    const voucher = await deliverVoucherReward({ redemptionId: taken.redemptionId, db: input.db });
+    const served = voucher.status === "NOT_VOUCHER"
+      ? await deliverDigitalReward({ redemptionId: taken.redemptionId, db: input.db })
+      : voucher;
+    delivery = served.status === "NOT_DIGITAL" ? null : served;
   } catch (error) {
-    console.error("[rewards] voucher delivery failed after a committed claim", taken.redemptionId, error instanceof Error ? error.message : error);
+    console.error("[rewards] delivery failed after a committed claim", taken.redemptionId, error instanceof Error ? error.message : error);
+  }
+  // The queued email is the reward itself for a digital claim, so it goes now
+  // instead of waiting for the next scheduled flush. A failure here costs
+  // nothing: the message stays queued and the scheduler retries it.
+  if (delivery?.status === "DELIVERED") {
+    try {
+      await flushPendingEmails({ limit: 3 });
+    } catch (error) {
+      console.error("[rewards] immediate email flush failed", taken.redemptionId, error instanceof Error ? error.message : error);
+    }
   }
   return { ...taken, delivery };
 }

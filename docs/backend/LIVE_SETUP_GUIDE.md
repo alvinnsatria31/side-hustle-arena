@@ -65,3 +65,26 @@ Urutan aktivasi:
 3. Periksa data hasil normalisasi di `/app/jobs`, termasuk tautan lamaran HTTPS.
 4. Aktifkan sumber dari dashboard setelah hasilnya benar.
 5. Pantau sync berikutnya dan nonaktifkan sumber bila mapping provider berubah.
+
+## Reward digital: pengiriman otomatis lewat email
+
+Reward bertipe `DIGITAL` (mis. `notion-kit`) diserahkan sendiri oleh sistem
+begitu diklaim: klaim ditandai `FULFILLED`, catatan penyerahan berisi link
+muncul di profil peserta, dan notifikasi `REWARD_FULFILLED` mengantre sebagai
+email berisi link yang sama. Antrean langsung didorong setelah klaim, jadi email
+tidak menunggu job `email-flush` berikutnya.
+
+Yang perlu disiapkan sekali per reward:
+
+1. Pastikan halaman tujuan sudah publik. Untuk template Notion: Share →
+   Publish, lalu aktifkan "Allow duplicate as template".
+2. Buka `/app/admin/rewards` → Katalog Reward → tombol **Atur link** pada reward
+   digitalnya, isi URL https publiknya, lalu simpan dengan alasan.
+
+Selama link belum diisi, klaim berhenti di `PENDING` dengan audit
+`REWARD_DIGITAL_DELIVERY_DEFERRED` dan tetap bisa diserahkan manual lewat
+"Tandai selesai" — tidak ada peserta yang dikirimi alamat yang belum diperiksa.
+
+Link hanya bisa diklik di email kalau host-nya ada di `ARENA_EMAIL_LINK_HOSTS`
+(default: `notion.site`, `notion.so`, `sekolahkarir.id`). Host lain tetap
+terkirim, tapi sebagai teks biasa.

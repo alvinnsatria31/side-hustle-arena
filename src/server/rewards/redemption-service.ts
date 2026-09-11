@@ -214,7 +214,14 @@ export async function claimRedemption(input: {
 export async function fulfillRedemption(input: {
   redemptionId: string; actorSubject: string; reference: string; db?: RewardDb;
   actorType?: "ADMIN" | "AUTOMATION";
-  verification?: "MANUALLY_VERIFIED" | "MAIN_SITE_VOUCHER_PUSHED";
+  verification?: "MANUALLY_VERIFIED" | "MAIN_SITE_VOUCHER_PUSHED" | "DIGITAL_LINK_SENT";
+  /**
+   * A digital reward's link. It becomes the notification's action URL, so the
+   * participant's email carries the reward itself rather than a trip back to
+   * the profile to copy it.
+   */
+  deliveryLink?: string;
+  rewardTitle?: string;
 }) {
   const actorSubject = required(input.actorSubject, "Actor subject");
   const reference = required(input.reference, "Manually verified payment/delivery reference");
@@ -236,8 +243,13 @@ export async function fulfillRedemption(input: {
       actorType: input.actorType ?? "ADMIN", actorSubject, action: "REWARD_FULFILLED", entityType: "redemption", entityId: take.id,
       metadata: { reference, verification: input.verification ?? "MANUALLY_VERIFIED", payoutSentByService: false },
     });
-    await notify({ type: "REWARD_FULFILLED", userId: take.userId, title: "Reward dipenuhi",
-      body: "Reward kamu sudah diserahkan. Cek catatan penyerahannya di Profil.", actionUrl: "/app/profile" }, tx);
+    await notify(input.deliveryLink
+      ? { type: "REWARD_FULFILLED", userId: take.userId,
+          title: `${input.rewardTitle ?? sku.title} sudah siap dibuka`,
+          body: `Klaim ${input.rewardTitle ?? sku.title} sudah diproses. Buka lewat tautan di bawah. Tautan yang sama tersimpan di Profil Arena kamu.`,
+          actionUrl: input.deliveryLink }
+      : { type: "REWARD_FULFILLED", userId: take.userId, title: "Reward dipenuhi",
+          body: "Reward kamu sudah diserahkan. Cek catatan penyerahannya di Profil.", actionUrl: "/app/profile" }, tx);
     return fulfilled;
   });
 }

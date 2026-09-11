@@ -1,0 +1,1 @@
+ALTER TABLE "rewards"."catalog" ADD COLUMN "delivery_url" text;

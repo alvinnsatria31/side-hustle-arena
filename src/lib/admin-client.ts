@@ -198,6 +198,13 @@ export const setAdminRewardActive = (input: { rewardId: string; isActive: boolea
     body: JSON.stringify({ action: 'catalog', ...input }),
   });
 
+/** The link a DIGITAL reward is served with; null takes it back to manual fulfilment. */
+export const setAdminRewardDeliveryUrl = (input: { rewardId: string; deliveryUrl: string | null; reason: string }) =>
+  adminRequest('/api/internal/rewards/inventory', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'delivery', ...input }),
+  });
+
 export const setAdminInventoryQuantity = (input: { periodId: string; quantityTotal: number; reason: string }) =>
   adminRequest('/api/internal/rewards/inventory', {
     method: 'POST',

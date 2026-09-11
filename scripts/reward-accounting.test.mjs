@@ -6,6 +6,7 @@ import { getTableColumns, getTableName } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { catalog, pointAccounts, pointLedger, redemptions, inventoryPeriods, events, deliveries, logs } from '../src/server/db/schema/index.ts';
 import { claimRedemption, fulfillRedemption, reverseRedemption, reconcilePointAccount } from '../src/server/rewards/redemption-service.ts';
+import { deliverDigitalReward } from '../src/server/rewards/digital-delivery.ts';
 
 // In-memory transaction adapter with row locks, uniqueness, rollback and SQL
 // predicate evaluation. It runs the real service; no PostgreSQL connection exists.
@@ -530,4 +531,53 @@ test('reversing a voucher claim that was never pushed makes no call to the main 
     assert.equal(result.voucher.voidAttempted, false);
   }, false);
   assert.equal(balanceOf(db), 3000);
+});
+
+// ---------------------------------------------------------------- digital rewards
+
+function digitalSetup(deliveryUrl = 'https://kit.notion.site/job-hunt') {
+  const context = setup({ cost: 300 });
+  context.sku.rewardType = 'DIGITAL';
+  context.sku.title = 'Template Notion & Resume Starter Kit';
+  context.sku.deliveryUrl = deliveryUrl;
+  return context;
+}
+
+test('a digital claim is served its link, on the profile and in an email', async () => {
+  const { db, claim, sku } = digitalSetup();
+  const { redemptionId } = await claim();
+  assert.deepEqual(await deliverDigitalReward({ redemptionId, db }), { status: 'DELIVERED', url: 'https://kit.notion.site/job-hunt' });
+
+  const row = db.tables.get(redemptions)[0];
+  assert.equal(row.status, 'FULFILLED');
+  assert.match(row.fulfillmentReference, /https:\/\/kit\.notion\.site\/job-hunt/, 'the profile note carries the link too');
+  const fulfilled = db.tables.get(events).find((event) => event.type === 'REWARD_FULFILLED');
+  assert.equal(fulfilled.actionUrl, 'https://kit.notion.site/job-hunt', 'the emailed link IS the reward');
+  assert.ok(fulfilled.title.includes(sku.title));
+  // The claim notice queues an email of its own; this one carries the link.
+  assert.equal(db.tables.get(deliveries).filter((row) => row.eventId === fulfilled.id && row.channel === 'EMAIL' && row.status === 'PENDING').length, 1);
+  assert.equal(balanceOf(db), 2700);
+
+  // Delivering again hands over the same reward, never a second one.
+  assert.deepEqual(await deliverDigitalReward({ redemptionId, db }), { status: 'ALREADY_SETTLED', redemptionStatus: 'FULFILLED' });
+  assert.equal(db.tables.get(events).filter((event) => event.type === 'REWARD_FULFILLED').length, 1);
+});
+
+test('a digital reward with no link configured waits for an admin instead of serving nothing', async () => {
+  const { db, claim } = digitalSetup(null);
+  const { redemptionId } = await claim();
+  const delivery = await deliverDigitalReward({ redemptionId, db });
+
+  assert.equal(delivery.status, 'MANUAL_REQUIRED');
+  assert.match(delivery.reason, /belum diisi/);
+  assert.equal(db.tables.get(redemptions)[0].status, 'PENDING', 'the claim stays in the admin queue');
+  assert.equal(db.tables.get(events).some((event) => event.type === 'REWARD_FULFILLED'), false);
+  assert.equal(db.tables.get(logs).at(-1).action, 'REWARD_DIGITAL_DELIVERY_DEFERRED');
+});
+
+test('digital delivery refuses rewards that are handed over some other way', async () => {
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  assert.deepEqual(await deliverDigitalReward({ redemptionId, db }), { status: 'NOT_DIGITAL' });
+  assert.equal(db.tables.get(redemptions)[0].status, 'PENDING');
 });

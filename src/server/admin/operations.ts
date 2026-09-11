@@ -134,6 +134,7 @@ export const inventoryMutation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("catalog"), rewardId: z.string().uuid(), isActive: z.boolean(), reason: z.string().trim().min(1).max(1000) }),
   z.object({ action: z.literal("quantity"), periodId: z.string().uuid(), quantityTotal: z.number().int().min(0).max(2147483647), reason: z.string().trim().min(1).max(1000) }),
   z.object({ action: z.literal("period"), rewardId: z.string().uuid(), periodStart: z.iso.datetime(), periodEnd: z.iso.datetime(), quantityTotal: z.number().int().min(0).max(2147483647), reason: z.string().trim().min(1).max(1000) }),
+  z.object({ action: z.literal("delivery"), rewardId: z.string().uuid(), deliveryUrl: z.union([z.string().trim().min(1).max(2000), z.null()]), reason: z.string().trim().min(1).max(1000) }),
 ]);
 
 export async function updateAdminInventory(input: z.infer<typeof inventoryMutation> & { actorSubject: string; db?: Db }) {
@@ -153,6 +154,17 @@ export async function updateAdminInventory(input: z.infer<typeof inventoryMutati
       await tx.update(catalog).set({ isActive: input.isActive, updatedAt: new Date() }).where(eq(catalog.id, reward.id));
       await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "REWARD_CATALOG_SET", entityType: "reward", entityId: reward.id,
         metadata: { previousActive: reward.isActive, isActive: input.isActive, reason: input.reason } });
+      return { id: reward.id };
+    }
+    if (input.action === "delivery") {
+      // The link a claim is served with, so it is checked once here rather than
+      // pasted per claim: only https, and only for rewards that are a link.
+      if (reward.rewardType !== "DIGITAL") throw new ArenaDomainError("VALIDATION_ERROR", "Link pengiriman hanya berlaku untuk reward digital.");
+      const deliveryUrl = input.deliveryUrl?.trim() || null;
+      if (deliveryUrl && !/^https:\/\/\S+$/i.test(deliveryUrl)) throw new ArenaDomainError("VALIDATION_ERROR", "Link pengiriman harus berupa URL https.");
+      await tx.update(catalog).set({ deliveryUrl, updatedAt: new Date() }).where(eq(catalog.id, reward.id));
+      await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "REWARD_DELIVERY_URL_SET", entityType: "reward", entityId: reward.id,
+        metadata: { previousDeliveryUrl: reward.deliveryUrl, deliveryUrl, reason: input.reason } });
       return { id: reward.id };
     }
     const start = new Date(input.periodStart);

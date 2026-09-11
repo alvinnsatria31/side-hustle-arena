@@ -48,17 +48,55 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
 
-export function emailContent(event: { body: string; actionUrl: string | null }, origin?: string) {
+/**
+ * Hosts an email may link to besides the Arena itself.
+ *
+ * A notification's actionUrl becomes a clickable link in mail signed with our
+ * domain, so an arbitrary absolute URL is still never linked. Digital rewards
+ * are handed over as a link an admin set, and those links live on a few known
+ * hosts. Anything outside this list still reaches the participant — as text
+ * they can read before deciding to open it.
+ */
+export const DEFAULT_EMAIL_LINK_HOSTS = ["notion.site", "notion.so", "sekolahkarir.id"];
+
+export function emailLinkHosts(configured = process.env.ARENA_EMAIL_LINK_HOSTS): string[] {
+  const listed = (configured ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
+  return listed.length ? listed : DEFAULT_EMAIL_LINK_HOSTS;
+}
+
+function hostAllowed(hostname: string, allowed: string[]) {
+  return allowed.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+}
+
+export function emailContent(
+  event: { body: string; actionUrl: string | null },
+  origin?: string,
+  allowedHosts: string[] = emailLinkHosts(),
+) {
   let destination: string | undefined;
-  if (origin && event.actionUrl?.startsWith("/") && !event.actionUrl.startsWith("//") && !event.actionUrl.includes("\\")) {
-    try {
-      const base = new URL(origin);
-      const url = new URL(event.actionUrl, base);
-      if (url.protocol === "https:" && url.origin === base.origin) destination = url.href;
-    } catch { /* A missing/invalid public origin must not produce an unsafe link. */ }
+  let external = false;
+  const actionUrl = event.actionUrl;
+  if (actionUrl && !actionUrl.includes("\\")) {
+    if (actionUrl.startsWith("/") && !actionUrl.startsWith("//")) {
+      if (origin) {
+        try {
+          const base = new URL(origin);
+          const url = new URL(actionUrl, base);
+          if (url.protocol === "https:" && url.origin === base.origin) destination = url.href;
+        } catch { /* A missing/invalid public origin must not produce an unsafe link. */ }
+      }
+    } else {
+      try {
+        const url = new URL(actionUrl);
+        if (url.protocol === "https:" && !url.username && !url.password && hostAllowed(url.hostname.toLowerCase(), allowedHosts)) {
+          destination = url.href;
+          external = true;
+        }
+      } catch { /* Not a URL at all: nothing to link. */ }
+    }
   }
   return {
-    html: `<p>${escapeHtml(event.body)}</p>${destination ? `<p><a href="${escapeHtml(destination)}">Buka Arena</a></p>` : ""}`,
+    html: `<p>${escapeHtml(event.body)}</p>${destination ? `<p><a href="${escapeHtml(destination)}">${external ? "Buka hadiahmu" : "Buka Arena"}</a></p>` : ""}`,
     text: event.body + (destination ? `\n\n${destination}` : ""),
   };
 }

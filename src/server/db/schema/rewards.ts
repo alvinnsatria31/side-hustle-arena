@@ -39,6 +39,13 @@ export const catalog = rewards.table("catalog", {
   rewardType: rewardType("reward_type").notNull(),
   monetaryValueMinor: integer("monetary_value_minor"),
   currency: text("currency"),
+  /**
+   * Where a DIGITAL reward actually lives — the page a participant opens once
+   * the claim is served. Set from the admin Reward page; until it is set, a
+   * claim stays PENDING for manual fulfilment instead of being served an
+   * address nobody checked.
+   */
+  deliveryUrl: text("delivery_url"),
   inventoryMode: inventoryMode("inventory_mode").default("UNLIMITED").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

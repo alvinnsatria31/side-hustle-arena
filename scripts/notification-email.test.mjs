@@ -27,6 +27,28 @@ test("email content escapes HTML and only resolves local destination links", () 
   }
 });
 
+test("a digital reward's link is only clickable when its host is allowed", () => {
+  const body = "Klaim kamu sudah diproses.";
+  const origin = "https://arena.example.com";
+  const delivered = emailContent({ body, actionUrl: "https://kit.notion.site/job-hunt" }, origin);
+  assert.match(delivered.html, /href="https:\/\/kit\.notion\.site\/job-hunt"/);
+  assert.match(delivered.text, /https:\/\/kit\.notion\.site\/job-hunt/);
+  for (const actionUrl of [
+    "http://kit.notion.site/job-hunt",              // plaintext transport
+    "https://notion.site.attacker.test/job-hunt",   // allowed host as a prefix of another
+    "https://user:pass@kit.notion.site/job-hunt",   // credentials in the URL
+    "https://kit.example.com/job-hunt",             // simply not on the list
+  ]) {
+    const content = emailContent({ body, actionUrl }, origin);
+    assert.ok(!content.html.includes("href="), actionUrl);
+    // The address still reaches the participant, as text they read first.
+    assert.equal(content.text, body);
+  }
+  // The list is configurable, and an explicit one replaces the default.
+  assert.match(emailContent({ body, actionUrl: "https://kit.example.com/x" }, origin, ["example.com"]).html, /href=/);
+  assert.ok(!emailContent({ body, actionUrl: "https://kit.notion.site/x" }, origin, ["example.com"]).html.includes("href="));
+});
+
 test("retry backoff is bounded and stops before provider idempotency expiry", () => {
   const now = new Date("2026-09-06T00:00:00Z");
   assert.equal(retryAt(1, now).getTime() - now.getTime(), 5 * 60_000);
