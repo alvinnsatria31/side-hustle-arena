@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1500">
+<title>Job Hunt Starter Kit cover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* 1500x600, in the light style of sekolahkarir.id's share image: off-white
+     grid, blue rule, letter-spaced label, navy headline with a blue highlight.
+     Notion crops a cover to a band around its middle, so the text and the
+     illustration both sit inside the central ~300px. */
+  html, body { margin: 0; }
+  body {
+    width: 1500px; height: 600px; overflow: hidden; position: relative;
+    font-family: Manrope, "Segoe UI", system-ui, sans-serif; color: #1a2540;
+    background: #fbfcfe;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(26,37,64,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,37,64,.055) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .glow {
+    position: absolute; right: -120px; top: 50%; width: 820px; height: 520px; transform: translateY(-50%);
+    background: radial-gradient(closest-side, rgba(36,107,253,.13), transparent);
+  }
+  .wrap {
+    position: absolute; left: 150px; right: 150px; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 60px;
+  }
+  .rule { width: 80px; height: 6px; border-radius: 3px; background: #246bfd; }
+  .label {
+    display: flex; align-items: center; gap: 12px; margin-top: 16px;
+    font-size: 16px; font-weight: 700; letter-spacing: .26em; color: #246bfd; white-space: nowrap;
+  }
+  .label img { width: 32px; height: 32px; border-radius: 8px; background: #fff; box-shadow: 0 0 0 1px #e3e9f4; }
+  .label span { color: #7b8aa6; }
+  h1 { margin: 12px 0 10px; font-size: 66px; line-height: 1; font-weight: 800; letter-spacing: -.03em; color: #07152d; white-space: nowrap; }
+  h1 em { font-style: normal; color: #246bfd; }
+  p { margin: 0; font-size: 23px; font-weight: 500; color: #3a4a68; white-space: nowrap; }
+
+  .art { position: relative; width: 450px; height: 270px; flex: none; }
+  .board { position: absolute; left: 0; top: 30px; display: flex; gap: 12px; }
+  .col { width: 116px; padding: 10px; border-radius: 12px; background: #eef3fb; }
+  .col h3 { margin: 0 0 9px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #5b6b88; }
+  .card {
+    height: 56px; margin-bottom: 8px; border-radius: 9px; padding: 10px; box-sizing: border-box;
+    background: #fff; box-shadow: 0 1px 2px rgba(7,21,45,.08), 0 0 0 1px #e3e9f4;
+  }
+  .card:last-child { margin-bottom: 0; }
+  .card i { display: block; height: 7px; width: 80%; border-radius: 4px; background: #c7d2e3; }
+  .card i.short { width: 58%; }
+  .card b { display: inline-block; margin-top: 11px; height: 14px; width: 52px; border-radius: 7px; }
+  .applied b { background: #cddcff; } .interview b { background: #fde68a; } .offer b { background: #bbf7d0; }
+
+  .cv {
+    position: absolute; right: 6px; top: 0; width: 184px; height: 250px; border-radius: 10px;
+    background: #fff; transform: rotate(4deg); padding: 22px 20px; box-sizing: border-box;
+    box-shadow: 0 22px 44px rgba(7,21,45,.16), 0 0 0 1px #e3e9f4;
+  }
+  .cv .n { height: 12px; width: 68%; border-radius: 3px; background: #07152d; }
+  .cv .s { height: 6px; width: 92%; border-radius: 3px; background: #c7d2e3; margin-top: 8px; }
+  .cv .h { height: 7px; width: 40%; border-radius: 3px; background: #246bfd; margin-top: 17px; }
+  .cv .l { height: 5px; border-radius: 3px; background: #dde4ef; margin-top: 7px; }
+  .cv .l.w85 { width: 85%; } .cv .l.w90 { width: 90%; } .cv .l.w75 { width: 75%; }
+  .tag {
+    position: absolute; left: -36px; bottom: 26px; transform: rotate(-4deg);
+    background: #246bfd; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .08em;
+    padding: 8px 13px; border-radius: 8px; box-shadow: 0 10px 22px rgba(36,107,253,.35);
+  }
+  .bars { position: absolute; right: -8px; bottom: -6px; display: flex; align-items: flex-end; gap: 9px; }
+  .bars i { width: 26px; border-radius: 2px; }
+  .bars i:nth-child(1) { height: 26px; background: #9cc3ff; }
+  .bars i:nth-child(2) { height: 44px; background: #3b82f6; }
+  .bars i:nth-child(3) { height: 64px; background: #1e3a8a; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="wrap">
+    <div>
+      <div class="rule"></div>
+      <div class="label"><img src="assets/sekolah-karir-mark.png" alt="">SEKOLAH KARIR <span>· SIDE HUSTLE ARENA</span></div>
+      <h1>Job Hunt <em>Starter Kit.</em></h1>
+      <p>Tracker lamaran kerja + template CV siap pakai</p>
+    </div>
+    <div class="art" aria-hidden="true">
+      <div class="board">
+        <div class="col applied"><h3>Applied</h3><div class="card"><i></i><b></b></div><div class="card"><i class="short"></i><b></b></div></div>
+        <div class="col interview"><h3>Interview</h3><div class="card"><i class="short"></i><b></b></div></div>
+      </div>
+      <div class="cv">
+        <div class="n"></div><div class="s"></div>
+        <div class="h"></div><div class="l"></div><div class="l w85"></div><div class="l w90"></div>
+        <div class="h"></div><div class="l"></div><div class="l w75"></div>
+        <div class="h"></div><div class="l w90"></div><div class="l w75"></div>
+        <div class="tag">ATS-FRIENDLY</div>
+      </div>
+      <div class="bars"><i></i><i></i><i></i></div>
+    </div>
+  </div>
+</body>
+</html>
