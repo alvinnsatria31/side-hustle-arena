@@ -4,7 +4,12 @@ import { getDb } from "@/server/db/client";
 import { projectSkills, skills } from "@/server/db/schema";
 import { getCurrentArenaWeek, getVisibleArenaProject, listActiveArenaDivisions, listVisibleArenaProjects } from "@/server/arena";
 import { ArenaDomainError } from "@/server/arena/errors";
-import type { ArenaProject, ProjectDifficulty } from "@/types/project";
+import { deadlineLabel } from "@/lib/deadline";
+import type { ArenaProject, ProjectDifficulty, ProjectResource } from "@/types/project";
+
+// Kept exported here: existing pages import it from this module, and the
+// formatter itself now lives in @/lib/deadline so client components share it.
+export { deadlineLabel };
 
 /**
  * Public read seam (Phase 9a): backend rows → the view models the approved
@@ -15,8 +20,9 @@ import type { ArenaProject, ProjectDifficulty } from "@/types/project";
  *   were mock-only; PRD pays points by rank, not by project).
  * - difficulty "STANDARD" is the only band the schema knows today → shown as
  *   Intermediate until the generator phase ships real bands.
- * - week number is the ISO week of opensAt; deadline label renders the real
- *   Friday 23:59 WIB timestamp from the database.
+ * - week number is the ISO week of the project's own week, and the deadline
+ *   label renders that week's real timestamp — never the currently open week's,
+ *   which is what made archived and ad-hoc briefs advertise the wrong day.
  */
 
 export function isoWeekNumber(date: Date): number {
@@ -27,12 +33,6 @@ export function isoWeekNumber(date: Date): number {
   const firstDay = (firstThursday.getUTCDay() + 6) % 7;
   firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
   return 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
-}
-
-export function deadlineLabel(date: Date): string {
-  const weekday = new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(date);
-  const time = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jakarta" }).format(date);
-  return `${weekday} · ${time}`;
 }
 
 export function monthDayLabel(date: Date): string {
@@ -47,6 +47,18 @@ function difficultyLabel(band: string): ProjectDifficulty {
   if (band === "BEGINNER") return "Beginner";
   if (band === "ADVANCED") return "Advanced";
   return "Intermediate";
+}
+
+/**
+ * Resource rows → the view model the resource list renders.
+ *
+ * The URL is the point. This mapper used to return `[]` and the component below
+ * it rendered titles with nothing behind them, so a brief could name a dataset
+ * the participant had no way to open. Kind is lowercased for the icon map and
+ * is presentation only.
+ */
+function toProjectResources(rows: Array<{ id: string; label: string; url: string; kind: string }>): ProjectResource[] {
+  return rows.map((row) => ({ id: row.id, title: row.label, kind: row.kind.toLowerCase() as ProjectResource["kind"], url: row.url }));
 }
 
 function estimatedLabel(minutes: number | null): string {
@@ -181,10 +193,13 @@ export async function getPublicProjectDetail(slug: string): Promise<ArenaProject
   } catch {
     return null;
   }
-  const week = await getCurrentArenaWeek().catch(() => null);
-  const opensAt = week ? new Date(week.opensAt) : new Date();
+  // The project's OWN week. Labelling an archived project with whatever week is
+  // open today is how a finished brief came to advertise next Friday's deadline,
+  // and how an ad-hoc week that ends on a Tuesday got a Friday next to it.
+  const opensAt = new Date(detail.week.opensAt);
   const weekNo = isoWeekNumber(opensAt);
-  const deadline = week ? deadlineLabel(new Date(week.submissionDeadlineAt)) : "";
+  const deadline = deadlineLabel(new Date(detail.week.submissionDeadlineAt));
+  const currentWeek = await currentWeekOrNull().catch(() => null);
   const totalWeight = detail.rubric.reduce((sum, criterion) => sum + Number(criterion.weight), 0) || 1;
   return {
     slug: detail.slug,
@@ -203,7 +218,7 @@ export async function getPublicProjectDetail(slug: string): Promise<ArenaProject
       description: requirement.instructions ?? undefined,
     })),
     skills: detail.skills.map((skill) => skill.name),
-    resources: [],
+    resources: toProjectResources(detail.resources),
     difficulty: difficultyLabel(detail.difficulty),
     estimatedTime: estimatedLabel(detail.estimatedMinutes),
     deadlineLabel: deadline,
@@ -213,6 +228,6 @@ export async function getPublicProjectDetail(slug: string): Promise<ArenaProject
       weight: Math.round((Number(criterion.weight) / totalWeight) * 100),
       description: criterion.description ?? criterion.reviewInstruction ?? "",
     })),
-    isThisWeek: true,
+    isThisWeek: currentWeek?.id === detail.week.id,
   };
 }

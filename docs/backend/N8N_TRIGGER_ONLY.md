@@ -90,8 +90,23 @@ Every job returns `{ data: { job, done, detail } }`.
 - `done: true` with `detail.skipped` — the normal quiet case. The job looked for
   work, found none, and stopped. Not an alert.
 - `done: true` with counts — it did something.
-- `done: false` — it could not finish. The workflow's "Summarise the run" node
-  treats this and any non-200 as the failure signal.
+- `done: false` with `detail.skipped` or `detail.stopped` — deferred, not broken.
+  Generation switched off by a flag, or a tick that ran out of budget and will be
+  continued by the next one.
+- `done: false` with `detail.failed` — it broke. So did any non-2xx status.
+
+"Summarise the run" tells those last two apart by `detail`, never by `done`, and
+**throws** on a real failure so the n8n execution is marked red. That matters: a
+node that returns `{ ok: false }` and finishes normally leaves the run green, which
+is how HTTP 500s from Arena sat unnoticed on a dashboard that looked healthy. A
+deferred job is still reported as a quiet success, with `deferred: true` on the
+summary item, so a config-gated job does not train operators to ignore red.
+
+The `heartbeat:*` signals in `/app/admin` are the other half of this: they catch a
+timer that stopped firing altogether, which no execution log can show because
+there is no execution to look at. `week-close`, `week-finalize`, `project-drop`,
+`project-generate`, `email-flush`, `jobs-sync`, `week-notifications` and
+`storage-cleanup` are all watched.
 
 A job that cannot complete *yet* (reviews still running when a week wants to
 finalize) reports itself as waiting and stays `done: true`. The schedule is the

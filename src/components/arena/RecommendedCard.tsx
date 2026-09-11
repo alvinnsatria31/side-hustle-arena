@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Badge } from '@/components/primitives/Badge';
 import { DifficultyBadge, TimeBadge } from './ProjectBadges';
 import type { ArenaProject } from '@/types/project';
@@ -37,7 +38,7 @@ export function RecommendedCard({
   className,
   delay = 0,
 }: RecommendedCardProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const to = href ?? `${hrefPrefix}/${project.slug}`;
 
   return (

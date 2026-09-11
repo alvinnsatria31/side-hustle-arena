@@ -7,7 +7,14 @@
  *   3. user_id ASC (final deterministic tiebreak when timestamps collide)
  *
  * Points (never expire; ledger is the source of truth, this is the formula):
- *   rank 1 → 300, rank 2 → 200, rank 3 → 150, rank 4+ → 100.
+ *   points = round(final score 0–100) + rank bonus
+ *   rank bonus: rank 1 → +200, rank 2 → +100, rank 3 → +50, rank 4+ → +0.
+ *
+ * The score itself is what a participant earns, so better work earns more at
+ * every rank — under the old flat ladder (300/200/150/100) a 95 and a 55 at
+ * rank 4+ both earned 100. The bonus keeps the podium worth chasing, and the
+ * totals stay close to the old ladder for typical scores (a 90 at rank 1 is
+ * 290, a 75 at rank 5 is 75).
  * No valid completion → 0 points and no leaderboard row at all.
  */
 
@@ -22,11 +29,21 @@ export interface RankedFinalist extends Finalist {
   points: number;
 }
 
-export function pointsForRank(rank: number): number {
-  if (rank === 1) return 300;
-  if (rank === 2) return 200;
-  if (rank === 3) return 150;
-  return 100;
+export function rankBonus(rank: number): number {
+  if (rank === 1) return 200;
+  if (rank === 2) return 100;
+  if (rank === 3) return 50;
+  return 0;
+}
+
+/** The score's own points: clamped to 0–100 and rounded half up. */
+export function scorePoints(finalScore: number): number {
+  if (!Number.isFinite(finalScore)) return 0;
+  return Math.round(Math.min(100, Math.max(0, finalScore)));
+}
+
+export function pointsForResult(rank: number, finalScore: number): number {
+  return scorePoints(finalScore) + rankBonus(rank);
 }
 
 export function rankFinalists<T extends Finalist>(finalists: T[]): Array<T & { rank: number; points: number }> {
@@ -38,6 +55,6 @@ export function rankFinalists<T extends Finalist>(finalists: T[]): Array<T & { r
   });
   return sorted.map((finalist, index) => {
     const rank = index + 1;
-    return { ...finalist, rank, points: pointsForRank(rank) };
+    return { ...finalist, rank, points: pointsForResult(rank, finalist.finalScore) };
   });
 }

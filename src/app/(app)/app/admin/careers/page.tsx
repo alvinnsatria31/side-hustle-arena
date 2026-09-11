@@ -6,7 +6,8 @@ import { AdminShell, AdminRefreshButton } from '@/components/admin/AdminShell';
 import { Card, PanelHeading } from '@/components/primitives/Card';
 import { Badge } from '@/components/primitives/Badge';
 import { Button } from '@/components/primitives/Button';
-import { getAdminJobSources, runAdminJobSourceAction, useAdminResource, type AdminJobSource } from '@/lib/admin-client';
+import { AddJobSourceDialog } from '@/components/admin/AddJobSourceDialog';
+import { getAdminJobSources, runAdminJobSourceAction, useAdminResource, type AdminJobSource, type AdminJobSourceCreated } from '@/lib/admin-client';
 import { ArenaApiError } from '@/lib/arena-client';
 import { jakartaDate } from '@/lib/jakarta-time';
 
@@ -38,6 +39,17 @@ export default function AdminCareersPage() {
   const sources = useAdminResource(useCallback(() => getAdminJobSources(), []));
   const [busy, setBusy] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Record<string, string>>({});
+  const [created, setCreated] = useState<string | null>(null);
+
+  const onCreated = async (result: AdminJobSourceCreated) => {
+    const { created: source, sync, syncError } = result;
+    const parts = [`Sumber "${source.name}" tersimpan (${source.slug}), ${source.isActive ? 'aktif' : 'nonaktif'}.`];
+    if (source.credentialConfigured === false) parts.push('Variabel token belum ter-set di server, jadi sync akan gagal sampai diisi.');
+    if (sync) parts.push(`Sync pertama ${sync.status.toLowerCase()}: ${sync.totals.itemsSeen} dibaca, ${sync.totals.itemsCreated} baru, ${sync.totals.itemsInvalid} ditolak.${sync.errorCode ? ` (${sync.errorCode})` : ''}`);
+    if (syncError) parts.push(`Sync pertama gagal: ${syncError}`);
+    setCreated(parts.join(' '));
+    await sources.refresh();
+  };
 
   const act = async (source: AdminJobSource, action: 'sync' | 'enable' | 'disable') => {
     setBusy(`${source.id}:${action}`);
@@ -64,7 +76,12 @@ export default function AdminCareersPage() {
     <AdminShell
       title="Sumber lowongan"
       description="Kesehatan tiap provider lowongan, kapan terakhir berhasil sync, dan pemicu manual. Menonaktifkan sumber menghentikan data baru; lowongan lamanya berhenti direkomendasikan tanpa dihapus dari riwayat."
-      action={<AdminRefreshButton refresh={sources.refresh} loading={sources.loading} />}
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <AddJobSourceDialog onCreated={onCreated} />
+          <AdminRefreshButton refresh={sources.refresh} loading={sources.loading} />
+        </div>
+      }
     >
       {sources.error && (
         <div role="alert" className="mb-5 border-l-2 border-sk-error bg-sk-error-wash p-4 text-sm text-sk-error">
@@ -72,14 +89,20 @@ export default function AdminCareersPage() {
         </div>
       )}
 
+      {created && (
+        <div role="status" className="mb-5 border-l-2 border-sk-blue bg-sk-blue-wash p-4 text-sm text-sk-navy">
+          {created}
+        </div>
+      )}
+
       {sources.data?.length === 0 && (
         <Card className="p-6">
           <PanelHeading>Belum ada sumber terdaftar</PanelHeading>
           <p className="mt-2 text-sm leading-relaxed text-sk-muted">
-            Halaman Jobs peserta akan kosong sampai satu sumber didaftarkan. Pipeline-nya sendiri sudah lengkap:
-            daftarkan satu baris <code className="rounded bg-sk-blue-wash px-1">arena.job_sources</code> dengan adapter
-            <code className="mx-1 rounded bg-sk-blue-wash px-1">http-json</code>, konfigurasi feed, dan nama variabel
-            environment tempat tokennya disimpan. Lihat <code className="rounded bg-sk-blue-wash px-1">docs/backend/JOBS_PIPELINE.md</code>.
+            Halaman Jobs peserta akan kosong sampai satu sumber didaftarkan. Klik{' '}
+            <strong className="text-sk-navy">Tambah Sumber Lowongan</strong> di atas: isi nama, URL feed JSON, dan
+            pemetaan field-nya, lalu aktifkan untuk langsung menarik lowongan pertama. Detail kontraknya ada di{' '}
+            <code className="rounded bg-sk-blue-wash px-1">docs/backend/JOBS_PIPELINE.md</code>.
           </p>
         </Card>
       )}
@@ -96,7 +119,14 @@ export default function AdminCareersPage() {
                     <Badge variant={HEALTH[health].variant}>{HEALTH[health].label}</Badge>
                     <Badge variant="slate">{source.adapter}</Badge>
                   </div>
-                  <p className="mt-1 font-mono text-[11px] text-sk-muted">{source.slug}</p>
+                  <p className="mt-1 font-mono text-[11px] text-sk-muted">{source.slug}{source.category ? ` · ${source.category}` : ''}</p>
+                  {(source.siteUrl || source.feedUrl) && (
+                    <p className="mt-1 break-all text-[11.5px] text-sk-muted">
+                      {source.siteUrl && <>Situs: {source.siteUrl}</>}
+                      {source.siteUrl && source.feedUrl && ' · '}
+                      {source.feedUrl && <>Feed: {source.feedUrl}</>}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button

@@ -1,7 +1,7 @@
 import "server-only";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { reviewJobs, reviewOverrides, reviews, submissionVersions } from "@/server/db/schema";
+import { reviewJobs, reviewOverrides, reviews, submissionVersions, submissions, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "./audit";
 import { canAdminRequeue } from "./queue-policy";
@@ -15,6 +15,19 @@ type Db = ReturnType<typeof getDb>;
  * Manual Override. Both never consume a user review attempt, are audited with
  * before/after state + reason + actor, and never delete the original review.
  */
+
+// Rankings and points are copied once at finalization. Lock the week before any review row, in finalize's order.
+async function assertWeekStillCorrectable(tx: Pick<Db, "select">, submissionVersionId: string, action: "override" | "rerun") {
+  const [owner] = await tx.select({ weekId: submissions.weekId }).from(submissionVersions)
+    .innerJoin(submissions, eq(submissions.id, submissionVersions.submissionId))
+    .where(eq(submissionVersions.id, submissionVersionId));
+  if (!owner) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Submission version not found.");
+  const [week] = await tx.select({ status: weeks.status }).from(weeks).where(eq(weeks.id, owner.weekId)).for("share");
+  if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Week not found.");
+  if (week.status === "FINALIZED" || week.status === "ARCHIVED") {
+    throw new ArenaDomainError("WEEK_ALREADY_FINALIZED", `Cannot ${action} review after week has been finalized. Final results and points are frozen.`);
+  }
+}
 
 /**
  * Requeue a version for a fresh review run. The old review rows stay untouched.
@@ -34,14 +47,16 @@ export async function rerunReview(
   if (!input.actorSubject.trim() || !input.reason.trim()) {
     throw new ArenaDomainError("VALIDATION_ERROR", "Rerun requires an actor and a reason.");
   }
+  return db.transaction(async (tx) => {
+  await assertWeekStillCorrectable(tx, input.versionId, "rerun");
   const version = (
-    await db.select().from(submissionVersions).where(eq(submissionVersions.id, input.versionId))
+    await tx.select().from(submissionVersions).where(eq(submissionVersions.id, input.versionId))
   )[0];
   if (!version) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Submission version not found.");
   if (version.reviewAttemptNumber == null || version.accessStatus !== "ACCESSIBLE") {
     throw new ArenaDomainError("VALIDATION_ERROR", "Only a version that consumed a review attempt can be rerun.");
   }
-  const existing = await db
+  const existing = await tx
     .select({ runNumber: reviews.runNumber, aiScore: reviews.aiScore })
     .from(reviews)
     .where(eq(reviews.submissionVersionId, input.versionId))
@@ -49,28 +64,28 @@ export async function rerunReview(
     .limit(1);
   const nextRunNumber = (existing[0]?.runNumber ?? 0) + 1;
 
-  const job = (await db.select().from(reviewJobs).where(eq(reviewJobs.submissionVersionId, input.versionId)))[0];
+  const job = (await tx.select().from(reviewJobs).where(eq(reviewJobs.submissionVersionId, input.versionId)).for("update"))[0];
   if (!canAdminRequeue(job ?? null, now)) {
     throw new ArenaDomainError("REVIEW_JOB_UNAVAILABLE", "A worker still holds a live lease on this review; wait for it to finish or expire.");
   }
   let jobId = job?.id;
   if (job) {
-    await db
+    await tx
       .update(reviewJobs)
       .set({ status: "PENDING", attemptCount: 0, lockedAt: null, lockedBy: null, leaseExpiresAt: null, availableAt: now, lastErrorCode: null, lastErrorMessage: null, updatedAt: now })
       .where(eq(reviewJobs.id, job.id));
   } else {
-    const [created] = await db
+    const [created] = await tx
       .insert(reviewJobs)
       .values({ submissionVersionId: input.versionId, status: "PENDING", availableAt: now })
       .returning({ id: reviewJobs.id });
     jobId = created.id;
   }
-  await db
+  await tx
     .update(submissionVersions)
     .set({ reviewStatus: "QUEUED" })
     .where(eq(submissionVersions.id, input.versionId));
-  await writeAudit(db, {
+  await writeAudit(tx, {
     actorType: "ADMIN",
     actorSubject: input.actorSubject,
     action: "REVIEW_RERUN",
@@ -86,6 +101,7 @@ export async function rerunReview(
     },
   });
   return { jobId: jobId!, nextRunNumber };
+  });
 }
 
 /** Manual score override. The review row keeps its AI score; finalScore moves; history is appended. */
@@ -100,6 +116,9 @@ export async function overrideReview(
     throw new ArenaDomainError("VALIDATION_ERROR", "Override score must be between 0 and 100.");
   }
   return db.transaction(async (tx) => {
+  const [target] = await tx.select({ versionId: reviews.submissionVersionId }).from(reviews).where(eq(reviews.id, input.reviewId));
+  if (!target) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Review not found.");
+  await assertWeekStillCorrectable(tx, target.versionId, "override");
   const review = (await tx.select().from(reviews).where(eq(reviews.id, input.reviewId)).for("update"))[0];
   if (!review) throw new ArenaDomainError("SUBMISSION_NOT_FOUND", "Review not found.");
   const previousScore = review.finalScore == null ? null : Number(review.finalScore);

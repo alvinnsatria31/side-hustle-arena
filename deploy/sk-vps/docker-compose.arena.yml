@@ -165,7 +165,9 @@ services:
       - caddy_config:/config
     networks:
       - default
-    mem_limit: 64m
+    # 128m, not 64m: with access logging + zstd + H3 under real traffic the
+    # process exceeds 64MB and the kernel OOM-kills it into a crash loop.
+    mem_limit: 128m
 
 volumes:
   arena_db_data:

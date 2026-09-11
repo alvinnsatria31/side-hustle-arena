@@ -52,9 +52,12 @@ Kalau ada pekerjaan:
   "input": {
     "projectTitle": "…", "divisionName": "…",
     "explanation": "…", "notes": "…",
+    "brief": { "caseBackground": "…", "roleDescription": "…",
+               "mission": "…", "objective": "…" },
     "rubric": [{ "id": "…uuid…", "name": "Execution", "weight": 3, "maxScore": 100,
                  "description": null, "reviewInstruction": null }],
     "items": [{ "itemType": "LINK", "externalUrl": "…", "downloadUrl": null }],
+    "evidenceLimits": ["Links are fetched as a single document. …"],
     "sources": [{ "id": "explanation", "kind": "TEXT", "text": "…", "sha256": "…" }]
   }
 } } }
@@ -63,6 +66,15 @@ Kalau ada pekerjaan:
 `input` sengaja **blind**: tidak ada skor sebelumnya, tidak ada feedback lama,
 tidak ada identitas peserta. Jangan menambahkan konteks dari mana pun — itulah
 yang membuat percobaan ke-2 dan ke-3 dinilai jujur.
+
+**`brief` dan `evidenceLimits` wajib masuk prompt.** Blind artinya buta terhadap
+*penilaian sebelumnya*, bukan buta terhadap soalnya. Workflow lama hanya membaca
+`projectTitle`, `divisionName`, `rubric`, dan `sources`, sehingga kriteria seperti
+"apakah deliverable menjawab brief?" dinilai tanpa brief — modelnya mengarang
+standar yang berbeda tiap run. `evidenceLimits` menyebutkan apa yang memang tidak
+bisa dinilai dari bukti ini (gambar sampai sebagai teks OCR, link diambil sebagai
+satu dokumen tanpa diklik); itulah yang menahan skor percaya diri pada kriteria
+yang buktinya tidak mendukung.
 
 Lease berlaku **600 detik**. Selesaikan sebelum `leaseExpiresAt`, atau job akan
 diambil ulang worker lain dan hasil telat Anda ditolak.
@@ -129,8 +141,10 @@ di-import. Alurnya:
 1. **Schedule Trigger** — tiap 2 menit sudah cukup; antrean kosong itu murah.
 2. **HTTP Request → `/claim`** — kirim `workerId`.
 3. **IF `job` null** — berhenti diam-diam.
-4. **Code: susun prompt** — rubrik + `sources`, dan instruksi format bukti
-   `[source-id] kutipan`.
+4. **Code: susun prompt** — `brief` (heading `## Project Brief & Context`),
+   rubrik, `evidenceLimits` (heading `## Evidence & Evaluation Limits`),
+   `sources`, dan instruksi format bukti `[source-id] kutipan`. Kutipan tetap
+   hanya boleh dari `## Sources`; brief adalah konteks, bukan bukti kerja peserta.
 5. **HTTP Request → model.**
 6. **Code: bentuk `output`** — petakan `criterionId` dari `rubric[].id`, jangan
    dari nama kriteria.

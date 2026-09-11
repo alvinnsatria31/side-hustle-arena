@@ -107,6 +107,63 @@ test("milestone ladder derives locked/ready/taken from ledger math, never stored
   assert.equal(rich.next, null);
 });
 
+test("ladder flags empty stock and hands over the retryOf a repeat claim must name", () => {
+  const catalog = [
+    { slug: "a", title: "A", pointsCost: 100 },
+    { slug: "b", title: "B", pointsCost: 200 },
+    { slug: "c", title: "C", pointsCost: 900 },
+  ];
+  const ladder = milestones.computeLadderState({
+    lifetimePoints: 300, catalog, takenSlugs: new Set(), takenAt: new Map(),
+    retryOf: new Map([["a", "claim-2"]]), outOfStockSlugs: new Set(["b", "c"]),
+  });
+  assert.deepEqual(ladder.steps.map((step) => step.state), ["ready", "out_of_stock", "locked"]);
+  assert.deepEqual(ladder.steps.map((step) => step.outOfStock), [false, true, true]);
+  assert.equal(ladder.steps[0].retryOf, "claim-2");
+  assert.equal(ladder.readyCount, 1);
+  // An unreached reward keeps its points gap even with an empty shelf.
+  assert.equal(ladder.steps[2].deficit, 600);
+  assert.equal(ladder.next?.slug, "c");
+
+  // A held claim is the participant's whatever the stock, and has nothing to retry.
+  const held = milestones.computeLadderState({
+    lifetimePoints: 300, catalog, takenSlugs: new Set(["b"]), takenAt: new Map([["b", "2026-09-11"]]),
+    retryOf: new Map([["b", "old-claim"]]), outOfStockSlugs: new Set(["b"]),
+  });
+  assert.equal(held.steps[1].state, "taken");
+  assert.equal(held.steps[1].outOfStock, false);
+  assert.equal(held.steps[1].retryOf, null);
+});
+
+test("reward claims classify exactly the way claimRedemption decides", () => {
+  const at = (minute) => new Date(Date.UTC(2026, 8, 11, 0, minute));
+  const take = (id, status, minute, over = {}) => ({ id, status, redeemedAt: at(minute), idempotencyKey: "take:user:reward", inventoryPeriodId: null, ...over });
+  const keys = (...entries) => new Set(entries);
+  const classify = milestones.classifyRewardTakes;
+
+  assert.deepEqual(classify([], keys()), { heldAt: null, retryOf: null });
+  // An active claim holds the reward.
+  assert.deepEqual(classify([take("a", "PENDING", 1)], keys("redemption:a:debit")), { heldAt: at(1), retryOf: null });
+  // A refunded claim is retried by naming it.
+  assert.deepEqual(classify([take("a", "ADMIN_REVERSED", 1)], keys("redemption:a:debit", "redemption:a:refund")), { heldAt: null, retryOf: "a" });
+  // Once a retry was refunded too, only the newest claim may be named — the
+  // older one already has a retry keyed to it — even if the clock says otherwise.
+  const chain = [
+    take("a", "ADMIN_REVERSED", 5),
+    take("b", "ADMIN_REVERSED", 5, { idempotencyKey: "take:user:reward:retry:a" }),
+  ];
+  const settled = keys("redemption:a:debit", "redemption:a:refund", "redemption:b:debit", "redemption:b:refund");
+  assert.deepEqual(classify(chain, settled), { heldAt: null, retryOf: "b" });
+  // A failed claim still holding its debit, or a stock reservation, blocks until an admin reverses it.
+  assert.deepEqual(classify([take("a", "FAILED", 1)], keys("redemption:a:debit")), { heldAt: at(1), retryOf: null });
+  assert.deepEqual(classify([take("a", "FAILED", 1, { inventoryPeriodId: "period" })], keys()), { heldAt: at(1), retryOf: null });
+  // A refund after fulfilment keeps the consumed stock and still settles the claim.
+  assert.deepEqual(
+    classify([take("a", "ADMIN_REVERSED", 1, { inventoryPeriodId: "period" })], keys("redemption:a:debit", "redemption:a:refund")),
+    { heldAt: null, retryOf: "a" },
+  );
+});
+
 test("crossed thresholds only fire on the boundary crossed by this award", () => {
   assert.deepEqual(milestones.crossedThresholds(0, 300, [150, 300, 600]), [150, 300]);
   assert.deepEqual(milestones.crossedThresholds(300, 100, [150, 300, 600]), []);

@@ -70,10 +70,10 @@ for (const trigger of triggers) {
       // found none, or is switched off by a flag — neither is a fault, and
       // calling them failures trains an operator to ignore this output.
       //
-      // Worth knowing: n8n's own "Summarise the run" node has only two states
-      // and treats any `done: false` as failed, so a config-gated job WILL show
-      // red there until its flag is turned on. That is n8n's summary being
-      // blunter than reality, not a different result.
+      // The workflow's own "Summarise the run" node now draws the same three
+      // lines: it reads `detail` rather than `done`, reports a config-gated job
+      // as a quiet success with `deferred: true`, and throws only on a non-2xx
+      // or a `detail.failed` — which is what marks the n8n execution red.
       const reachable = response.status === 200;
       const gated = reachable && data.done === false && typeof detail.skipped === "string";
       const ok = reachable && data.done !== false;

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
+import { deadlinePhrase } from '@/lib/deadline';
 import { Check, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
@@ -25,12 +27,13 @@ type Sealed = Extract<ArenaResult, { sealed: true }>;
 
 export default function ProjectResultPage() {
   const params = useParams<{ projectId: string }>();
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const [boot, setBoot] = useState<'loading' | 'ready' | 'sealed' | 'unranked' | 'missing' | 'expired' | 'error'>('loading');
   const [bootError, setBootError] = useState<string | null>(null);
   const [result, setResult] = useState<Ranked | null>(null);
   const [sealed, setSealed] = useState<Sealed | null>(null);
   const [projectCategory, setProjectCategory] = useState('');
+  const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
   const [counted, setCounted] = useState(false);
 
   useEffect(() => {
@@ -47,6 +50,8 @@ export default function ProjectResultPage() {
         const res = await getResult(enrollment.enrollmentId);
         if (cancelled) return;
         setProjectCategory(detail.division.name);
+        // This project's week: an ad-hoc week does not finalise on a Friday.
+        setDeadlineIso(detail.week?.submissionDeadlineAt ?? null);
         if (res.sealed) {
           setSealed(res);
           setBoot('sealed');
@@ -105,8 +110,8 @@ export default function ProjectResultPage() {
             Feedback belum bisa dibuka.
           </h1>
           <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
-            Reviewer mungkin sudah menilai, tapi skor dikunci sampai finalisasi Jumat 23:59 WIB biar adil buat semua
-            peserta. Jatah review kepakai {sealed?.reviewAttemptsUsed ?? 0}/3.
+            Reviewer mungkin sudah menilai, tapi skor dikunci {deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')} biar
+            adil buat semua peserta. Jatah review kepakai {sealed?.reviewAttemptsUsed ?? 0}/3.
           </p>
           <div className="mb-7 flex flex-wrap gap-2">
             <Badge variant="slate">{(sealed?.submissionStatus ?? 'DRAFT').replace(/_/g, ' ')}</Badge>

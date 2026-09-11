@@ -1,6 +1,7 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { cn } from '@/lib/cn';
 
 interface ProgressBarProps {
@@ -13,7 +14,7 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ value, className, barClassName, animate = true, delay = 0 }: ProgressBarProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const width = `${Math.min(100, Math.max(0, value))}%`;
   return (
     <div

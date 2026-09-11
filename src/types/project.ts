@@ -25,6 +25,15 @@ export interface ProjectResource {
   id: string;
   title: string;
   kind: 'document' | 'dataset' | 'template' | 'link';
+  /**
+   * Where the participant actually gets the material.
+   *
+   * Optional only because the mock catalogue predates it. A live resource
+   * without a URL is a title with nothing behind it, which is exactly the state
+   * the resource list was stuck in, so the renderer treats a missing URL as
+   * "not linkable" rather than rendering a dead anchor.
+   */
+  url?: string;
 }
 
 export interface RubricCriterion {

@@ -22,7 +22,7 @@ import { notify } from "@/server/notifications/service";
 import { crossedThresholds, getLifetimePoints } from "@/server/rewards/milestones";
 import { catalog } from "@/server/db/schema";
 import { writeAudit } from "@/server/reviews/audit";
-import { rankFinalists } from "./ranking";
+import { rankBonus, rankFinalists, scorePoints } from "./ranking";
 import { eligibleVersionOrder, isFinalizableReview } from "./finalist-core";
 import { attributeSkillEvidence } from "./skill-attribution";
 
@@ -238,7 +238,7 @@ async function finalizeWeekInTransaction(input: {
         weekId: week.id,
         referenceType: "weekly_ranking",
         referenceId: finalist.versionId,
-        description: `Week ${week.weekCode} rank #${finalist.rank}`,
+        description: `Week ${week.weekCode} rank #${finalist.rank}: skor ${scorePoints(finalist.finalScore)} + bonus peringkat ${rankBonus(finalist.rank)}`,
         idempotencyKey: `finalize:${week.id}:${finalist.userId}`,
       })
       .onConflictDoNothing({ target: pointLedger.idempotencyKey })

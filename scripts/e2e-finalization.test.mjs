@@ -26,7 +26,9 @@ const voucher = await import("../src/server/rewards/voucher-push.ts");
 
 const stamp = Date.now();
 const WEEK_CODE = `E2E-FIN-${stamp}`;
-const MILE_SLUG = `e2e-mile-150-${stamp}`;
+// 50 points: every finisher crosses it, since the smallest award is the podium's
+// +50 bonus (3rd place) on top of a score of at least 0.
+const MILE_SLUG = `e2e-mile-50-${stamp}`;
 const DIVISION_SLUG = `e2e-fin-div-${stamp}`;
 const PROJECT_SLUG = `e2e-fin-project-${stamp}`;
 const PARTICIPANTS = ["alpha", "bravo", "charlie"];
@@ -65,7 +67,7 @@ async function setup() {
   // check sees it when awards land.
   await sql`
     insert into rewards.catalog (slug, title, description, points_cost, reward_type, inventory_mode, is_active)
-    values (${MILE_SLUG}, 'E2E Test Reward', 'Milestone E2E fixture', 150, 'DIGITAL', 'UNLIMITED', true)`;
+    values (${MILE_SLUG}, 'E2E Test Reward', 'Milestone E2E fixture', 50, 'DIGITAL', 'UNLIMITED', true)`;
 }
 
 async function cleanup() {
@@ -156,17 +158,20 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
   assert.equal(completed, 3);
   const result = await finalization.finalizeWeek({ weekId, actorSubject: "e2e-admin" });
   assert.equal(result.ranked, 3);
-  assert.equal(result.pointsAwarded, 650);
 
   const board = await leaderboard.listWeekLeaderboard({ weekCode: WEEK_CODE });
   assert.equal(board.rows.length, 3);
   assert.deepEqual(board.rows.map((row) => row.rank), [1, 2, 3]);
-  assert.deepEqual(board.rows.map((row) => row.pointsAwarded), [300, 200, 150]);
+  // Points are the rounded score plus the podium bonus (200/100/50).
+  const expectedPoints = board.rows.map((row, index) => Math.round(Number(row.finalScore)) + [200, 100, 50][index]);
+  const expectedTotal = expectedPoints.reduce((sum, points) => sum + points, 0);
+  assert.equal(result.pointsAwarded, expectedTotal);
+  assert.deepEqual(board.rows.map((row) => row.pointsAwarded), expectedPoints);
   assert.ok(board.rows[0].finalScore >= board.rows[1].finalScore);
   assert.ok(board.rows.every((row) => row.projectTitle === "E2E Fin Project"));
 
   const ledger = await sql`select user_id, amount, entry_type from rewards.point_ledger where week_id = ${weekId} order by amount desc`;
-  assert.deepEqual(ledger.map((row) => row.amount), [300, 200, 150]);
+  assert.deepEqual(ledger.map((row) => row.amount), [...expectedPoints].sort((a, b) => b - a));
   assert.ok(ledger.every((row) => row.entry_type === "WEEKLY_RANK"));
   for (const userId of userIds.values()) {
     const account = await sql`select balance, lifetime_earned from rewards.point_accounts where user_id = ${userId}`;
@@ -176,12 +181,12 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
     select a.balance from rewards.point_accounts a
     join arena.enrollments e on e.user_id = a.user_id
     where e.week_id = ${weekId} order by a.balance desc`;
-  assert.deepEqual(balances.map((row) => row.balance), [300, 200, 150]);
+  assert.deepEqual(balances.map((row) => row.balance), [...expectedPoints].sort((a, b) => b - a));
 
   // Re-finalize is idempotent: same ranks, no duplicate ledger rows.
   const repeat = await finalization.finalizeWeek({ weekId, actorSubject: "e2e-admin" });
   assert.equal(repeat.ranked, 3);
-  assert.equal(repeat.pointsAwarded, 650);
+  assert.equal(repeat.pointsAwarded, expectedTotal);
   const ledgerCount = await sql`select count(*)::int as n from rewards.point_ledger where week_id = ${weekId}`;
   assert.equal(ledgerCount[0].n, 3);
 
@@ -200,19 +205,20 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
 
   // Admin: overview reflects the finalized week; flag flips are audited.
   //
-  // `getOpsOverview` reports the NEWEST week by `opens_at`, which is not
-  // necessarily this fixture's — a database that already holds a later week
-  // (an ad-hoc launch, another suite's leftovers) is a normal state, not a
+  // `getOpsOverview` reports the participant's current week — an active OPEN
+  // week first, then the next scheduled one, then the latest ended one — which
+  // is not necessarily this fixture's: a database holding an OPEN week (the dev
+  // seed, an ad-hoc launch, another suite's leftovers) is a normal state, not a
   // failure of finalization. So the week-scoped numbers are asserted only when
-  // this fixture is in fact the newest, and the parts that are unconditionally
+  // this fixture is the week reported, and the parts that are unconditionally
   // true are asserted unconditionally.
   const overview = await adminOps.getOpsOverview();
   assert.ok(overview.flags.length >= 4);
   assert.ok(overview.catalog.active >= 1, "seeded catalog SKU missing from overview");
   assert.ok(overview.health, "the overview must carry automation health");
   assert.ok(["OK", "WARN", "ALERT"].includes(overview.health.level));
-  if (overview.week.weekCode !== WEEK_CODE) {
-    console.log(`[e2e-finalization] a newer week (${overview.week.weekCode}) exists; skipping the week-scoped overview assertions.`);
+  if (overview.week?.weekCode !== WEEK_CODE) {
+    console.log(`[e2e-finalization] the overview reports another current week (${overview.week?.weekCode ?? "none"}); skipping the week-scoped overview assertions.`);
   } else {
   assert.equal(overview.week.status, "FINALIZED");
   assert.equal(overview.enrollments, 3);
@@ -237,7 +243,10 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
   const takerId = (await sql`select user_id from arena.weekly_rankings where week_id = ${weekId} order by rank asc`)[0].user_id;
   const ladder = await milestones.getMilestoneLadder(takerId);
   assert.ok(ladder.steps.some((step) => step.slug === MILE_SLUG && step.state === "ready"));
-  assert.ok(ladder.steps.some((step) => step.slug === "usd-20-cash" && step.state === "locked"));
+  // The main reward (the most expensive active step) is far beyond one week's points.
+  const mainStep = ladder.steps.at(-1);
+  assert.ok(mainStep.pointsRequired > ladder.lifetimePoints);
+  assert.equal(mainStep.state, "locked");
   const taken = await milestones.takeMilestone({ userId: takerId, slug: MILE_SLUG, weekId });
   assert.ok(taken.redemptionId);
   const ladderAfter = await milestones.getMilestoneLadder(takerId);
@@ -247,7 +256,7 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
     (error) => error?.code === "VALIDATION_ERROR",
   );
   await assert.rejects(
-    () => milestones.takeMilestone({ userId: takerId, slug: "usd-20-cash", weekId }),
+    () => milestones.takeMilestone({ userId: takerId, slug: mainStep.slug, weekId }),
     (error) => error?.code === "VALIDATION_ERROR",
   );
   // Voucher push without the main-site contract reports pending, never throws.
@@ -259,14 +268,14 @@ test("end-to-end finalization: 3 racers → close → finalize → ranks/points/
   const thirdUserId = rankedRows[2].user_id;
   const thirdEnrollment = await sql`select id from arena.enrollments where week_id = ${weekId} and user_id = ${thirdUserId}`;
   const voided = await finalization.voidEnrollment({ enrollmentId: thirdEnrollment[0].id, actorSubject: "e2e-admin", reason: "E2E plagiarism check" });
-  assert.equal(voided.pointsRevoked, 150);
+  assert.equal(voided.pointsRevoked, expectedPoints[2]);
 
   const boardAfter = await leaderboard.listWeekLeaderboard({ weekCode: WEEK_CODE });
   assert.equal(boardAfter.rows.length, 2);
   assert.deepEqual(boardAfter.rows.map((row) => row.rank), [1, 2]);
 
   const reversal = await sql`select amount, entry_type from rewards.point_ledger where user_id = ${thirdUserId} order by amount asc`;
-  assert.ok(reversal.some((row) => row.amount === -150 && row.entry_type === "ADMIN_REVERSAL"));
+  assert.ok(reversal.some((row) => row.amount === -expectedPoints[2] && row.entry_type === "ADMIN_REVERSAL"));
   const voidedAccount = await sql`select balance, lifetime_spent from rewards.point_accounts where user_id = ${thirdUserId}`;
   assert.equal(voidedAccount[0].balance, 0);
 

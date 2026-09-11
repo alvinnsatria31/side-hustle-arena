@@ -182,6 +182,8 @@ test("claiming sweeps abandoned jobs first, then looks for work below the attemp
 test("admin rerun recovers a first review that never produced a row", async () => {
   const version = { id: "version-1", reviewAttemptNumber: 1, accessStatus: "ACCESSIBLE" };
   const db = fakeDb([
+    [{ weekId: "week-1" }],
+    [{ status: "FINALIZING" }],
     [version],
     [],                                                       // no review rows at all
     [processing({ status: "FAILED", leaseExpiresAt: dead })], // terminal job
@@ -197,6 +199,8 @@ test("admin rerun recovers a first review that never produced a row", async () =
 
 test("admin rerun refuses to steal a job from a worker holding a live lease", async () => {
   const db = fakeDb([
+    [{ weekId: "week-1" }],
+    [{ status: "OPEN" }],
     [{ id: "version-1", reviewAttemptNumber: 1, accessStatus: "ACCESSIBLE" }],
     [{ runNumber: 1, aiScore: "70.00" }],
     [processing()],
@@ -211,9 +215,30 @@ test("admin rerun refuses to steal a job from a worker holding a live lease", as
 });
 
 test("a version that never consumed an attempt is not rerunnable", async () => {
-  const db = fakeDb([[{ id: "version-1", reviewAttemptNumber: null, accessStatus: "FAILED" }]]);
+  const db = fakeDb([
+    [{ weekId: "week-1" }],
+    [{ status: "OPEN" }],
+    [{ id: "version-1", reviewAttemptNumber: null, accessStatus: "FAILED" }],
+  ]);
   await assert.rejects(
     () => rerunReview({ versionId: "version-1", actorSubject: "admin", reason: "retry", now, db }),
     (error) => error.code === "VALIDATION_ERROR",
   );
+});
+
+test("a finalized or archived week refuses a rerun before touching the job", async () => {
+  for (const status of ["FINALIZED", "ARCHIVED"]) {
+    const db = fakeDb([
+      [{ weekId: "week-1" }],
+      [{ status }],
+      [{ id: "version-1", reviewAttemptNumber: 1, accessStatus: "ACCESSIBLE" }],
+      [],
+      [processing({ status: "FAILED", leaseExpiresAt: dead })],
+    ]);
+    await assert.rejects(
+      () => rerunReview({ versionId: "version-1", actorSubject: "admin", reason: "late correction", now, db }),
+      (error) => error.code === "WEEK_ALREADY_FINALIZED",
+    );
+    assert.equal(db.writes.length, 0);
+  }
 });

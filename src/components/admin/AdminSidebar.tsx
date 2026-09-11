@@ -67,7 +67,8 @@ const GROUPS: Array<{ label: string | null; entries: Entry[] }> = [
     label: 'Produk',
     entries: [
       item('CV Scanner', '/app/admin/cv-scanner', ScanLine, 'overview'),
-      item('Career Report', '/app/admin/career-report', FileText, 'overview'),
+      // `users`: the page lists participants' emails and CV status.
+      item('Career Report', '/app/admin/career-report', FileText, 'users'),
       // Named for the product, not for the page's contents: an operator looks
       // for "Jobs", never for "Sumber Lowongan".
       item('Jobs', '/app/admin/careers', Briefcase, 'careers'),

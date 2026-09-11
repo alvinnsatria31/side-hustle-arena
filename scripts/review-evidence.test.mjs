@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateReviewerOutput } from '../src/server/reviews/validator.ts';
-import { ApiReviewProvider, createReviewProvider, StubReviewProvider } from '../src/server/reviews/model-router.ts';
+import { ApiReviewProvider, createReviewProvider, isApiReviewProvider, StubReviewProvider } from '../src/server/reviews/model-router.ts';
 import { normaliseReviewerOutput, reviewerOutputSchema } from '../src/server/reviews/review-schema.ts';
 
 const id = '00000000-0000-4000-8000-000000000001';
@@ -33,6 +33,28 @@ test('configured provider sends blind JSON and parses provider output', async ()
 
 test('production cannot fall back to fabricated stub scores', () => {
   assert.throws(() => createReviewProvider('review', { APP_ENV: 'production', AI_REVIEW_PROVIDER: 'stub' }), /provider/i);
+});
+
+test('the second judge builds on the provider name production actually sets', () => {
+  // The live container runs AI_REVIEW_PROVIDER=openai. The factory used to
+  // accept only 'openai-compatible', so every path that needs an in-process
+  // provider — the second judge above all — threw before it called anything.
+  const base = { APP_ENV: 'production', AI_API_BASE_URL: 'https://provider.example/v1', AI_API_KEY: 'k', AI_JUDGE_MODEL: 'judge' };
+  for (const AI_REVIEW_PROVIDER of ['openai', 'openai-compatible']) {
+    const provider = createReviewProvider('judge', { ...base, AI_REVIEW_PROVIDER });
+    assert.ok(provider instanceof ApiReviewProvider, `${AI_REVIEW_PROVIDER} must reach the API provider`);
+  }
+  // Widened, not opened: an unknown name is still a misconfiguration, and a
+  // configured name with no judge model still fails on the model, not silently.
+  assert.throws(() => createReviewProvider('judge', { ...base, AI_REVIEW_PROVIDER: 'anthropic-native' }), /provider/i);
+  assert.throws(() => createReviewProvider('judge', { ...base, AI_REVIEW_PROVIDER: 'openai', AI_JUDGE_MODEL: '' }), /judge model/i);
+});
+
+test('isApiReviewProvider answers the same question the factory asks', () => {
+  assert.equal(isApiReviewProvider({ AI_REVIEW_PROVIDER: 'openai' }), true);
+  assert.equal(isApiReviewProvider({ AI_REVIEW_PROVIDER: 'openai-compatible' }), true);
+  assert.equal(isApiReviewProvider({ AI_REVIEW_PROVIDER: 'stub' }), false);
+  assert.equal(isApiReviewProvider({}), false);
 });
 
 test('development stub chooses a verifiable source after a short explanation', async () => {

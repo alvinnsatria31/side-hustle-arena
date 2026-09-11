@@ -1,0 +1,14 @@
+# Taste File
+- Always update owned `docs/backend/*OPERATIONS.md` immediately after completing a task with actual tests/results and pending actions before final. UI agents use `docs/backend/PARTICIPANT_UI_IMPLEMENTATION.md`. Parent centralizes progress MD; never edit `END_TO_END_IMPLEMENTATION.md`. Confidence: 0.98
+- Edit files directly; do not create unnecessary wrappers or indirection layers. Confidence: 0.92
+- Report exact file paths, test results, checks performed, and remaining issues/limitations — precise communication expected. Confidence: 0.9
+- Never run live DB mutations, deployment, external payments, or any live production-side effects during implementation work. Confidence: 0.95
+- Do not write to schema files, `.env`, or `package.json` unless explicitly coordinated with parent. Confidence: 0.93
+- Never print secret values (tokens, keys, credentials) in logs or output. Confidence: 0.88
+- Preserve existing user edits in shared dirty workspaces; never revert or overwrite another agent's changes. Confidence: 0.9
+- Use existing visual style, icons, and design patterns; maintain dense/utilitarian aesthetic for admin surfaces. Don't introduce new aesthetics. Confidence: 0.85
+- No fake stats, placeholder data, or marketing explanations in production code — use real backend data only. Confidence: 0.88
+- Write focused test coverage only where risk exists; prefer injected fakes/pure cores for unit tests over live integration. Confidence: 0.82
+- Prefer native SDK libraries already installed over adding new dependencies. Confidence: 0.75
+- No cross-language call edges or phantom artifacts in knowledge graphs; calls must stay within one language. Confidence: 0.7
+- Avoid introducing marketing explanations or fake stats in participant-facing UI; show only real data with proper loading/error/empty states. Confidence: 0.85

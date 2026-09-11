@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { cn } from '@/lib/cn';
 
 interface ScoreRingProps {
@@ -22,7 +23,7 @@ export function ScoreRing({
   gradient = ['#246BFD', '#5AE0A0'],
   className,
 }: ScoreRingProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const target = circumference * (1 - Math.min(100, Math.max(0, value)) / 100);

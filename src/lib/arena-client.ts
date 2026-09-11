@@ -45,6 +45,7 @@ export type ArenaErrorCode =
   | 'REVIEW_PROVIDER_FAILED'
   | 'WEEK_NOT_READY'
   | 'WEEK_NOT_FINALIZED'
+  | 'WEEK_ALREADY_FINALIZED'
   | 'FEATURE_CLOSED'
   | 'STORAGE_NOT_CONFIGURED'
   | 'INTERNAL_ERROR';
@@ -176,6 +177,29 @@ export interface DraftItem {
   fileSizeBytes: number | null;
 }
 
+export type AccessStatus = 'PENDING' | 'CHECKING' | 'ACCESSIBLE' | 'FAILED' | 'NOT_REQUIRED';
+
+/**
+ * The version that was actually submitted.
+ *
+ * Distinct from the draft on purpose. `accessStatus: 'FAILED'` means the submit
+ * was rejected before review — no attempt spent, nothing queued — even though
+ * the submission row reads SUBMITTED, and the items here are the snapshot the
+ * reviewer sees rather than a draft the participant may have edited since.
+ */
+export interface SubmissionVersionSummary {
+  id: string;
+  versionNumber: number;
+  submittedAt: string;
+  accessStatus: AccessStatus;
+  reviewStatus: string;
+  reviewAttemptNumber: number | null;
+  isFinal: boolean;
+  explanation: string | null;
+  notes: string | null;
+  items: DraftItem[];
+}
+
 export interface ArenaSubmission {
   id: string;
   enrollmentId: string;
@@ -184,6 +208,7 @@ export interface ArenaSubmission {
   notes: string | null;
   reviewAttemptsUsed: number;
   latestVersionId: string | null;
+  latestVersion: SubmissionVersionSummary | null;
   items: DraftItem[];
 }
 
@@ -300,6 +325,18 @@ export interface ProjectRequirement {
   minItems: number;
   maxItems: number;
   instructions: string | null;
+  /** MIME types this FILE requirement accepts; empty/null means the global set. */
+  allowedMimeTypes?: string[] | null;
+  allowedLinkTypes?: string[] | null;
+  sortOrder?: number;
+}
+
+/** Task material — dataset, template, reference — as the detail endpoint returns it. */
+export interface ProjectResourceLink {
+  id: string;
+  label: string;
+  url: string;
+  kind: 'DATASET' | 'DOCUMENT' | 'TEMPLATE' | 'LINK';
 }
 
 export interface VisibleProjectDetail extends VisibleProject {
@@ -309,8 +346,20 @@ export interface VisibleProjectDetail extends VisibleProject {
   caseBackground: string | null;
   roleDescription: string | null;
   objective: string | null;
+  mission: string | null;
   skills: Array<{ slug: string; name: string }>;
   requirements: ProjectRequirement[];
+  resources: ProjectResourceLink[];
+  /** The week this project belongs to — never "whichever week is open now". */
+  week: {
+    id: string;
+    weekCode: string;
+    title: string | null;
+    status: string;
+    opensAt: string;
+    submissionDeadlineAt: string;
+    timezone: string;
+  };
 }
 
 export interface WeekCurrent {

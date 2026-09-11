@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Badge } from '@/components/primitives/Badge';
 import { SkillChip } from '@/components/primitives/SkillChip';
 import { DifficultyBadge, DeadlineBadge, TimeBadge } from './ProjectBadges';
@@ -18,7 +19,7 @@ interface ProjectCardProps {
 
 /** Editorial project card — hover: lift 2px + soft border accent + shadow. */
 export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/projects' }: ProjectCardProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const to = href ?? `${hrefPrefix}/${project.slug}`;
 
   return (

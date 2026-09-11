@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import {
   ARENA_FEATURES,
@@ -10,20 +10,31 @@ import {
 import { featureFlags } from "@/server/db/schema";
 import { catalog, logs, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
+import { resolveCurrentWeekFromCandidates } from "@/server/arena/week-service";
 import { writeAudit } from "@/server/reviews/audit";
 import { getReviewQueueDepth } from "@/server/reviews/queue-service";
 import { getAutomationHealth } from "@/server/ops/automation-health";
 
 type Db = ReturnType<typeof getDb>;
 
+const MONITORED_WEEK_STATUSES = ["OPEN", "SCHEDULED", "PREVIEW", "CLOSED", "FINALIZING", "FINALIZED"] as const;
+
+// The participant resolver, so a draft for next week cannot displace the running week; newest opening is only a fallback.
+async function monitoredWeek(db: Db, now: Date) {
+  const rows = await db.select().from(weeks).where(inArray(weeks.status, MONITORED_WEEK_STATUSES));
+  const current = resolveCurrentWeekFromCandidates(rows, now);
+  if (current) return rows.find((row) => row.id === current.id) ?? null;
+  const [latest] = await db.select().from(weeks).orderBy(desc(weeks.opensAt)).limit(1);
+  return latest ?? null;
+}
+
 /**
  * Admin operations overview (PRD §37). Read-only aggregator for the future
  * admin dashboard: week state, queue health, resolution backlog, flags,
  * rewards, and recent audit — one call instead of six.
  */
-export async function getOpsOverview(db: Db = getDb()) {
-  const weekRows = await db.select().from(weeks).orderBy(desc(weeks.opensAt)).limit(1);
-  const week = weekRows[0] ?? null;
+export async function getOpsOverview(db: Db = getDb(), now = new Date()) {
+  const week = await monitoredWeek(db, now);
   const [enrollmentCount, versionCount, resolutionRows, catalogRows, redemptionRows, auditRows, queueDepth] = await Promise.all([
     week ? db.execute(sql`select count(*)::int as n from arena.enrollments where week_id = ${week.id}`) : [{ n: 0 }],
     week

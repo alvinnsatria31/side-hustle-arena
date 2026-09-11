@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
-import { CalendarClock, Check, Download, ExternalLink, FileText, Link2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { AlertTriangle, CalendarClock, Check, Download, ExternalLink, FileText, Link2 } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { ErrorState } from '@/components/states/ErrorState';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
+import { deadlinePhrase, deadlineSentence } from '@/lib/deadline';
 import {
   ArenaApiError,
   formatBytes,
@@ -40,12 +42,14 @@ function statusLabel(status: string): string {
 }
 
 export default function SubmissionPage() {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const params = useParams<{ projectId: string }>();
   const [boot, setBoot] = useState<'loading' | 'ready' | 'missing' | 'empty' | 'expired' | 'error'>('loading');
   const [bootError, setBootError] = useState<string | null>(null);
   const [submission, setSubmission] = useState<ArenaSubmission | null>(null);
   const [projectTitle, setProjectTitle] = useState('');
+  const [projectSlug, setProjectSlug] = useState('');
+  const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -71,6 +75,10 @@ export default function SubmissionPage() {
         }
         setSubmission(sub);
         setProjectTitle(detail.title);
+        setProjectSlug(detail.slug);
+        // This project's week — the page must not promise a deadline borrowed
+        // from whichever week happens to be open when it is opened.
+        setDeadlineIso(detail.week?.submissionDeadlineAt ?? null);
         setEnrollmentId(enrollment.enrollmentId);
         setBoot('ready');
       } catch (err) {
@@ -143,8 +151,30 @@ export default function SubmissionPage() {
   }
 
   const finalized = submission.status === 'FINALIZED';
-  const links = submission.items.filter((item) => item.itemType === 'LINK' && item.externalUrl);
-  const files = submission.items.filter((item) => item.itemType === 'FILE');
+  const version = submission.latestVersion;
+  /**
+   * The submit was refused before review.
+   *
+   * The backend records a version with `accessStatus: 'FAILED'` when a reviewer
+   * cannot open one of the attachments: no attempt is spent and no review job is
+   * queued, but the submission row still reads SUBMITTED. This page used to read
+   * only that row, so it rendered "Project berhasil dikirim" and a review
+   * timeline over a submission that was never going to be reviewed.
+   */
+  const accessFailed = version?.accessStatus === 'FAILED';
+  const queued = Boolean(version) && !accessFailed;
+  /**
+   * Show what was SENT, not what the draft says now.
+   *
+   * The draft stays editable after a submit, so a recap built from draft items
+   * can show attachments the reviewer never saw. Falls back to the draft only
+   * before the first submit, when there is no version yet.
+   */
+  const recapItems = version?.items ?? submission.items;
+  const links = recapItems.filter((item) => item.itemType === 'LINK' && item.externalUrl);
+  const files = recapItems.filter((item) => item.itemType === 'FILE');
+  const sealedNote = `Hasil review disegel ${deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')} — bukan hitungan detik.`;
+  const workspaceHref = `/app/arena/workspace/${projectSlug || params.projectId}`;
 
   const downloadFile = async (itemId: string, fallbackName: string) => {
     if (!enrollmentId || downloadingId) return;
@@ -178,38 +208,74 @@ export default function SubmissionPage() {
       />
 
       <motion.div initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }} className="mt-5">
-        {/* Success hero */}
+        {/* Hero: success, or the honest failure that used to look like success */}
         <Card className="p-7 sm:p-9">
-          <div className="mb-5 flex h-[64px] w-[64px] items-center justify-center rounded-[var(--radius-sk-xl)] bg-sk-success-tint text-sk-success">
-            <Check size={30} strokeWidth={2.6} aria-hidden />
-          </div>
-          <span className="eyebrow">Submitted</span>
-          <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
-            Project berhasil dikirim.
-          </h1>
-          <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
-            {finalized
-              ? 'Review selesai dan week sudah difinalisasi — feedback kamu tersedia.'
-              : 'Submission kamu sedang dalam proses review. Hasilnya disegel sampai finalisasi Jumat 23:59 WIB. Kamu bisa menutup halaman ini — status tersimpan di server.'}
-          </p>
+          {accessFailed ? (
+            <>
+              <div className="mb-5 flex h-[64px] w-[64px] items-center justify-center rounded-[var(--radius-sk-xl)] bg-sk-warning-wash text-sk-warning-ink">
+                <AlertTriangle size={30} strokeWidth={2.4} aria-hidden />
+              </div>
+              <span className="eyebrow">Belum masuk review</span>
+              <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
+                Tautan tidak dapat diakses reviewer.
+              </h1>
+              <div
+                role="alert"
+                className="mb-6 max-w-[620px] rounded-[var(--radius-sk-lg)] border border-sk-warning-border bg-sk-warning-wash px-4 py-3.5 text-[13.5px] leading-relaxed text-sk-warning-ink"
+              >
+                Submission kamu <b>belum masuk antrean review</b> karena ada lampiran yang tidak bisa dibuka reviewer —
+                biasanya link yang izin aksesnya masih private. <b>Jatah attempt kamu tidak berkurang.</b> Perbaiki izin
+                akses tautan (set ke “siapa saja yang memiliki link”) lalu kirim ulang{' '}
+                {deadlinePhrase(deadlineIso, 'sebelum deadline minggu ini').replace(/^sampai /, 'sebelum ')}.
+              </div>
 
-          <div className="mb-7 flex flex-wrap gap-2">
-            <Badge variant="slate">{statusLabel(submission.status)}</Badge>
-            <Badge variant="slate">Attempt {submission.reviewAttemptsUsed}/3</Badge>
-          </div>
+              <div className="mb-7 flex flex-wrap gap-2">
+                <Badge variant="slate">TIDAK DAPAT DIAKSES</Badge>
+                <Badge variant="slate">Attempt {submission.reviewAttemptsUsed} terpakai</Badge>
+              </div>
 
-          <div className="flex flex-wrap gap-3">
-            {finalized ? (
-              <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result</ButtonLink>
-            ) : (
-              <ButtonLink href="/app/arena" variant="ghost">
-                Kembali ke Arena
-              </ButtonLink>
-            )}
-            <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
-              Lihat Brief Project
-            </ButtonLink>
-          </div>
+              <div className="flex flex-wrap gap-3">
+                <ButtonLink href={workspaceHref}>Perbaiki & Kirim Ulang</ButtonLink>
+                <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
+                  Lihat Brief Project
+                </ButtonLink>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-5 flex h-[64px] w-[64px] items-center justify-center rounded-[var(--radius-sk-xl)] bg-sk-success-tint text-sk-success">
+                <Check size={30} strokeWidth={2.6} aria-hidden />
+              </div>
+              <span className="eyebrow">Submitted</span>
+              <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
+                Project berhasil dikirim.
+              </h1>
+              <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
+                {finalized
+                  ? 'Review selesai dan week sudah difinalisasi — feedback kamu tersedia.'
+                  : `Submission kamu sedang dalam proses review. Hasilnya disegel ${deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')}. Kamu bisa menutup halaman ini — status tersimpan di server.`}
+              </p>
+
+              <div className="mb-7 flex flex-wrap gap-2">
+                <Badge variant="slate">{statusLabel(submission.status)}</Badge>
+                <Badge variant="slate">Attempt {submission.reviewAttemptsUsed}</Badge>
+                {version && <Badge variant="slate">Versi {version.versionNumber}</Badge>}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {finalized ? (
+                  <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result</ButtonLink>
+                ) : (
+                  <ButtonLink href="/app/arena" variant="ghost">
+                    Kembali ke Arena
+                  </ButtonLink>
+                )}
+                <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
+                  Lihat Brief Project
+                </ButtonLink>
+              </div>
+            </>
+          )}
         </Card>
 
         {/* Submission recap */}
@@ -280,10 +346,18 @@ export default function SubmissionPage() {
                   </dd>
                 </div>
               ))}
-              {submission.explanation && (
+              {version && (
+                <div>
+                  <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Dikirim</dt>
+                  <dd className="text-[13.5px] text-sk-muted">
+                    Versi {version.versionNumber} · {deadlineSentence(version.submittedAt)}
+                  </dd>
+                </div>
+              )}
+              {(version?.explanation ?? submission.explanation) && (
                 <div>
                   <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Short Explanation</dt>
-                  <dd className="text-[13.5px] leading-relaxed text-sk-muted">{submission.explanation}</dd>
+                  <dd className="text-[13.5px] leading-relaxed text-sk-muted">{version?.explanation ?? submission.explanation}</dd>
                 </div>
               )}
             </dl>
@@ -296,27 +370,43 @@ export default function SubmissionPage() {
             </h2>
             <ol className="flex flex-col gap-4">
               {[
-                { label: 'Submission diterima', done: true },
-                { label: 'Reviewer memeriksa deliverables', done: submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT' },
-                { label: 'Feedback tersedia', done: finalized },
+                // "Diterima" means accepted INTO review. A version whose links a
+                // reviewer cannot open is not accepted, and marking this step
+                // done for it was the whole misinformation: everything below it
+                // then read as a queue the participant was waiting in.
+                { label: accessFailed ? 'Submission ditolak: lampiran tidak dapat diakses' : 'Submission diterima', done: queued, failed: accessFailed },
+                { label: 'Reviewer memeriksa deliverables', done: queued && submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT', failed: false },
+                { label: 'Feedback tersedia', done: finalized, failed: false },
               ].map((s) => (
                 <li key={s.label} className="flex items-center gap-3">
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                      s.done ? 'bg-sk-success-tint text-sk-success' : 'bg-sk-track text-sk-faint'
+                      s.failed
+                        ? 'bg-sk-warning-wash text-sk-warning-ink'
+                        : s.done
+                          ? 'bg-sk-success-tint text-sk-success'
+                          : 'bg-sk-track text-sk-faint'
                     }`}
                     aria-hidden
                   >
-                    {s.done ? <Check size={12} strokeWidth={3.5} /> : <CalendarClock size={12} />}
+                    {s.failed ? <AlertTriangle size={12} /> : s.done ? <Check size={12} strokeWidth={3.5} /> : <CalendarClock size={12} />}
                   </span>
-                  <span className={`text-[13px] ${s.done ? 'font-semibold text-sk-navy' : 'text-sk-muted'}`}>{s.label}</span>
+                  <span
+                    className={`text-[13px] ${s.failed ? 'font-semibold text-sk-warning-ink' : s.done ? 'font-semibold text-sk-navy' : 'text-sk-muted'}`}
+                  >
+                    {s.label}
+                  </span>
                 </li>
               ))}
             </ol>
-            {!finalized && (
-              <p className="mt-5 rounded-xl bg-sk-bg px-3.5 py-3 text-[11.5px] leading-relaxed text-sk-muted">
-                Hasil review disegel sampai finalisasi Jumat 23:59 WIB — bukan hitungan detik.
-              </p>
+            {accessFailed ? (
+              <ButtonLink href={workspaceHref} size="sm" className="mt-5" fullWidth>
+                Perbaiki di Workspace
+              </ButtonLink>
+            ) : (
+              !finalized && (
+                <p className="mt-5 rounded-xl bg-sk-bg px-3.5 py-3 text-[11.5px] leading-relaxed text-sk-muted">{sealedNote}</p>
+              )
             )}
             {finalized && (
               <ButtonLink href={`/app/arena/result/${params.projectId}`} size="sm" className="mt-5" fullWidth>

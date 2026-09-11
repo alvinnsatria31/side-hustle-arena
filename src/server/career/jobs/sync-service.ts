@@ -357,8 +357,14 @@ export async function getJobSourceStatus(db: Db = getDb()) {
       .where(eq(jobSyncRuns.sourceId, source.id)).orderBy(desc(jobSyncRuns.startedAt)).limit(1);
     const counts = await db.select({ status: jobOpenings.status, count: sql<number>`count(*)::int` })
       .from(jobOpenings).where(eq(jobOpenings.sourceId, source.id)).groupBy(jobOpenings.status);
+    // Config is non-secret by contract (credentials live in the environment),
+    // so the addresses and label can be shown; nothing else from it is.
+    const config = (source.config ?? {}) as { baseUrl?: unknown; siteUrl?: unknown; category?: unknown };
     rows.push({
       id: source.id, slug: source.slug, name: source.name, adapter: source.adapter,
+      feedUrl: typeof config.baseUrl === "string" ? config.baseUrl : null,
+      siteUrl: typeof config.siteUrl === "string" ? config.siteUrl : null,
+      category: typeof config.category === "string" ? config.category : null,
       isActive: source.isActive, syncIntervalMinutes: source.syncIntervalMinutes,
       stalenessDays: source.stalenessDays,
       // The NAME of the variable, so an operator can see what to provision. The

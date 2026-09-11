@@ -63,6 +63,7 @@ export default function AdminReviewsPage() {
       if (action.kind === 'override') {
         const parsed = Number(score);
         if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) throw new Error('Skor harus 0–100.');
+        if (!action.review.id) throw new Error('Submission ini belum punya hasil review untuk dioverride.');
         await overrideAdminReview({ reviewId: action.review.id, newScore: parsed, reason });
       } else if (action.kind === 'rerun') {
         await rerunAdminReview({ versionId: action.review.versionId, reason });
@@ -105,37 +106,59 @@ export default function AdminReviewsPage() {
       )}
 
       <div className="space-y-3">
-        {reviews.data?.map((review) => (
-          <Card key={review.id} className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold text-sk-navy">{review.weekCode}</span>
-                  <Badge variant={STATUS_VARIANT[review.status] ?? 'slate'}>{review.status}</Badge>
-                  <span className="text-xs text-sk-muted">run #{review.runNumber}</span>
+        {reviews.data?.map((review) => {
+          const frozen = review.weekStatus === 'FINALIZED' || review.weekStatus === 'ARCHIVED';
+          return (
+            <Card key={review.id ?? `version-${review.versionId}`} className="p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-sk-navy">{review.weekCode}</span>
+                    <Badge variant={STATUS_VARIANT[review.status] ?? 'slate'}>{review.status}</Badge>
+                    <span className="text-xs text-sk-muted">
+                      {review.runNumber === null ? 'belum ada hasil review' : `run #${review.runNumber}`}
+                    </span>
+                    {review.id !== null && review.jobStatus === 'FAILED' && <Badge variant="amber">rerun gagal</Badge>}
+                  </div>
+                  {review.id === null ? (
+                    <p className="mt-1.5 max-w-2xl text-sm text-sk-body">
+                      Review pertama gagal sebelum menghasilkan skor. Jalankan ulang untuk memulihkan — jatah attempt peserta tidak terpakai.
+                    </p>
+                  ) : (
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-sk-body">
+                      <span>AI: {review.aiScore ?? '—'}</span>
+                      <span>Final: {review.finalScore ?? '—'}</span>
+                      <span>Confidence: {review.confidence ?? '—'}</span>
+                      <span className="text-sk-muted">{review.model ?? 'stub'}</span>
+                    </div>
+                  )}
+                  {review.jobError && <p className="mt-2 max-w-2xl break-words text-xs text-sk-error">Job: {review.jobError}</p>}
+                  {review.summary && <p className="mt-2 max-w-2xl text-sm text-sk-muted">{review.summary}</p>}
+                  {frozen && (
+                    <p className="mt-2 text-xs text-sk-muted">
+                      Minggu {review.weekStatus}: skor dan poin sudah dibekukan, jadi rerun dan override tidak tersedia.
+                    </p>
+                  )}
                 </div>
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-sk-body">
-                  <span>AI: {review.aiScore ?? '—'}</span>
-                  <span>Final: {review.finalScore ?? '—'}</span>
-                  <span>Confidence: {review.confidence ?? '—'}</span>
-                  <span className="text-sk-muted">{review.model ?? 'stub'}</span>
+                <div className="flex flex-wrap gap-2">
+                  {!frozen && (
+                    <Button size="sm" variant="ghost" onClick={() => openAction({ kind: 'rerun', review })}>
+                      Rerun
+                    </Button>
+                  )}
+                  {!frozen && review.id !== null && (
+                    <Button size="sm" onClick={() => openAction({ kind: 'override', review })}>
+                      Override
+                    </Button>
+                  )}
+                  <Button size="sm" variant="destructive" onClick={() => openAction({ kind: 'void', review })}>
+                    Void peserta
+                  </Button>
                 </div>
-                {review.summary && <p className="mt-2 max-w-2xl text-sm text-sk-muted">{review.summary}</p>}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="ghost" onClick={() => openAction({ kind: 'rerun', review })}>
-                  Rerun
-                </Button>
-                <Button size="sm" onClick={() => openAction({ kind: 'override', review })}>
-                  Override
-                </Button>
-                <Button size="sm" variant="destructive" onClick={() => openAction({ kind: 'void', review })}>
-                  Void peserta
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
         {reviews.data?.length === 0 && !reviews.loading && (
           <p className="py-10 text-center text-sm text-sk-muted">Tidak ada review dengan status ini.</p>
         )}

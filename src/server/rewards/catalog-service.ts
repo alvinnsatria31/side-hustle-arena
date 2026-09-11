@@ -6,10 +6,10 @@ import { catalog } from "@/server/db/schema";
 /**
  * Public reward catalog read model (PRD §35).
  *
- * Read-only: catalog rows seeded from the locked reward SKUs (the confirmed
- * `2,000 points → USD 20` SKU plus website-proven supporting SKUs). This endpoint
- * exposes active catalog entries. Live stock and spendable balance are checked
- * transactionally by redemption-service at claim time.
+ * Read-only: the six official reward SKUs (300 → 2.700 points, main reward
+ * CASH REWARD Rp500.000). This exposes active catalog entries. Live stock and
+ * spendable balance are checked transactionally by redemption-service at claim
+ * time.
  */
 export interface PublicCatalogItem {
   slug: string;

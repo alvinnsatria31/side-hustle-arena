@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, CalendarClock, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Trophy, UserRound } from 'lucide-react';
+import { Bell, CalendarClock, Gift, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Trophy, UserRound } from 'lucide-react';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { useParticipant } from '@/features/arena/participant';
 import { SignInButton } from '@/components/auth/SignInButton';
+import { MilestoneRoadmap, RewardProgress } from '@/components/arena/MilestoneRoadmap';
 import { ArenaApiError } from '@/lib/arena-client';
-import { getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
+import { getParticipantMilestones, getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
 import type { ReactNode } from 'react';
 
 export function participantDate(value: string) {
@@ -97,6 +98,28 @@ export function ParticipantLogout() {
   return <form action="/auth/logout" method="post"><Button type="submit" variant="ghost" iconLeft={<LogOut size={15} aria-hidden />}>Keluar</Button></form>;
 }
 
+/** The reward ladder with the participant's own progress, on the Arena page. */
+function ArenaRewardLadder({ balance }: { balance: number }) {
+  const rewards = useParticipantResource(getParticipantMilestones);
+  const ladder = rewards.data?.ladder;
+  return <section aria-labelledby="arena-rewards-title" className="mb-8">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 id="arena-rewards-title" className="flex items-center gap-2 text-lg font-bold text-sk-navy"><Gift size={20} aria-hidden />Hadiah &amp; milestone</h2>
+      <ButtonLink href="/app/profile#rewards" size="sm" variant="ghost">Tukar poin</ButtonLink>
+    </div>
+    {rewards.error
+      ? <p className="text-sm text-sk-muted">Milestone belum bisa dimuat. Coba perbarui halaman.</p>
+      : !ladder
+        ? null
+        : ladder.steps.length === 0
+          ? <p className="text-sm text-sk-muted">Belum ada hadiah aktif.</p>
+          : <>
+            <RewardProgress lifetimePoints={ladder.lifetimePoints} balance={balance} steps={ladder.steps} className="mb-5" />
+            <MilestoneRoadmap steps={ladder.steps} points={ladder.lifetimePoints} />
+          </>}
+  </section>;
+}
+
 export default function ParticipantDashboard({ arena = false }: { arena?: boolean }) {
   const user = useParticipant();
   const resource = useParticipantResource(getParticipantOverview);
@@ -111,6 +134,7 @@ export default function ParticipantDashboard({ arena = false }: { arena?: boolea
         <ButtonLink href="/app/arena/projects" iconLeft={<LayoutGrid size={15} aria-hidden />}>Lihat Project</ButtonLink>
       </section>}
       <ParticipantStats data={data} />
+      {arena && <ArenaRewardLadder balance={data.points.balance} />}
       <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua Project</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Leaderboard</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Reward</ButtonLink></div>
       <EnrollmentHistory history={data.history.filter((row) => row.id !== active?.id)} />
     </>}

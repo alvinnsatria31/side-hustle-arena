@@ -301,17 +301,19 @@ test("results stay sealed until the week is finalized, then points land exactly 
   await closeWeekForFinalization({ weekId: fixture.weekId, actorSubject: `${STAMP}-admin`, force: true });
   const finalized = await finalizeWeek({ weekId: fixture.weekId, actorSubject: `${STAMP}-admin` });
   assert.equal(finalized.ranked, 1);
-  assert.equal(finalized.pointsAwarded, 300, "a sole finalist ranks first and first place is worth 300 points");
+  // A sole finalist ranks first: the rounded score plus the 200-point first-place bonus.
+  const expectedPoints = Math.round(fixture.expectedScore) + 200;
+  assert.equal(finalized.pointsAwarded, expectedPoints);
 
   const [ranking] = await db.select().from(schema.weeklyRankings).where(eq(schema.weeklyRankings.weekId, fixture.weekId));
   assert.equal(ranking.rank, 1);
-  assert.equal(ranking.pointsAwarded, 300);
+  assert.equal(ranking.pointsAwarded, expectedPoints);
   assert.equal(ranking.submissionVersionId, fixture.versionId);
   assert.equal(Number(ranking.finalScore), fixture.expectedScore);
 
   const [account] = await db.select().from(schema.pointAccounts).where(eq(schema.pointAccounts.userId, fixture.userId));
-  assert.equal(account.balance, 300);
-  assert.equal(account.lifetimeEarned, 300);
+  assert.equal(account.balance, expectedPoints);
+  assert.equal(account.lifetimeEarned, expectedPoints);
 
   // Idempotent re-finalize: the ledger is keyed, so nothing doubles.
   const again = await finalizeWeek({ weekId: fixture.weekId, actorSubject: `${STAMP}-admin` });
@@ -319,7 +321,7 @@ test("results stay sealed until the week is finalized, then points land exactly 
   const ledger = await db.select().from(schema.pointLedger).where(eq(schema.pointLedger.userId, fixture.userId));
   assert.equal(ledger.length, 1, "re-finalizing must not award a second time");
   const [accountAfter] = await db.select().from(schema.pointAccounts).where(eq(schema.pointAccounts.userId, fixture.userId));
-  assert.equal(accountAfter.balance, 300);
+  assert.equal(accountAfter.balance, expectedPoints);
 });
 
 test("skill evidence is written from the finalized review only", async () => {

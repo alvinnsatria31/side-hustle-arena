@@ -154,9 +154,18 @@ export async function claimRedemption(input: {
   });
 }
 
-/** ADMIN-only integration. Reference attests manual verification; no payout is sent. */
+/**
+ * Mark a claim served. Reference attests manual verification; no payout is sent.
+ * It is also the hand-over note the participant sees on their profile.
+ *
+ * An admin calls this by hand. The one automated caller is voucher delivery,
+ * which fulfils only after the main site has accepted the code and says so in
+ * the audit row (`verification`), so a reader can tell the two apart.
+ */
 export async function fulfillRedemption(input: {
   redemptionId: string; actorSubject: string; reference: string; db?: RewardDb;
+  actorType?: "ADMIN" | "AUTOMATION";
+  verification?: "MANUALLY_VERIFIED" | "MAIN_SITE_VOUCHER_PUSHED";
 }) {
   const actorSubject = required(input.actorSubject, "Actor subject");
   const reference = required(input.reference, "Manually verified payment/delivery reference");
@@ -175,11 +184,11 @@ export async function fulfillRedemption(input: {
       status: "FULFILLED", fulfilledAt: new Date(), fulfillmentReference: reference, updatedAt: new Date(),
     }).where(eq(redemptions.id, take.id)).returning();
     await writeAudit(tx, {
-      actorType: "ADMIN", actorSubject, action: "REWARD_FULFILLED", entityType: "redemption", entityId: take.id,
-      metadata: { reference, verification: "MANUALLY_VERIFIED", payoutSentByService: false },
+      actorType: input.actorType ?? "ADMIN", actorSubject, action: "REWARD_FULFILLED", entityType: "redemption", entityId: take.id,
+      metadata: { reference, verification: input.verification ?? "MANUALLY_VERIFIED", payoutSentByService: false },
     });
     await notify({ type: "REWARD_FULFILLED", userId: take.userId, title: "Reward dipenuhi",
-      body: "Tim telah memverifikasi pemenuhan reward kamu.", actionUrl: "/app/profile" }, tx);
+      body: "Reward kamu sudah diserahkan. Cek catatan penyerahannya di Profil.", actionUrl: "/app/profile" }, tx);
     return fulfilled;
   });
 }

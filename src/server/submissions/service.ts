@@ -17,6 +17,9 @@ import { createImmutableSnapshot, createPresignedDownload, createPresignedUpload
 import { assertArenaFeatureOpen } from "@/server/ops/feature-flags";
 import { notifyBestEffort } from "@/server/notifications/service";
 import { enqueueReviewJob } from "@/server/reviews/queue-service";
+import { freezeLinkArtifacts } from "@/server/reviews/artifacts";
+import { deadlineSentence } from "@/lib/deadline";
+import { overfilledRequirements, unmetRequirements } from "@/lib/submission-requirements";
 import { checkExternalUrlAccess } from "./url-access";
 import { planVersionSnapshots, resolveVersionItemStorage, type FrozenArtifact } from "./version-core";
 import { draftLinkSchema, draftSubmissionSchema, supportedFileMimeTypes, uploadPresignSchema } from "./schemas";
@@ -43,6 +46,35 @@ function assertBeforeDeadline(deadline: Date, now: Date) {
   if (now >= deadline) throw new ArenaDomainError("SUBMISSION_DEADLINE_PASSED", "The submission deadline has passed.");
 }
 
+/**
+ * A week takes submission changes only while it is OPEN and before its deadline.
+ *
+ * The deadline alone was not enough. An admin force-close or early finalize
+ * changes the week's status without moving `submissionDeadlineAt`, so a
+ * participant with the form still open could keep editing — and submit a new
+ * attempt into a week whose results were already published. The deadline keeps
+ * its own, more specific code: the form words the two cases differently.
+ */
+function assertWeekOpenForSubmission(week: typeof weeks.$inferSelect, now: Date) {
+  if (week.status !== "OPEN") throw new ArenaDomainError("WEEK_CLOSED", "This Arena week is closed for submissions.");
+  assertBeforeDeadline(week.submissionDeadlineAt, now);
+}
+
+/**
+ * The same gate, read again inside the writing transaction under FOR SHARE.
+ *
+ * Closing and finalizing both write the week row, which a share lock blocks
+ * until commit. So a close either lands before this read, and the write is
+ * refused, or waits for the write to commit, and finalization then sees the
+ * new version with its queued review. The earlier check on the context row is
+ * only the cheap refusal; this one is the one a race cannot slip past.
+ */
+async function lockWeekOpenForSubmission(tx: Db, weekId: string, now: Date) {
+  const [week] = await tx.select().from(weeks).where(eq(weeks.id, weekId)).for("share");
+  if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Arena week not found.");
+  assertWeekOpenForSubmission(week, now);
+}
+
 async function ensureSubmission(db: Db, context: Awaited<ReturnType<typeof ownedContext>>) {
   await db.insert(submissions).values({
     enrollmentId: context.enrollment.id,
@@ -67,7 +99,42 @@ function serializeDraftItem(item: DraftItem) {
   return clientSafe;
 }
 
-function serializeSubmission(submission: Submission, items: DraftItem[]) {
+function serializeVersionItem(item: typeof submissionVersionItems.$inferSelect) {
+  const { storageKey: _storageKey, checksum: _checksum, ...clientSafe } = item;
+  return clientSafe;
+}
+
+/**
+ * What was actually submitted, as distinct from what the draft says now.
+ *
+ * The two diverge in the case that matters most. A submit whose link a reviewer
+ * cannot open produces a version with `accessStatus: FAILED` — no attempt spent,
+ * nothing queued — while the submission row still reads SUBMITTED. Reading only
+ * the row, the UI told the participant their project was in review and left them
+ * waiting for a result that was never coming. The draft can also be edited after
+ * a successful submit, so a recap built from draft items shows something the
+ * reviewer never saw.
+ */
+async function latestVersionSummary(db: Db, submission: Submission) {
+  if (!submission.latestVersionId) return null;
+  const version = (await db.select().from(submissionVersions).where(eq(submissionVersions.id, submission.latestVersionId)))[0];
+  if (!version) return null;
+  const items = await db.select().from(submissionVersionItems).where(eq(submissionVersionItems.submissionVersionId, version.id));
+  return {
+    id: version.id,
+    versionNumber: version.versionNumber,
+    submittedAt: version.submittedAt,
+    accessStatus: version.accessStatus,
+    reviewStatus: version.reviewStatus,
+    reviewAttemptNumber: version.reviewAttemptNumber,
+    isFinal: version.isFinal,
+    explanation: version.explanation,
+    notes: version.notes,
+    items: items.map(serializeVersionItem),
+  };
+}
+
+function serializeSubmission(submission: Submission, items: DraftItem[], latestVersion: Awaited<ReturnType<typeof latestVersionSummary>> = null) {
   return {
     id: submission.id,
     enrollmentId: submission.enrollmentId,
@@ -76,6 +143,7 @@ function serializeSubmission(submission: Submission, items: DraftItem[]) {
     notes: submission.draftNotes,
     reviewAttemptsUsed: submission.reviewAttemptsUsed,
     latestVersionId: submission.latestVersionId,
+    latestVersion,
     items: items.map(serializeDraftItem),
   };
 }
@@ -102,7 +170,7 @@ export async function getArenaSubmission({ userId, enrollmentId }: { userId: str
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   const submission = await ensureSubmission(db, context);
-  return serializeSubmission(submission, await getDraftItems(db, submission.id));
+  return serializeSubmission(submission, await getDraftItems(db, submission.id), await latestVersionSummary(db, submission));
 }
 
 export async function patchArenaSubmissionDraft({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
@@ -111,14 +179,14 @@ export async function patchArenaSubmissionDraft({ userId, enrollmentId, input, n
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const submission = await ensureSubmission(db, context);
   const updated = (await db.update(submissions).set({
     ...(Object.hasOwn(parsed.data, "explanation") ? { draftExplanation: parsed.data.explanation ?? null } : {}),
     ...(Object.hasOwn(parsed.data, "notes") ? { draftNotes: parsed.data.notes ?? null } : {}),
     updatedAt: now,
   }).where(eq(submissions.id, submission.id)).returning())[0];
-  return serializeSubmission(updated, await getDraftItems(db, updated.id));
+  return serializeSubmission(updated, await getDraftItems(db, updated.id), await latestVersionSummary(db, updated));
 }
 
 export async function addArenaSubmissionLink({ userId, enrollmentId, input, now = new Date() }: { userId: string; enrollmentId: string; input: unknown; now?: Date }) {
@@ -127,7 +195,7 @@ export async function addArenaSubmissionLink({ userId, enrollmentId, input, now 
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const submission = await ensureSubmission(db, context);
   const requirement = await requirementForProject(db, context.enrollment.projectId, parsed.data.requirementId, "LINK");
   const items = await getDraftItems(db, submission.id);
@@ -145,7 +213,7 @@ export async function createArenaUploadIntent({ userId, enrollmentId, input, now
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const submission = await ensureSubmission(db, context);
   const requirement = await requirementForProject(db, context.enrollment.projectId, parsed.data.requirementId, "FILE");
   if (!allowedMime(requirement, parsed.data.mimeType)) throw new ArenaDomainError("FILE_TYPE_NOT_ALLOWED", "This file type is not allowed for the requirement.");
@@ -174,7 +242,7 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const intent = (await db.select().from(uploadIntents).where(and(eq(uploadIntents.id, intentId), eq(uploadIntents.userId, userId), eq(uploadIntents.enrollmentId, enrollmentId), isNull(uploadIntents.consumedAt))))[0];
   if (!intent) throw new ArenaDomainError("UPLOAD_INTENT_NOT_FOUND", "Upload intent not found.");
   if (intent.expiresAt <= now) throw new ArenaDomainError("UPLOAD_INTENT_EXPIRED", "Upload intent has expired.");
@@ -209,6 +277,7 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
   }
 
   return db.transaction(async (tx) => {
+    await lockWeekOpenForSubmission(tx, context.week.id, now);
     const freshIntent = (await tx.update(uploadIntents).set({ consumedAt: now })
       .where(and(eq(uploadIntents.id, intent.id), isNull(uploadIntents.consumedAt), gt(uploadIntents.expiresAt, now))).returning())[0];
     if (!freshIntent) throw new ArenaDomainError("UPLOAD_INTENT_EXPIRED", "Upload intent is no longer valid.");
@@ -230,7 +299,7 @@ export async function deleteArenaSubmissionItem({ userId, enrollmentId, itemId, 
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const submission = await ensureSubmission(db, context);
   const item = (await db.delete(submissionDraftItems).where(and(eq(submissionDraftItems.id, itemId), eq(submissionDraftItems.submissionId, submission.id))).returning())[0];
   if (!item) throw new ArenaDomainError("SUBMISSION_ITEM_NOT_FOUND", "Submission item not found.");
@@ -242,12 +311,12 @@ export async function deleteArenaSubmissionItem({ userId, enrollmentId, itemId, 
 }
 
 function validateRequirements(requirements: (typeof projectSubmissionRequirements.$inferSelect)[], items: DraftItem[]) {
-  for (const requirement of requirements) {
-    const actual = items.filter((item) => item.requirementId === requirement.id).length;
-    const minimum = requirement.required ? Math.max(1, requirement.minItems) : requirement.minItems;
-    if (actual < minimum || actual > requirement.maxItems) {
-      throw new ArenaDomainError("SUBMISSION_REQUIREMENTS_INCOMPLETE", "Submission requirements are incomplete.");
-    }
+  // Same rule the form checks before it submits (src/lib/submission-requirements),
+  // so a refusal here can never be for something the participant had no box for.
+  const unmet = unmetRequirements(requirements, items);
+  const overfilled = overfilledRequirements(requirements, items);
+  if (unmet.length || overfilled.length) {
+    throw new ArenaDomainError("SUBMISSION_REQUIREMENTS_INCOMPLETE", "Submission requirements are incomplete.");
   }
 }
 
@@ -339,8 +408,9 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
   await assertArenaFeatureOpen("arena-submissions");
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
-  assertBeforeDeadline(context.week.submissionDeadlineAt, now);
+  assertWeekOpenForSubmission(context.week, now);
   const result = await db.transaction(async (tx) => {
+    await lockWeekOpenForSubmission(tx, context.week.id, now);
     const submission = await ensureSubmission(tx, context);
     // Serialize concurrent submits for one submission: without this lock, two
     // transactions can read the same MAX(version_number) and the loser aborts
@@ -375,6 +445,26 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
     return { version, allocatedReviewAttempt: true };
   });
 
+  // Freeze what the links said AT SUBMIT, not at claim.
+  //
+  // Outside the transaction on purpose: this fetches external hosts, and the
+  // submit holds a row lock on the submission until it commits. The window it
+  // leaves open is milliseconds instead of the hours between a deadline and a
+  // worker picking the job up, which is the gap that let a Google Doc be edited
+  // after the deadline and still be the thing that got graded.
+  if (result.version.accessStatus === "ACCESSIBLE") {
+    try {
+      const versionItems = await db.select().from(submissionVersionItems)
+        .where(eq(submissionVersionItems.submissionVersionId, result.version.id));
+      await freezeLinkArtifacts(db, result.version.id, versionItems);
+    } catch (error) {
+      // The submission is already committed and the attempt already allocated.
+      // A freeze failure must not turn a valid submit into an error the
+      // participant sees; the claim path still fetches anything left unfrozen.
+      console.warn(`submission version ${result.version.id}: link freeze failed at submit —`, error);
+    }
+  }
+
   // Best-effort inbox notice: must never break the submit itself (PRD §36).
   // Canonical slug deep link — the detail route resolves slugs and UUIDs, but
   // the slug is the stable, shareable form (matches EnrollmentCard links).
@@ -388,7 +478,9 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
       userId,
       weekId: context.week.id,
       title: "Submission belum bisa dinilai",
-      body: "Ada link/file yang tidak bisa dibuka reviewer. Benerin sebelum deadline Jumat 23:59 WIB — jatah 3x review kamu aman.",
+      // The real deadline of THIS week. Ad-hoc weeks do not end on a Friday, and
+      // an email that names the wrong day is worse than one that names no day.
+      body: `Ada link/file yang tidak bisa dibuka reviewer. Benerin sebelum deadline ${deadlineSentence(context.week.submissionDeadlineAt)} — jatah ${context.rules.maxReviewAttempts}x review kamu aman.`,
       actionUrl,
     });
   } else {
@@ -397,7 +489,7 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
       userId,
       weekId: context.week.id,
       title: `Submission #${result.version.reviewAttemptNumber} diterima`,
-      body: "Karyamu masuk antrean review. Hasilnya disegel sampai finalisasi Jumat — pantau dari workspace.",
+      body: `Karyamu masuk antrean review. Hasilnya disegel sampai finalisasi ${deadlineSentence(context.week.submissionDeadlineAt)} — pantau dari workspace.`,
       actionUrl,
     });
   }
@@ -408,7 +500,14 @@ export async function getArenaSubmissionDownload({ userId, enrollmentId, itemId 
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   const submission = await ensureSubmission(db, context);
-  const item = (await db.select().from(submissionDraftItems).where(and(eq(submissionDraftItems.id, itemId), eq(submissionDraftItems.submissionId, submission.id))))[0];
+  const draftItem = (await db.select().from(submissionDraftItems).where(and(eq(submissionDraftItems.id, itemId), eq(submissionDraftItems.submissionId, submission.id))))[0];
+  // A submitted version's items are the ones the recap shows, and they are not
+  // draft rows — a participant asking for "the file I actually sent" was getting
+  // a 404 for it. Ownership is enforced the same way: the version has to belong
+  // to this enrollment's submission.
+  const item = draftItem ?? (await db.select({ item: submissionVersionItems }).from(submissionVersionItems)
+    .innerJoin(submissionVersions, eq(submissionVersionItems.submissionVersionId, submissionVersions.id))
+    .where(and(eq(submissionVersionItems.id, itemId), eq(submissionVersions.submissionId, submission.id))))[0]?.item;
   if (!item?.storageKey) throw new ArenaDomainError("SUBMISSION_ITEM_NOT_FOUND", "Private file not found.");
   try {
     return { url: await createPresignedDownload(item.storageKey, item.originalFilename), filename: item.originalFilename };

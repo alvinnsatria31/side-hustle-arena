@@ -18,6 +18,8 @@ export const dynamic = 'force-dynamic';
 export default async function AdminJobsPage() {
   const admin = await requireArenaAdminSession();
   const canRelease = admin.scopes.includes('projects');
+  // Same rule as the release form: only offer what the server will accept.
+  const canManageSources = admin.scopes.includes('careers');
 
-  return <AdminJobsConsole release={canRelease ? <TriggerWorkflow /> : null} />;
+  return <AdminJobsConsole release={canRelease ? <TriggerWorkflow /> : null} canManageSources={canManageSources} />;
 }

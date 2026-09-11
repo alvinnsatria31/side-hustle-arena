@@ -1,7 +1,7 @@
 import { boolean, check, index, integer, numeric, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { divisions, weeks } from "./arena-core";
-import { difficultyBand, projectPreviewStatus, projectStatus, submissionRequirementType } from "./enums";
+import { difficultyBand, projectPreviewStatus, projectResourceKind, projectStatus, submissionRequirementType } from "./enums";
 import { runs } from "./automation";
 import { arena } from "./schemas";
 
@@ -91,4 +91,33 @@ export const projectSubmissionRequirements = arena.table("project_submission_req
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   check("submission_requirements_item_bounds_check", sql`${table.minItems} >= 0 AND ${table.maxItems} >= 0 AND ${table.maxItems} >= ${table.minItems} AND ${table.sortOrder} >= 0`),
+]);
+
+/**
+ * The materials a participant needs to actually do the task.
+ *
+ * The generator has produced these since the package schema was written — a
+ * dataset link, a template, a reference document — and they were dropped on the
+ * way to the database, so a brief could say "analyse the sales dataset" with no
+ * dataset anywhere in the product. Storing them alongside the requirements is
+ * what makes the brief answerable.
+ *
+ * URLs are validated as credential-free HTTPS at generation time
+ * (packageSchema.resources); the check constraint here is the backstop for
+ * anything written by hand or by a migration.
+ */
+export const projectResources = arena.table("project_resources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  url: text("url").notNull(),
+  /** Presentation only: which icon the list shows. Never a security boundary. */
+  kind: projectResourceKind("kind").default("LINK").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("project_resources_https_url_check", sql`${table.url} LIKE 'https://%'`),
+  check("project_resources_sort_order_nonnegative_check", sql`${table.sortOrder} >= 0`),
+  index("project_resources_project_id_idx").on(table.projectId),
 ]);

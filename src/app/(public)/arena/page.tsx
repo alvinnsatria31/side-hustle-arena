@@ -5,7 +5,9 @@ import { Entrance, Reveal } from '@/components/motion/Reveal';
 import { StatCard } from '@/components/primitives/StatCard';
 import { HowItWorks } from '@/components/arena/HowItWorks';
 import { KanbanPreview } from '@/components/arena/KanbanPreview';
+import { MilestoneRoadmap } from '@/components/arena/MilestoneRoadmap';
 import { getPublicArenaHome } from '@/lib/arena-view';
+import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
 
 export const metadata = { title: 'Side Hustle Arena' };
 export const dynamic = 'force-dynamic';
@@ -18,6 +20,11 @@ export default async function ArenaLandingPage() {
   // then — it is the public pitch for the Arena — so it renders with the
   // week-dependent slots showing that nothing is scheduled yet.
   const home = await getPublicArenaHome();
+  // The ladder is an addition to the pitch, never a dependency of it: a catalog
+  // read that fails hides the section instead of taking the page down.
+  const rewardSteps = await listActiveCatalogItems()
+    .then((items) => items.map((item) => ({ slug: item.slug, title: item.title, pointsRequired: item.pointsCost, rewardType: item.rewardType })))
+    .catch(() => []);
   const stats = [
     { key: 'projects', label: 'Project Minggu Ini', value: home ? String(home.projectCount) : '—' },
     { key: 'deadline', label: 'Deadline', value: home ? home.deadline : 'Belum dijadwalkan', small: true },
@@ -97,6 +104,25 @@ export default async function ArenaLandingPage() {
           </Reveal>
           <HowItWorks />
         </div>
+
+        {/* Reward ladder: what the points from each week's result add up to. */}
+        {rewardSteps.length > 0 && (
+          <div id="hadiah" className="mt-24 scroll-mt-24 md:mt-28">
+            <Reveal className="mb-8 max-w-2xl">
+              <Badge variant="slate">HADIAH</Badge>
+              <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
+                Kumpulkan poin, buka {rewardSteps.length} hadiah.
+              </h2>
+              <p className="mt-2 text-[14px] leading-relaxed text-sk-muted">
+                Setiap project yang selesai dinilai memberi poin sebesar skornya (0–100), plus bonus 200/100/50 untuk
+                peringkat 1–3 minggu itu. Poin tidak hangus, dan setiap milestone bisa ditukar dengan hadiahnya.
+              </p>
+            </Reveal>
+            <Reveal y={16}>
+              <MilestoneRoadmap steps={rewardSteps} />
+            </Reveal>
+          </div>
+        )}
 
         {/* Closing CTA */}
         <Reveal className="mt-20" y={16}>

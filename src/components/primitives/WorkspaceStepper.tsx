@@ -1,6 +1,7 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { WORKSPACE_STEP_LABELS } from './StatusBadge';
@@ -16,7 +17,7 @@ interface WorkspaceStepperProps {
 
 /** Horizontal 5-step progress bar for the workspace (animated forward). */
 export function WorkspaceStepper({ current, completedUpTo, onStepClick }: WorkspaceStepperProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const currentIndex = ORDER.indexOf(current);
   const doneCount = completedUpTo ?? Math.max(0, currentIndex);
 

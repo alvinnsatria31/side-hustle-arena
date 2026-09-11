@@ -19,7 +19,7 @@ import { buildBlindReviewerInput, buildImprovementFeedback, type BlindRubricCrit
 import { validateReviewerOutput } from "./validator";
 import { computeWeightedScore, secondJudgeDisagrees } from "./scorer";
 import { needsSecondJudge, REVIEW_CONFIDENCE_MIN } from "./judge-router";
-import { PROMPT_VERSION, createReviewProvider, type ReviewProvider } from "./model-router";
+import { PROMPT_VERSION, createReviewProvider, isApiReviewProvider, type ReviewProvider } from "./model-router";
 import { reviewerOutputSchema, type ReviewerOutput } from "./review-schema";
 import { writeAudit } from "./audit";
 import { ensureReviewSources } from "./artifacts";
@@ -240,7 +240,11 @@ async function buildJobInput(db: Db, versionId: string, options: { budget?: Exec
       };
     }),
   );
-  const sources = process.env.APP_ENV !== 'development' || process.env.AI_REVIEW_PROVIDER === 'openai-compatible'
+  // Same provider question as the factory, so it has to read the same way: a
+  // development box pointed at a real provider extracts evidence, a stubbed one
+  // does not. Spelling one provider name here and two there is how the second
+  // judge came to be misconfigured in the first place.
+  const sources = process.env.APP_ENV !== 'development' || isApiReviewProvider()
     ? await ensureReviewSources(db, version, items, options) : undefined;
   return {
     attemptNumber: version.reviewAttemptNumber,

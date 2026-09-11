@@ -1,6 +1,7 @@
 'use client';
 
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -14,7 +15,7 @@ interface ChecklistRowProps {
 
 /** Animated checklist row (workspace review + submit final checklist). */
 export function ChecklistRow({ label, checked, onToggle, disabled, mandatory }: ChecklistRowProps) {
-  const reduce = useReducedMotion();
+  const reduce = useSettledReducedMotion();
   const interactive = Boolean(onToggle) && !disabled;
 
   const content = (

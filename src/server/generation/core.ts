@@ -58,6 +58,11 @@ export const packageSchema = z.object({
 
 export type ProjectPackage = z.infer<typeof packageSchema>;
 export type BaseCriterion = Pick<ProjectPackage["rubric"][number], "name" | "weight" | "maxScore">;
+/** A division's frozen rubric entered on its own, before the division has any project. */
+export const baseRubricSchema = z.array(z.object({
+  name: label, weight: z.number().positive().max(100), maxScore: z.number().positive().max(100),
+}).strict()).min(1).max(20)
+  .refine((rubric) => new Set(rubric.map((criterion) => normalize(criterion.name))).size === rubric.length, "Duplicate rubric criteria.");
 export type GenerationContext = {
   divisionId: string; skillIds: string[]; baseRubric: BaseCriterion[];
   weekCode?: string; divisionName?: string;
@@ -99,6 +104,31 @@ export type GenerationProvider = {
   readonly name: string;
   generate(input: { context: GenerationContext; history: unknown[]; attempt: number; signal: AbortSignal }): Promise<unknown>;
 };
+
+export type ProjectResourceKind = "DATASET" | "DOCUMENT" | "TEMPLATE" | "LINK";
+
+/**
+ * Which icon a resource line shows. Presentation only.
+ *
+ * The generator returns a label and a URL and nothing else, so the kind is
+ * inferred rather than declared. Getting it wrong costs an icon; it never
+ * changes what the participant can open, and it is deliberately not used as a
+ * content-type check anywhere. LINK is the honest fallback.
+ */
+export function resourceKind(resource: { label: string; url: string }): ProjectResourceKind {
+  const path = (() => {
+    try {
+      return new URL(resource.url).pathname.toLowerCase();
+    } catch {
+      return resource.url.toLowerCase();
+    }
+  })();
+  const label = resource.label.toLowerCase();
+  if (/\.(csv|tsv|xlsx?|json|parquet)$/.test(path) || /\b(dataset|data set|data mentah|raw data)\b/.test(label)) return "DATASET";
+  if (/\btemplate\b|\bkerangka\b/.test(label)) return "TEMPLATE";
+  if (/\.(pdf|docx?|pptx?|md|txt)$/.test(path) || /\b(dokumen|document|panduan|brief|laporan|guide)\b/.test(label)) return "DOCUMENT";
+  return "LINK";
+}
 
 function normalize(value: string) {
   return value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();

@@ -13,80 +13,95 @@ function requireDevelopmentDatabase() {
 /**
  * Reward catalog seed — development only, idempotent by slug.
  *
- * SKU policy (PRD §35, confirmed 2026-09-04: PRD-only pricing):
- * - `usd-20-cash` is the ONLY confirmed, active SKU: 2,000 points → USD 20,
- *   LIMITED inventory. This is the locked business rule; do not retune here.
- * - The five supporting SKUs are website-proven ideas seeded INACTIVE with
- *   their names only: PRD lists them as potentials WITHOUT prices, so they
- *   ship as unpriced proposals for admin approval and can never be claimed
- *   until the PO prices each one explicitly.
+ * SKU policy (decided by the product owner on 2026-09-11, replacing the
+ * 2026-09-04 "one USD 20 SKU" rule): six official rewards, all active, forming
+ * the milestone ladder 300 → 600 → 1.000 → 1.500 → 2.200 → 2.700 points. The
+ * last one, CASH REWARD Rp500.000, is the main reward.
+ *
+ * - `usd-20-cash` is retired, not deleted: it may carry redemption history, so
+ *   it stays as an inactive row and leaves the ladder.
+ * - Money is stored in minor units. The IDR minor unit is the sen (ISO 4217
+ *   exponent 2), so Rp500.000 is 50,000,000.
  * - Re-runs only refresh operational columns (title/description/active flag);
- *   an admin-edited price is never clobbered.
+ *   an admin-edited price or inventory mode is never clobbered.
+ * - LIMITED rewards need an inventory period before they can be claimed; set
+ *   the stock from the admin Reward page. Until then they show "Stok habis".
  */
 const skus = [
   {
-    slug: "usd-20-cash",
-    title: "Cash Reward USD 20",
-    description: "Tukar 2.000 Arena Points dengan cash reward USD 20. Klaim ditinjau manual oleh tim sebelum pencairan.",
-    pointsCost: 2000,
-    rewardType: "MONETARY",
-    monetaryValueMinor: 2000,
-    currency: "USD",
-    inventoryMode: "LIMITED",
-    isActive: true,
-  },
-  {
     slug: "notion-kit",
     title: "Template Notion & Resume Starter Kit",
-    description: "Proposal SKU dari katalog website — menunggu keputusan ekonomi points/XP.",
+    description: "Template Notion untuk melacak lamaran kerja plus resume starter kit siap pakai. Dikirim digital setelah klaim diproses.",
     pointsCost: 300,
     rewardType: "DIGITAL",
     monetaryValueMinor: null,
     currency: null,
     inventoryMode: "UNLIMITED",
-    isActive: false,
+    isActive: true,
   },
   {
     slug: "ebook",
     title: "E-Book Banting Stir Karir & HR Interview Guide",
-    description: "Proposal SKU dari katalog website — menunggu keputusan ekonomi points/XP.",
+    description: "E-book panduan pindah karir dan panduan menjawab interview HR. Dikirim digital setelah klaim diproses.",
     pointsCost: 600,
     rewardType: "DIGITAL",
     monetaryValueMinor: null,
     currency: null,
     inventoryMode: "UNLIMITED",
-    isActive: false,
+    isActive: true,
   },
   {
     slug: "voucher-50",
     title: "Voucher Diskon 50% Masterclass",
-    description: "Proposal SKU dari katalog website — menunggu keputusan ekonomi points/XP.",
+    description: "Voucher potongan 50% untuk satu masterclass Sekolah Karir. Kode voucher muncul di profilmu setelah klaim.",
     pointsCost: 1000,
     rewardType: "DISCOUNT",
     monetaryValueMinor: null,
     currency: null,
     inventoryMode: "UNLIMITED",
-    isActive: false,
+    isActive: true,
   },
   {
     slug: "cv-review",
     title: "1-on-1 CV & Portfolio Review (20 Menit)",
-    description: "Proposal SKU dari katalog website — menunggu keputusan ekonomi points/XP.",
+    description: "Sesi 1-on-1 selama 20 menit bersama tim Sekolah Karir untuk membedah CV dan portfolio. Jadwal diatur setelah klaim.",
     pointsCost: 1500,
     rewardType: "SERVICE",
     monetaryValueMinor: null,
     currency: null,
     inventoryMode: "LIMITED",
-    isActive: false,
+    isActive: true,
   },
   {
     slug: "free-pass",
     title: "100% Free Pass All Masterclass",
-    description: "Proposal SKU dari katalog website — menunggu keputusan ekonomi points/XP.",
+    description: "Akses gratis ke seluruh masterclass Sekolah Karir. Kode akses muncul di profilmu setelah klaim.",
     pointsCost: 2200,
     rewardType: "MASTERCLASS",
     monetaryValueMinor: null,
     currency: null,
+    inventoryMode: "LIMITED",
+    isActive: true,
+  },
+  {
+    slug: "cash-500k",
+    title: "CASH REWARD Rp500.000",
+    description: "Hadiah utama: uang tunai Rp500.000. Klaim diverifikasi manual oleh tim sebelum pencairan.",
+    pointsCost: 2700,
+    rewardType: "MONETARY",
+    monetaryValueMinor: 50_000_000,
+    currency: "IDR",
+    inventoryMode: "LIMITED",
+    isActive: true,
+  },
+  {
+    slug: "usd-20-cash",
+    title: "Cash Reward USD 20 (dihentikan)",
+    description: "Digantikan CASH REWARD Rp500.000 sejak 11 September 2026. Tidak bisa diklaim lagi.",
+    pointsCost: 2000,
+    rewardType: "MONETARY",
+    monetaryValueMinor: 2000,
+    currency: "USD",
     inventoryMode: "LIMITED",
     isActive: false,
   },
@@ -107,7 +122,8 @@ async function seed() {
           updated_at = now()
       `;
     }
-    console.log(`Reward catalog ready: ${skus.length} SKUs (1 active, ${skus.length - 1} pending PO approval).`);
+    const active = skus.filter((sku) => sku.isActive).length;
+    console.log(`Reward catalog ready: ${active} active SKUs, ${skus.length - active} retired.`);
   } finally {
     await sql.end({ timeout: 5 });
   }

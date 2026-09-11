@@ -17,6 +17,8 @@ import type { listAuditLog } from '@/server/admin/audit';
 import type { listAdminDivisions, listAdminProjects } from '@/server/admin/content';
 import type { getJobSourceStatus, syncJobSource } from '@/server/career/jobs/sync-service';
 import type { previewProject } from '@/server/generation/service';
+import type { VoucherDelivery } from '@/server/rewards/voucher-push';
+import type { listAdminCareerReports, previewAdminCareerReport } from '@/server/admin/career-report';
 
 /** Every `Date` becomes an ISO string over the wire; pages format them themselves. */
 type Serialized<T> = T extends Date ? string
@@ -168,6 +170,13 @@ export const fulfillAdminRedemption = (input: { redemptionId: string; reference:
     body: JSON.stringify({ reference: input.reference }),
   });
 
+/** Retry a voucher claim's main-site push; fulfils it automatically on success. */
+export const pushAdminVoucher = (redemptionId: string) =>
+  adminRequest<{ done: VoucherDelivery }>(`/api/internal/rewards/${redemptionId}/push-voucher`, {
+    method: 'POST',
+    body: '{}',
+  }).then((r) => r.done);
+
 export const reverseAdminRedemption = (input: { redemptionId: string; reason: string }) =>
   adminRequest(`/api/internal/rewards/${input.redemptionId}/reverse`, {
     method: 'POST',
@@ -252,6 +261,62 @@ export const runAdminJobSourceAction = (sourceId: string, action: 'sync' | 'enab
     body: JSON.stringify({ sourceId, action }),
   }).then((r) => r.result);
 
+export type AdminJobSourceInput = {
+  name: string;
+  slug?: string;
+  adapter: 'http-json';
+  feedUrl: string;
+  siteUrl?: string;
+  category?: string;
+  itemsPath?: string;
+  nextCursorPath?: string;
+  cursorParam?: string;
+  fieldMap: {
+    externalId: string;
+    title: string;
+    company: string;
+    applicationUrl: string;
+    location?: string;
+    workMode?: string;
+    employmentType?: string;
+    description?: string;
+    requiredSkills?: string;
+    postedAt?: string;
+    expiresAt?: string;
+  };
+  credentialEnvVar?: string;
+  authHeader?: string;
+  authScheme?: string;
+  syncIntervalMinutes?: number;
+  stalenessDays?: number;
+  activate: boolean;
+  syncNow: boolean;
+  reason: string;
+};
+
+export type AdminJobSourceCreated = {
+  created: { id: string; slug: string; name: string; isActive: boolean; credentialConfigured: boolean | null };
+  sync: AdminJobSyncOutcome | null;
+  syncError: string | null;
+};
+
+export const createAdminJobSourceClient = (input: AdminJobSourceInput) =>
+  adminRequest<{ result: AdminJobSourceCreated }>('/api/internal/admin/job-sources', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'create', ...input }),
+  }).then((r) => r.result);
+
+// ----------------------------------------------------------- career report
+
+export type AdminCareerReportRow = Serialized<Awaited<ReturnType<typeof listAdminCareerReports>>[number]>;
+export type AdminCareerReportPreview = Serialized<Awaited<ReturnType<typeof previewAdminCareerReport>>>;
+
+export const listAdminCareerReportsClient = (params?: { q?: string; limit?: number; offset?: number }) =>
+  adminRequest<{ participants: AdminCareerReportRow[] }>(`/api/internal/admin/career-report${qs({ ...params })}`).then((r) => r.participants);
+
+export const previewAdminCareerReportClient = (userId: string) =>
+  adminRequest<AdminCareerReportPreview>(`/api/internal/admin/career-report/${userId}`);
+
 // --------------------------------------------------------------- projects
 
 export const listAdminProjectsClient = (params?: { weekId?: string; divisionId?: string; status?: string; limit?: number; offset?: number }) =>
@@ -272,6 +337,17 @@ export const editAdminProject = (input: { projectId: string; reason: string; pac
     body: JSON.stringify({ reason: input.reason, package: input.package }),
   });
 
+/** Rubric criterion → skill on a published project, until its week is finalized. */
+export const attributeAdminProjectCriteria = (input: {
+  projectId: string;
+  reason: string;
+  attributions: Array<{ criterionId: string; skillId: string | null }>;
+}) =>
+  adminRequest<{ projectId: string; changed: number }>(`/api/internal/admin/projects/${input.projectId}/attribute`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: input.reason, attributions: input.attributions }),
+  });
+
 export const scheduleAdminProject = (input: { projectId: string; scheduledPublishAt: string | null; reason: string }) =>
   adminRequest(`/api/internal/admin/projects/${input.projectId}/schedule`, {
     method: 'POST',
@@ -283,10 +359,12 @@ export const scheduleAdminProject = (input: { projectId: string; scheduledPublis
 export const listAdminDivisionsClient = () =>
   adminRequest<{ divisions: AdminDivision[] }>('/api/internal/admin/divisions').then((r) => r.divisions);
 
-export const createAdminDivisionClient = (input: { slug: string; name: string; description?: string | null; isActive: boolean; sortOrder: number }) =>
+export type AdminBaseCriterion = { name: string; weight: number; maxScore: number };
+
+export const createAdminDivisionClient = (input: { slug: string; name: string; description?: string | null; isActive: boolean; sortOrder: number; baseRubric?: AdminBaseCriterion[] }) =>
   adminRequest('/api/internal/admin/divisions', { method: 'POST', body: JSON.stringify(input) });
 
-export const updateAdminDivisionClient = (input: { divisionId: string; name?: string; description?: string | null; isActive?: boolean; sortOrder?: number }) =>
+export const updateAdminDivisionClient = (input: { divisionId: string; name?: string; description?: string | null; isActive?: boolean; sortOrder?: number; baseRubric?: AdminBaseCriterion[] }) =>
   adminRequest('/api/internal/admin/divisions', { method: 'PATCH', body: JSON.stringify(input) });
 
 // ------------------------------------------------------ week orchestration

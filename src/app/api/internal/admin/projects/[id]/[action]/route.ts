@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { arenaData, arenaError } from "@/server/arena/http";
 import { requireArenaAdmin } from "@/server/admin/auth";
-import { setAdminProjectSchedule } from "@/server/admin/content";
+import { attributeProjectCriteria, criteriaAttributionSchema, setAdminProjectSchedule } from "@/server/admin/content";
 import { reviewProject } from "@/server/generation/service";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const parsed = editSchema.safeParse(body);
       if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
       return arenaData(await reviewProject({ projectId: id, action: "edit", reason: parsed.data.reason, package: parsed.data.package, actorSubject }));
+    }
+    if (action === "attribute") {
+      // Rubric criterion → skill on a live project; drafts carry it in `edit`.
+      const parsed = criteriaAttributionSchema.safeParse(body);
+      if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
+      return arenaData(await attributeProjectCriteria({ projectId: id, ...parsed.data, actorSubject }));
     }
     if (action === "schedule") {
       const parsed = scheduleSchema.safeParse(body);

@@ -6,7 +6,7 @@ import { takeMilestone } from "@/server/rewards/milestones";
 
 export const dynamic = "force-dynamic";
 
-const takeSchema = z.object({ slug: z.string().trim().min(1).max(64) });
+const takeSchema = z.object({ slug: z.string().trim().min(1).max(64), retryOf: z.string().uuid().optional() });
 
 /** Claim a reached milestone: creates a PENDING redemption + notice. Fulfillment is Phase 7. */
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   try {
     const parsed = takeSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return arenaData({ taken: false, reason: "VALIDATION_ERROR" }, 400);
-    return arenaData({ taken: await takeMilestone({ userId: user.id, slug: parsed.data.slug }) }, 201);
+    return arenaData({ taken: await takeMilestone({ userId: user.id, slug: parsed.data.slug, retryOf: parsed.data.retryOf }) }, 201);
   } catch (error) {
     return arenaError(error);
   }

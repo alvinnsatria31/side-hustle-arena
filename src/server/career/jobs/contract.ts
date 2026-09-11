@@ -118,6 +118,10 @@ export const httpJsonSourceConfigSchema = z.object({
   pageDelayMs: z.number().int().min(0).max(10_000).default(0),
   /** Safety stop: a feed that never ends must not run forever. */
   maxPages: z.number().int().min(1).max(200).default(20),
+  /** Display only: the provider's public site, shown to operators. Never fetched. */
+  siteUrl: z.url().refine((value) => new URL(value).protocol === "https:", "siteUrl must be an https:// address").optional(),
+  /** Display only: an operator's label for what the feed lists, e.g. "Teknologi". */
+  category: z.string().trim().min(1).max(60).optional(),
 }).strict();
 
 export type HttpJsonSourceConfig = z.infer<typeof httpJsonSourceConfigSchema>;

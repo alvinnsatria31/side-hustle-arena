@@ -9,6 +9,8 @@ export const projectStatus = arena.enum("project_status", ["DRAFT", "PREVIEWED",
 export const difficultyBand = arena.enum("difficulty_band", ["STANDARD"]);
 export const projectPreviewStatus = arena.enum("project_preview_status", ["PENDING", "APPROVED", "REJECTED", "REGENERATE_REQUESTED", "AUTO_APPROVED"]);
 export const submissionRequirementType = arena.enum("submission_requirement_type", ["FILE", "LINK", "TEXT"]);
+/** Presentation kind for a project resource: chooses the icon, nothing more. */
+export const projectResourceKind = arena.enum("project_resource_kind", ["DATASET", "DOCUMENT", "TEMPLATE", "LINK"]);
 export const enrollmentStatus = arena.enum("enrollment_status", ["ACTIVE", "SUBMITTED", "UNDER_REVIEW", "REVIEW_READY", "COMPLETED", "VOIDED"]);
 export const workspaceStep = arena.enum("workspace_step", ["BRIEF", "PLAN", "WORK", "REVIEW", "SUBMIT"]);
 export const submissionStatus = arena.enum("submission_status", ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "REVIEWED_HIDDEN", "FINALIZED", "VOIDED"]);

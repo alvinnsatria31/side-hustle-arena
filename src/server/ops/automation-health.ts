@@ -50,12 +50,31 @@ export interface HealthSignal {
 const REVIEW_UNCLAIMED_WARN_MINUTES = 30;
 const REVIEW_UNCLAIMED_ALERT_MINUTES = 120;
 
-/** A scheduled job that has not run for far longer than its own cadence. */
-const HEARTBEAT_EXPECTATIONS: Array<{ job: string; action: string; withinHours: number }> = [
+/**
+ * A scheduled job that has not run for far longer than its own cadence.
+ *
+ * The list used to watch the housekeeping jobs and none of the jobs that
+ * actually run a competition week. That is backwards: a stalled storage cleanup
+ * costs disk, a stalled `week-close` costs every participant their results, and
+ * neither the queue counters nor the n8n dashboard can tell you a timer simply
+ * stopped firing. A missing heartbeat is the only evidence of that.
+ *
+ * Windows are the cadence plus slack for one missed tick, so a single blip does
+ * not page anyone.
+ */
+export const HEARTBEAT_EXPECTATIONS: Array<{ job: string; action: string; withinHours: number }> = [
   { job: "jobs-sync", withinHours: 24, action: "Cek /app/admin/careers dan pemicu n8n “Every 4 hours”." },
   { job: "email-flush", withinHours: 6, action: "Cek pemicu n8n “Every 15 minutes”; retry email kedaluwarsa setelah 23 jam." },
   { job: "week-notifications", withinHours: 48, action: "Cek pemicu n8n harian." },
   { job: "storage-cleanup", withinHours: 48, action: "Cek pemicu n8n harian." },
+  // Hourly in the workflow. Late close = week tidak pernah difinalisasi =
+  // peserta tidak pernah menerima hasil atau poin, tanpa satu pun error.
+  { job: "week-close", withinHours: 3, action: "Cek pemicu n8n “Hourly week lifecycle”; minggu yang lewat deadline tidak akan menutup sendiri." },
+  { job: "week-finalize", withinHours: 3, action: "Cek pemicu n8n “Hourly week lifecycle”; finalize menyusul close pada tick yang sama." },
+  // Generation runs through a window of ticks; one full day without any tick
+  // means next week has no projects, which is only visible once it is too late.
+  { job: "project-generate", withinHours: 26, action: "Cek pemicu n8n untuk generate dan ARENA_GENERATION_ENABLED di container." },
+  { job: "project-drop", withinHours: 3, action: "Cek pemicu n8n “Hourly project publication”; proyek terjadwal tidak akan terbit sendiri." },
 ];
 
 export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
@@ -216,7 +235,8 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
       key: "cv-spend",
       level: spend.used >= spend.ceiling ? "ALERT" : "WARN",
       detail: `Pemindaian CV jam ini ${spend.used} dari batas ${spend.ceiling}.`,
-      action: "Turunkan CV_SCAN_HOURLY_CAP atau tutup fitur lewat Saklar Darurat kalau ini lonjakan tidak wajar.",
+      // CV Scanner is not on the maintenance switches: its flag is baked in at build time.
+      action: "Kalau lonjakan tidak wajar, turunkan CV_SCAN_HOURLY_CAP di arena.env lalu `docker compose up -d sk-arena`. Menutup CV Scanner sepenuhnya butuh build ulang image tanpa CV_SCANNER=true — lihat halaman CV Scanner.",
     });
   }
 

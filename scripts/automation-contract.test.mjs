@@ -127,12 +127,124 @@ test("the grading workflow's timeouts fit the lease it holds", () => {
     "a worker could still be running after its lease expired, which lets a second worker claim the same job");
 });
 
+/**
+ * Run one n8n Code node's real source against a constructed item.
+ *
+ * The workflow JSON is the deployable artifact, so asserting on its text would
+ * pass for a node that reads the right key and never puts it in the prompt.
+ * This executes the node body exactly as n8n would, with `$input` supplied.
+ */
+function runCodeNode(workflow, name, item) {
+  const code = nodeNamed(workflow, name).parameters.jsCode;
+  const $input = { first: () => item, all: () => [item] };
+  return new Function("$input", code)($input);
+}
+
+test("the grader is told what the task was and what the evidence cannot show", () => {
+  // Arena builds both (buildBlindReviewerInput.brief, describeEvidenceLimits)
+  // and sends them on every claim. This node used to read four keys and drop
+  // the rest, so the model scored "does this answer the brief?" without ever
+  // seeing the brief, and scored visual criteria off OCR text without being
+  // told that is all it had.
+  const job = {
+    jobId: "job-1",
+    input: {
+      projectTitle: "Sales Insight Brief",
+      divisionName: "Data Analyst",
+      brief: {
+        caseBackground: "BACKGROUND-MARKER",
+        roleDescription: "ROLE-MARKER",
+        mission: "MISSION-MARKER",
+        objective: "OBJECTIVE-MARKER",
+      },
+      rubric: [{ id: "c1", name: "Execution", maxScore: 100, weight: 3, reviewInstruction: "check depth" }],
+      evidenceLimits: ["LIMIT-MARKER images reach you as OCR text."],
+      sources: [{ id: "explanation", text: "SOURCE-MARKER penjelasan peserta." }],
+    },
+  };
+  const [{ json }] = runCodeNode(grading, "Build blind prompt", { json: { data: { job } } });
+  for (const marker of ["BACKGROUND-MARKER", "ROLE-MARKER", "MISSION-MARKER", "OBJECTIVE-MARKER", "LIMIT-MARKER", "SOURCE-MARKER"]) {
+    assert.ok(json.prompt.includes(marker), `the prompt drops ${marker}`);
+  }
+  assert.match(json.prompt, /## Project Brief & Context/);
+  assert.match(json.prompt, /## Evidence & Evaluation Limits/);
+  // The downstream pre-check reads both of these by name.
+  assert.equal(json.jobId, "job-1");
+  assert.deepEqual(json.rubricIds, ["c1"]);
+});
+
+test("a job with no brief still grades, and says so rather than inventing one", () => {
+  const job = {
+    jobId: "job-2",
+    input: {
+      projectTitle: "Legacy Fixture",
+      divisionName: "Data Analyst",
+      brief: { caseBackground: null, roleDescription: null, mission: null, objective: null },
+      rubric: [{ id: "c1", name: "Execution", maxScore: 100, weight: 1, reviewInstruction: null }],
+      evidenceLimits: [],
+      sources: [{ id: "explanation", text: "penjelasan peserta." }],
+    },
+  };
+  const [{ json }] = runCodeNode(grading, "Build blind prompt", { json: { data: { job } } });
+  assert.match(json.prompt, /No brief was stored/);
+  assert.doesNotMatch(json.prompt, /\bnull\b/, "a missing brief field must never reach the model as the word null");
+});
+
 test("the grading workflow reports which model actually graded", () => {
   const body = nodeNamed(grading, "Complete the lease").parameters.jsonBody;
   // Without this, every externally graded review was stored as the literal
   // string "external-worker" and provenance told you nothing.
   assert.match(body, /model:\s*\$env\.AI_REVIEW_MODEL/);
   assert.match(body, /workerId:\s*'n8n-grading'/);
+});
+
+test("an HTTP 500 from Arena fails the n8n run instead of colouring it green", () => {
+  // Live sample #3169 and friends all finished green. Nothing in them proved a
+  // project published or an email sent — the summary node reported ok:false and
+  // returned normally, and n8n grades a run by whether its last node threw.
+  const call = (statusCode, body) => ({ json: { statusCode, body } });
+  assert.throws(
+    () => runCodeNode(trigger, "Summarise the run", call(500, { error: { code: "INTERNAL", message: "boom" } })),
+    /failed/i,
+    "a 500 must mark the execution red",
+  );
+  assert.throws(
+    () => runCodeNode(trigger, "Summarise the run", call(200, { data: { job: "project-generate", done: false, detail: { failed: "WEEK_NOT_READY" } } })),
+    /project-generate/,
+    "a job reporting detail.failed is a failure even on a 200",
+  );
+});
+
+test("a scheduled job with nothing to do is still a quiet success", () => {
+  // The distinction the old node could not make. `done:false` covers both
+  // "generation is disabled" and "generation broke"; alerting on both would
+  // make the red light meaningless within a day.
+  const quiet = [
+    { job: "week-close", done: true, detail: { skipped: "no open week past its deadline" } },
+    { job: "project-generate", done: false, detail: { skipped: "generation disabled" } },
+    { job: "project-generate", done: false, detail: { stopped: "time budget reached; the next tick continues" } },
+  ];
+  for (const data of quiet) {
+    const [{ json }] = runCodeNode(trigger, "Summarise the run", { json: { statusCode: 200, body: { data } } });
+    assert.equal(json.ok, true, `${JSON.stringify(data.detail)} must not alert`);
+    assert.equal(json.job, data.job);
+    assert.equal(json.deferred, data.done === false, "a deferred job is reported as deferred, not as failed");
+  }
+});
+
+test("every scheduled job that can silently stop has a heartbeat expectation", async () => {
+  // A timer that stops is the failure nothing else surfaces: the queue is
+  // empty, the console is calm, and no week has opened for eight days.
+  const { HEARTBEAT_EXPECTATIONS } = await import("../src/server/ops/automation-health.ts");
+  const watched = new Set(HEARTBEAT_EXPECTATIONS.map((entry) => entry.job));
+  for (const job of ["project-generate", "project-drop", "week-close", "week-finalize", "email-flush", "jobs-sync"]) {
+    assert.ok(watched.has(job), `no heartbeat expectation covers "${job}"`);
+    assert.ok(job in JOBS, `heartbeat watches "${job}", which is not a real job`);
+  }
+  for (const entry of HEARTBEAT_EXPECTATIONS) {
+    assert.ok(entry.job in JOBS, `heartbeat watches unknown job "${entry.job}"`);
+    assert.ok(entry.action.length > 10, `heartbeat for "${entry.job}" says nothing about what to do`);
+  }
 });
 
 test("route ceilings all state the same invocation limit", () => {

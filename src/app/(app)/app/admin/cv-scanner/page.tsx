@@ -56,9 +56,23 @@ export default async function AdminCvScannerPage() {
           diunggah dan teks yang diekstrak <strong>tidak pernah</strong> disimpan, jadi tidak ada isi CV yang bisa
           ditinjau atau dimoderasi dari sini — dan tidak perlu dicari.
         </p>
-        <p className="mt-3 text-[13px] leading-relaxed text-sk-muted">
-          Plafon per jam dibaca dari <code className="font-mono text-xs">CV_SCAN_HOURLY_CAP</code>. Untuk menutup
-          fitur ini sepenuhnya saat insiden, gunakan <strong>Saklar Darurat</strong>.
+        <p className="mt-3 break-words text-[13px] leading-relaxed text-sk-muted">
+          Plafon per jam dibaca dari <code className="font-mono text-xs">CV_SCAN_HOURLY_CAP</code> saat server
+          berjalan. Kosong atau <code className="font-mono text-xs">0</code> berarti bawaan 300 — bukan tertutup.
+        </p>
+        {/* CV Scanner is not one of the maintenance switches, and its flag is inlined at `next build`,
+            so the only instructions worth printing here are the ones that actually close it. */}
+        <p className="mt-3 break-words text-[13px] leading-relaxed text-sk-muted">
+          CV Scanner <strong>tidak</strong> ada di Saklar Darurat. Fitur ini dinyalakan oleh{' '}
+          <code className="font-mono text-xs">NEXT_PUBLIC_CV_SCANNER_ENABLED</code>, yang ditanam ke image saat
+          build — mengubah environment variable di server lalu me-restart container <strong>tidak</strong> menutupnya.
+          Untuk menonaktifkan sepenuhnya saat insiden: build ulang image tanpa{' '}
+          <code className="font-mono text-xs">CV_SCANNER=true</code> lewat{' '}
+          <code className="font-mono text-xs">deploy/sk-vps/build-and-ship.sh</code>, lalu jalankan{' '}
+          <code className="font-mono text-xs">docker compose -f docker-compose.arena.yml up -d sk-arena</code> di VPS.
+          Rem cepat tanpa build: set <code className="font-mono text-xs">CV_SCAN_HOURLY_CAP=1</code> di{' '}
+          <code className="font-mono text-xs">arena.env</code>, lalu <code className="font-mono text-xs">up -d sk-arena</code>{' '}
+          (bukan <code className="font-mono text-xs">restart</code>, yang tidak membaca ulang env).
         </p>
       </Card>
     </AdminShell>

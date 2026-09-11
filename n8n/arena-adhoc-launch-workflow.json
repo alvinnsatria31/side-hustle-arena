@@ -1,4 +1,5 @@
 {
+  "id": "arena-adhoc-launch",
   "name": "Arena off-schedule project release",
   "meta": {
     "description": "Release a project outside the Monday cycle. Arena still owns generation, validation and publication; this workflow only says when, for which day, and how far to take it."

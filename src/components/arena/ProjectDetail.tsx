@@ -88,9 +88,12 @@ export function CtaActions({ slug }: { slug: string }) {
           ? err.code === 'ALREADY_ENROLLED_THIS_WEEK'
             ? 'Kamu sudah ambil project lain minggu ini (1 project/minggu).'
             : err.code === 'WEEK_NOT_OPEN' || err.code === 'WEEK_CLOSED'
-              ? 'Pendaftaran project minggu ini sudah tutup (Jumat 23:59 WIB).'
+              // No day is named here on purpose: this component only knows a
+              // slug, and an ad-hoc week's selection does not close on a Friday.
+              // The deadline is stated accurately on the brief above it.
+              ? 'Pendaftaran project ini sudah tutup — cek tanggal deadline di brief.'
               : err.code === 'FEATURE_CLOSED'
-                ? 'Pendaftaran lagi ditutup sementara (kill-switch). Coba lagi nanti.'
+                ? err.message || 'Pendaftaran lagi ditutup sementara. Coba lagi nanti.'
                 : `Gagal enroll: ${err.message}`
           : 'Gagal enroll. Cek koneksi lalu coba lagi.';
       showToast(message);

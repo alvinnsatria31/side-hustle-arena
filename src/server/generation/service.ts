@@ -1,9 +1,9 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { divisions, featureFlags, logs, projects, projectRubricCriteria, projectSkills, projectSubmissionRequirements, runs, skills, weekRules, weeks } from "@/server/db/schema";
+import { divisions, featureFlags, logs, projects, projectResources, projectRubricCriteria, projectSkills, projectSubmissionRequirements, runs, skills, weekRules, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, rubricHash, validatePackage, weeklyWindow,
+import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, resourceKind, rubricHash, validatePackage, weeklyWindow,
   type BaseCriterion, type GenerationProvider, type LibraryEntry, type ProjectPackage } from "./core";
 import { EXECUTION_CONTRACT, type ExecutionBudget } from "@/server/ops/execution-budget";
 
@@ -67,6 +67,7 @@ async function storedPackage(db: Store, project: typeof projects.$inferSelect, s
   const rubric = await db.select().from(projectRubricCriteria).where(eq(projectRubricCriteria.projectId, project.id)).orderBy(asc(projectRubricCriteria.sortOrder));
   const requirements = await db.select().from(projectSubmissionRequirements).where(eq(projectSubmissionRequirements.projectId, project.id)).orderBy(asc(projectSubmissionRequirements.sortOrder));
   const projectSkillRows = await db.select().from(projectSkills).where(eq(projectSkills.projectId, project.id)).orderBy(asc(projectSkills.skillId));
+  const resourceRows = await db.select().from(projectResources).where(eq(projectResources.projectId, project.id)).orderBy(asc(projectResources.sortOrder), asc(projectResources.label));
   // Nullable legacy content remains invalid. It is never filled with invented AI output.
   return {
     divisionId: project.divisionId, title: project.title, shortDescription: project.shortDescription ?? "",
@@ -74,10 +75,18 @@ async function storedPackage(db: Store, project: typeof projects.$inferSelect, s
     mission: project.mission ?? "", objective: project.objective ?? "", difficulty: project.difficulty,
     estimatedMinutes: project.estimatedMinutes ?? 0,
     skills: projectSkillRows.map((s) => ({ skillId: s.skillId, weight: Number(s.weight ?? 1) })),
-    rubric: rubric.map((r) => ({ name: r.name, description: r.description ?? "", weight: Number(r.weight), maxScore: Number(r.maxScore), reviewInstruction: r.reviewInstruction ?? "", skillId: r.skillId })),
+    rubric: rubric.map((r) => ({ name: r.name, description: r.description ?? "", weight: Number(r.weight), maxScore: Number(r.maxScore), reviewInstruction: r.reviewInstruction ?? "",
+      // A NULL skill_id means "unattributed", exactly what the validated package
+      // carries as an absent skillId. Returning null here would add a key the
+      // validation hash never saw, so every approval of a provider-generated
+      // project failed with "Stored content changed since validation."
+      skillId: r.skillId ?? undefined })),
     requirements: requirements.map((r) => ({ label: r.label, type: r.type as "FILE" | "LINK", required: r.required,
       minItems: r.minItems, maxItems: r.maxItems, allowedMimeTypes: r.allowedMimeTypes ?? [], allowedLinkTypes: r.allowedLinkTypes ?? [], instructions: r.instructions ?? "" })) as ProjectPackage["requirements"],
-    resources: supplemental?.resources ?? [], fingerprint: supplemental?.fingerprint as ProjectPackage["fingerprint"],
+    // Stored rows are the source of truth now that they exist; the supplemental
+    // package is the fallback for projects written before the table did.
+    resources: resourceRows.length ? resourceRows.map((r) => ({ label: r.label, url: r.url })) : supplemental?.resources ?? [],
+    fingerprint: supplemental?.fingerprint as ProjectPackage["fingerprint"],
   };
 }
 
@@ -135,9 +144,19 @@ async function writeContent(db: Store, projectId: string, p: ProjectPackage) {
   await db.delete(projectSkills).where(eq(projectSkills.projectId, projectId));
   await db.delete(projectRubricCriteria).where(eq(projectRubricCriteria.projectId, projectId));
   await db.delete(projectSubmissionRequirements).where(eq(projectSubmissionRequirements.projectId, projectId));
+  await db.delete(projectResources).where(eq(projectResources.projectId, projectId));
   await db.insert(projectSkills).values(p.skills.map((s) => ({ projectId, skillId: s.skillId, weight: String(s.weight) })));
   await db.insert(projectRubricCriteria).values(p.rubric.map((r, sortOrder) => ({ ...r, projectId, sortOrder, weight: String(r.weight), maxScore: String(r.maxScore), skillId: r.skillId ?? null })));
   await db.insert(projectSubmissionRequirements).values(p.requirements.map((r, sortOrder) => ({ ...r, projectId, sortOrder })));
+  // The task materials. Validated as credential-free HTTPS by packageSchema and
+  // written here so the brief a participant opens can actually be worked on:
+  // until this existed, a generated "analyse the sales dataset" arrived with no
+  // dataset anywhere in the product. Empty stays empty — no placeholder rows.
+  if (p.resources.length) {
+    await db.insert(projectResources).values(p.resources.map((resource, sortOrder) => ({
+      projectId, label: resource.label, url: resource.url, kind: resourceKind(resource), sortOrder,
+    })));
+  }
 }
 
 function projectFields(p: ProjectPackage) {
@@ -304,11 +323,21 @@ export async function previewProject(input: { projectId: string; db?: Db }) {
   if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Week not found.");
   const [division] = await db.select().from(divisions).where(eq(divisions.id, project.divisionId));
   const validation = await validationRecord(db, project.id);
+  // For the editor's skill attribution: the criterion ids in package order
+  // (a published project is attributed by id), and the skills this project
+  // lists, by name — the only skills a criterion may measure.
+  const criterionRows = await db.select({ id: projectRubricCriteria.id }).from(projectRubricCriteria)
+    .where(eq(projectRubricCriteria.projectId, project.id)).orderBy(asc(projectRubricCriteria.sortOrder));
+  const skillOptions = await db.select({ id: skills.id, name: skills.name }).from(projectSkills)
+    .innerJoin(skills, eq(skills.id, projectSkills.skillId))
+    .where(eq(projectSkills.projectId, project.id)).orderBy(asc(skills.name));
   return {
     project, week, division: division ?? null,
     package: await storedPackage(db, project, validation?.metadata.package),
     validatedAt: validation?.createdAt ?? null,
     validationSource: validation?.metadata.source ?? null,
+    rubricCriterionIds: criterionRows.map((row) => row.id),
+    skillOptions,
   };
 }
 

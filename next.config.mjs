@@ -11,6 +11,7 @@ const nextConfig = {
    */
   output: "standalone",
   images: {
+    contentDispositionType: 'inline',
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],

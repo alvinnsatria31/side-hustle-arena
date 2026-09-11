@@ -5,6 +5,7 @@ import {
   fulfillAdminRedemption,
   getAdminInventory,
   listAdminRedemptionsClient,
+  pushAdminVoucher,
   reverseAdminRedemption,
   setAdminInventoryQuantity,
   setAdminRewardActive,
@@ -45,6 +46,30 @@ function RedemptionsQueue() {
   const [value, setValue] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pushing, setPushing] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const pushVoucher = async (row: AdminRedemption) => {
+    setPushing(row.id);
+    setNotice(null);
+    try {
+      const delivery = await pushAdminVoucher(row.id);
+      setNotice(
+        delivery.status === 'DELIVERED'
+          ? `Voucher ${delivery.code} diterima website utama dan klaim ditandai selesai.`
+          : delivery.status === 'MANUAL_REQUIRED'
+            ? `Belum terkirim — ${delivery.reason} Serahkan manual lewat "Tandai selesai".`
+            : delivery.status === 'ALREADY_SETTLED'
+              ? 'Klaim ini sudah tidak terbuka.'
+              : 'Reward ini bukan voucher.',
+      );
+      await redemptions.refresh();
+    } catch (err) {
+      setNotice(err instanceof ArenaApiError ? err.message : 'Push voucher gagal.');
+    } finally {
+      setPushing(null);
+    }
+  };
 
   const open = (a: RedemptionAction) => {
     setAction(a);
@@ -55,7 +80,7 @@ function RedemptionsQueue() {
   const submit = async () => {
     if (!action) return;
     if (!value.trim()) {
-      setError(action.kind === 'fulfill' ? 'Nomor referensi transfer wajib diisi.' : 'Alasan wajib diisi.');
+      setError(action.kind === 'fulfill' ? 'Catatan penyerahan wajib diisi.' : 'Alasan wajib diisi.');
       return;
     }
     setPending(true);
@@ -91,6 +116,7 @@ function RedemptionsQueue() {
       </div>
 
       {redemptions.error && <p className="mb-4 text-sm text-sk-error">{redemptions.error.message}</p>}
+      {notice && <p role="status" className="mb-4 text-sm text-sk-navy">{notice}</p>}
 
       <div className="space-y-3">
         {redemptions.data?.map((row) => (
@@ -103,12 +129,25 @@ function RedemptionsQueue() {
               <div className="mt-1 text-sm text-sk-body">
                 {row.reward} · {row.pointsSpent} poin · {jakartaDate(row.redeemedAt)}
               </div>
-              {row.reference && <div className="mt-1 text-xs text-sk-muted">Ref: {row.reference}</div>}
+              {row.reference && <div className="mt-1 whitespace-pre-line break-words text-xs text-sk-muted">Catatan ke peserta: {row.reference}</div>}
+              {row.voucher && (row.status === 'PENDING' || row.status === 'PROCESSING') && (
+                <div className="mt-1 text-xs text-sk-muted">
+                  Voucher <span className="font-mono">{row.voucher.code}</span>
+                  {row.voucher.deferral
+                    ? <> · <span className="text-sk-error">perlu penyerahan manual</span> ({jakartaDate(row.voucher.deferral.deferredAt)}): {row.voucher.deferral.reason ?? 'push ditunda'}</>
+                    : ' · belum ada catatan push'}
+                </div>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {row.voucher && (row.status === 'PENDING' || row.status === 'PROCESSING') && (
+                <Button size="sm" variant="ghost" loading={pushing === row.id} disabled={pushing !== null} onClick={() => void pushVoucher(row)}>
+                  Kirim ulang voucher
+                </Button>
+              )}
               {(row.status === 'PENDING' || row.status === 'PROCESSING') && (
                 <Button size="sm" onClick={() => open({ kind: 'fulfill', row })}>
-                  Tandai lunas
+                  Tandai selesai
                 </Button>
               )}
               {row.status !== 'ADMIN_REVERSED' && (
@@ -127,17 +166,17 @@ function RedemptionsQueue() {
       <Modal open={action !== null} onClose={() => setAction(null)} labelledBy="redemption-action-title">
         <div className="p-7">
           <h3 id="redemption-action-title" className="mb-2 text-lg font-bold text-sk-navy">
-            {action?.kind === 'fulfill' ? 'Tandai klaim ini lunas' : 'Batalkan klaim ini'}
+            {action?.kind === 'fulfill' ? 'Tandai klaim ini selesai' : 'Batalkan klaim ini'}
           </h3>
           <p className="mb-4 text-sm text-sk-muted">
             {action?.kind === 'fulfill'
-              ? 'Isi setelah transfer manual sudah dikirim. Tidak ada uang yang dikirim otomatis oleh sistem ini.'
+              ? 'Isi setelah reward diserahkan manual. Teks ini tampil ke peserta di profilnya: tulis nomor referensi transfer, kode voucher, link akses, atau instruksi pengambilan — jangan catatan internal. Tidak ada uang yang dikirim otomatis oleh sistem ini.'
               : action?.row.status === 'FULFILLED'
                 ? 'Klaim ini sudah lunas — membatalkannya mengembalikan poin tapi TIDAK menarik kembali dana yang sudah dikirim.'
                 : 'Poin peserta akan dikembalikan dan stok (jika ada) dilepas.'}
           </p>
           {action?.kind === 'fulfill' ? (
-            <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Nomor referensi transfer" className="mb-4" />
+            <Textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="Catatan penyerahan untuk peserta" rows={3} maxLength={1000} className="mb-4" />
           ) : (
             <Textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="Alasan pembatalan" rows={3} className="mb-4" />
           )}
@@ -160,7 +199,10 @@ type CatalogAction = { rewardId: string; title: string; isActive: boolean };
 type QuantityAction = { periodId: string; current: number; rewardTitle: string };
 
 function InventoryPanel() {
-  const inventory = useAdminResource(() => getAdminInventory());
+  // Stable loader: useAdminResource refetches whenever the loader's identity
+  // changes, so an inline arrow re-requested the inventory on every render — an
+  // endless request loop for as long as the page stayed open.
+  const inventory = useAdminResource(useCallback(() => getAdminInventory(), []));
   const [catalogAction, setCatalogAction] = useState<CatalogAction | null>(null);
   const [quantityAction, setQuantityAction] = useState<QuantityAction | null>(null);
   const [reason, setReason] = useState('');

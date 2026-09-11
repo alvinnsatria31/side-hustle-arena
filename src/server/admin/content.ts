@@ -1,8 +1,9 @@
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { baseRubricSchema, type BaseCriterion } from "@/server/generation/core";
 import { getDb } from "@/server/db/client";
-import { divisions, logs, projects, projectStatus, weekRules, weeks } from "@/server/db/schema";
+import { divisions, logs, projectRubricCriteria, projectSkills, projects, projectStatus, weekRules, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "@/server/reviews/audit";
 
@@ -95,7 +96,31 @@ export const divisionSchema = z.object({
   description: z.string().trim().max(2000).nullish(),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(10000).default(0),
+  baseRubric: baseRubricSchema.optional(),
 });
+
+const RUBRIC_FROZEN = "generation.rubric-frozen";
+
+// Taken first in the transaction, as generation does, so a bootstrap cannot freeze a different rubric concurrently.
+async function lockProjectLifecycle(tx: Pick<Db, "execute">) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext('arena-project-lifecycle'))`);
+}
+
+async function freezeDivisionRubric(tx: Pick<Db, "select" | "insert">, divisionId: string, rubric: BaseCriterion[], actorSubject: string) {
+  // Re-checked here and not only by the route: a service caller skips the
+  // route's schema, and a frozen rubric no package can satisfy blocks the
+  // division for good.
+  const parsed = baseRubricSchema.safeParse(rubric);
+  if (!parsed.success) {
+    throw new ArenaDomainError("VALIDATION_ERROR", "Base rubric failed validation.", {
+      issues: parsed.error.issues.map(({ path, message }) => ({ path: path.join("."), message })),
+    });
+  }
+  const [existing] = await tx.select({ id: logs.id }).from(logs).where(and(eq(logs.action, RUBRIC_FROZEN), eq(logs.entityId, divisionId))).limit(1);
+  if (existing) throw new ArenaDomainError("VALIDATION_ERROR", "This division's base rubric is already frozen and cannot be replaced.");
+  await tx.insert(logs).values({ actorType: "ADMIN", actorSubject, action: RUBRIC_FROZEN, entityType: "division", entityId: divisionId,
+    metadata: { rubric: parsed.data, source: "admin-division" } });
+}
 
 /**
  * Divisions, each with the one fact that decides whether it can produce work.
@@ -108,18 +133,26 @@ export const divisionSchema = z.object({
  */
 export async function listAdminDivisions(db: Db = getDb()) {
   const rows = await db.select().from(divisions).orderBy(asc(divisions.sortOrder), asc(divisions.name));
-  const frozen = await db.select({ entityId: logs.entityId }).from(logs).where(eq(logs.action, "generation.rubric-frozen"));
-  const ready = new Set(frozen.map((row) => row.entityId));
-  return rows.map((division) => ({ ...division, hasBaseRubric: ready.has(division.id) }));
+  const frozen = await db.select({ entityId: logs.entityId, metadata: logs.metadata }).from(logs)
+    .where(eq(logs.action, RUBRIC_FROZEN)).orderBy(asc(logs.createdAt), asc(logs.id));
+  // Earliest record wins, exactly as the generator reads it.
+  const rubrics = new Map<string, BaseCriterion[]>();
+  for (const row of frozen) {
+    if (row.entityId && !rubrics.has(row.entityId)) rubrics.set(row.entityId, (row.metadata as { rubric: BaseCriterion[] }).rubric);
+  }
+  return rows.map((division) => ({ ...division, hasBaseRubric: rubrics.has(division.id), baseRubric: rubrics.get(division.id) ?? null }));
 }
 
 export async function createAdminDivision(input: z.infer<typeof divisionSchema> & { actorSubject: string; db?: Db }) {
   return (input.db ?? getDb()).transaction(async (tx) => {
+    if (input.baseRubric) await lockProjectLifecycle(tx);
     const [clash] = await tx.select({ id: divisions.id }).from(divisions).where(eq(divisions.slug, input.slug)).limit(1);
     if (clash) throw new ArenaDomainError("VALIDATION_ERROR", "A division with this slug already exists.");
     const [division] = await tx.insert(divisions).values({ slug: input.slug, name: input.name,
       description: input.description ?? null, isActive: input.isActive, sortOrder: input.sortOrder }).returning();
-    await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "DIVISION_CREATED", entityType: "division", entityId: division.id, metadata: { slug: division.slug } });
+    if (input.baseRubric) await freezeDivisionRubric(tx, division.id, input.baseRubric, input.actorSubject);
+    await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "DIVISION_CREATED", entityType: "division", entityId: division.id,
+      metadata: { slug: division.slug, baseRubricFrozen: Boolean(input.baseRubric) } });
     return division;
   });
 }
@@ -133,12 +166,15 @@ export const divisionUpdateSchema = divisionSchema.omit({ slug: true }).partial(
 export async function updateAdminDivision(input: z.infer<typeof divisionUpdateSchema> & { actorSubject: string; db?: Db }) {
   const patch = Object.fromEntries((["name", "description", "isActive", "sortOrder"] as const)
     .filter((key) => input[key] !== undefined).map((key) => [key, input[key]]));
-  if (!Object.keys(patch).length) throw new ArenaDomainError("VALIDATION_ERROR", "No changes were supplied.");
+  if (!Object.keys(patch).length && !input.baseRubric) throw new ArenaDomainError("VALIDATION_ERROR", "No changes were supplied.");
   return (input.db ?? getDb()).transaction(async (tx) => {
+    if (input.baseRubric) await lockProjectLifecycle(tx);
     const [division] = await tx.select().from(divisions).where(eq(divisions.id, input.divisionId)).for("update");
     if (!division) throw new ArenaDomainError("VALIDATION_ERROR", "Division not found.");
-    await tx.update(divisions).set({ ...patch, updatedAt: new Date() }).where(eq(divisions.id, input.divisionId));
-    await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "DIVISION_UPDATED", entityType: "division", entityId: input.divisionId, metadata: { changes: patch } });
+    if (Object.keys(patch).length) await tx.update(divisions).set({ ...patch, updatedAt: new Date() }).where(eq(divisions.id, input.divisionId));
+    if (input.baseRubric) await freezeDivisionRubric(tx, input.divisionId, input.baseRubric, input.actorSubject);
+    await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "DIVISION_UPDATED", entityType: "division", entityId: input.divisionId,
+      metadata: { changes: patch, baseRubricFrozen: Boolean(input.baseRubric) } });
     return { divisionId: input.divisionId, ...patch };
   });
 }
@@ -163,6 +199,67 @@ export async function listAdminProjects(query: z.infer<typeof projectListQuery>,
       query.divisionId ? eq(projects.divisionId, query.divisionId) : undefined,
       query.status ? eq(projects.status, query.status) : undefined))
     .orderBy(desc(weeks.opensAt), asc(divisions.sortOrder), projects.id).limit(query.limit).offset(query.offset);
+}
+
+export const criteriaAttributionSchema = z.object({
+  reason,
+  attributions: z.array(z.object({ criterionId: z.string().uuid(), skillId: z.string().uuid().nullable() }).strict()).min(1).max(20),
+});
+
+/**
+ * Which skill each rubric criterion measures, on a project that is already live.
+ *
+ * Draft content carries this in its package (`rubric[].skillId`) and goes
+ * through `reviewProject`, so its validation record stays in step — the editor
+ * saves it with the rest of the package. A published package can no longer
+ * change, but attribution is not content: participants never see it, it sits
+ * outside `rubricHash`, and nothing re-checks a published package against its
+ * validation hash. What it does change is the skill evidence finalization
+ * writes (`skill-attribution.ts`), so it stays editable exactly until the week
+ * is finalized and is refused after — evidence already written is not rewritten.
+ *
+ * Lock order matches finalization (week first), so an attribution either lands
+ * before finalize reads the rubric or waits for it and is then refused.
+ */
+export async function attributeProjectCriteria(input: z.infer<typeof criteriaAttributionSchema> & { projectId: string; actorSubject: string; db?: Db }) {
+  return (input.db ?? getDb()).transaction(async (tx) => {
+    const [project] = await tx.select().from(projects).where(eq(projects.id, input.projectId));
+    if (!project) throw new ArenaDomainError("PROJECT_NOT_FOUND", "Project not found.");
+    const [week] = await tx.select().from(weeks).where(eq(weeks.id, project.weekId)).for("share");
+    if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Week not found.");
+    if (week.status === "FINALIZED" || week.status === "ARCHIVED") {
+      throw new ArenaDomainError("WEEK_ALREADY_FINALIZED", "This week's skill evidence is already written, so its rubric attribution is frozen.");
+    }
+    if (project.status !== "PUBLISHED") {
+      throw new ArenaDomainError("VALIDATION_ERROR", "Unpublished content carries its skill attribution in the package; save it with the project editor instead.");
+    }
+    const criteria = await tx.select().from(projectRubricCriteria).where(eq(projectRubricCriteria.projectId, project.id)).for("update");
+    const byId = new Map(criteria.map((criterion) => [criterion.id, criterion]));
+    const claimed = new Set((await tx.select({ skillId: projectSkills.skillId }).from(projectSkills)
+      .where(eq(projectSkills.projectId, project.id))).map((row) => row.skillId));
+    const seen = new Set<string>();
+    const changes: Array<{ criterionId: string; name: string; from: string | null; to: string | null }> = [];
+    for (const attribution of input.attributions) {
+      const criterion = byId.get(attribution.criterionId);
+      if (!criterion || seen.has(attribution.criterionId)) throw new ArenaDomainError("VALIDATION_ERROR", "Unknown or repeated rubric criterion.");
+      seen.add(attribution.criterionId);
+      // Same rule validatePackage applies to drafts: evidence for a skill the
+      // brief never lists would be a claim the project cannot back.
+      if (attribution.skillId && !claimed.has(attribution.skillId)) {
+        throw new ArenaDomainError("VALIDATION_ERROR", `Criterion "${criterion.name}" can only measure a skill this project lists.`);
+      }
+      if ((criterion.skillId ?? null) === attribution.skillId) continue;
+      changes.push({ criterionId: criterion.id, name: criterion.name, from: criterion.skillId ?? null, to: attribution.skillId });
+    }
+    for (const change of changes) {
+      await tx.update(projectRubricCriteria).set({ skillId: change.to }).where(eq(projectRubricCriteria.id, change.criterionId));
+    }
+    if (changes.length) {
+      await writeAudit(tx, { actorType: "ADMIN", actorSubject: input.actorSubject, action: "PROJECT_RUBRIC_ATTRIBUTED", entityType: "project", entityId: project.id,
+        metadata: { reason: input.reason, weekCode: week.weekCode, changes } });
+    }
+    return { projectId: project.id, changed: changes.length };
+  });
 }
 
 export const projectScheduleSchema = z.object({

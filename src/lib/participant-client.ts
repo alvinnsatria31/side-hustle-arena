@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArenaApiError, type ArenaErrorCode } from './arena-client';
 import type { ParticipantOverview } from '@/server/arena/participant-service';
 import type { MilestoneLadder } from '@/server/rewards/milestones';
+import type { VoucherDelivery } from '@/server/rewards/voucher-push';
 
 export type { ParticipantOverview };
 export type ParticipantEnrollment = ParticipantOverview['history'][number];
@@ -23,7 +24,8 @@ export async function participantRequest<T>(path: string, init?: RequestInit): P
 
 export const getParticipantOverview = () => participantRequest<ParticipantOverview>('/api/arena/me');
 export const getParticipantMilestones = () => participantRequest<{ ladder: MilestoneLadder }>('/api/arena/milestones');
-export const takeParticipantReward = (slug: string) => participantRequest('/api/arena/milestones/take', { method: 'POST', body: JSON.stringify({ slug }) });
+export const takeParticipantReward = (slug: string, retryOf?: string | null) =>
+  participantRequest<{ taken: { redemptionId: string; pointsSpent: number; delivery: VoucherDelivery | null } }>('/api/arena/milestones/take', { method: 'POST', body: JSON.stringify(retryOf ? { slug, retryOf } : { slug }) });
 export const setParticipantAvatar = (avatarId: string) =>
   participantRequest<{ avatarId: string }>('/api/arena/me/avatar', { method: 'PUT', body: JSON.stringify({ avatarId }) });
 export const getParticipantInbox = (unreadOnly = false, limit = 20) => participantRequest<ParticipantInbox>(`/api/arena/notifications?limit=${limit}${unreadOnly ? '&unread=1' : ''}`);

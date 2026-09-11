@@ -5,7 +5,8 @@ import { Check, Play, TriangleAlert, X } from 'lucide-react';
 import { AdminShell, AdminRefreshButton } from '@/components/admin/AdminShell';
 import { Card, PanelHeading } from '@/components/primitives/Card';
 import { Badge } from '@/components/primitives/Badge';
-import { Button } from '@/components/primitives/Button';
+import { Button, ButtonLink } from '@/components/primitives/Button';
+import { AddJobSourceDialog } from '@/components/admin/AddJobSourceDialog';
 import {
   getAdminJobs,
   runAdminJobClient,
@@ -23,7 +24,7 @@ import { jakartaDate } from '@/lib/jakarta-time';
  * Component — it needs local state for the run buttons — without teaching it
  * anything about permissions.
  */
-export function AdminJobsConsole({ release }: { release?: ReactNode }) {
+export function AdminJobsConsole({ release, canManageSources = false }: { release?: ReactNode; canManageSources?: boolean }) {
   const catalogue = useAdminResource(useCallback(() => getAdminJobs(), []));
   const [running, setRunning] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, AdminJobResult | { failed: string }>>({});
@@ -125,11 +126,18 @@ export function AdminJobsConsole({ release }: { release?: ReactNode }) {
                 </pre>
               )}
 
-              <div className="mt-auto">
+              <div className="mt-auto flex flex-wrap gap-2">
                 <Button size="sm" loading={running === job} disabled={running !== null}
                   onClick={() => runJob(job)} iconLeft={<Play size={14} aria-hidden />}>
                   Jalankan sekarang
                 </Button>
+                {/* The sync job has nothing to pull until a source exists; register one right here. */}
+                {job === 'jobs-sync' && canManageSources && (
+                  <>
+                    <AddJobSourceDialog variant="ghost" onCreated={() => catalogue.refresh()} />
+                    <ButtonLink size="sm" variant="ghost" href="/app/admin/careers">Kelola sumber</ButtonLink>
+                  </>
+                )}
               </div>
             </Card>
           );

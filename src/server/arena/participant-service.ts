@@ -33,7 +33,7 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
       .innerJoin(skills, eq(skillEvidence.skillId, skills.id))
       .innerJoin(projects, eq(skillEvidence.projectId, projects.id))
       .where(eq(skillEvidence.userId, userId)).orderBy(desc(weeks.opensAt), skills.name),
-    db.select({ id: redemptions.id, slug: catalog.slug, title: catalog.title, pointsSpent: redemptions.pointsSpent, status: redemptions.status, redeemedAt: redemptions.redeemedAt, fulfilledAt: redemptions.fulfilledAt })
+    db.select({ id: redemptions.id, slug: catalog.slug, title: catalog.title, pointsSpent: redemptions.pointsSpent, status: redemptions.status, redeemedAt: redemptions.redeemedAt, fulfilledAt: redemptions.fulfilledAt, fulfillmentReference: redemptions.fulfillmentReference })
       .from(redemptions).innerJoin(catalog, eq(redemptions.rewardId, catalog.id))
       .where(eq(redemptions.userId, userId)).orderBy(desc(redemptions.redeemedAt)),
   ]);
@@ -55,7 +55,16 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
     completedProjects: history.filter((row) => row.ranking !== null).length,
     provenSkills: new Set(evidence.map((row) => row.skillId)).size,
     skillEvidence: evidence.map((row) => ({ ...row, score: Number(row.score) })),
-    redemptions: redemptionHistory.map((row) => ({ ...row, redeemedAt: row.redeemedAt.toISOString(), fulfilledAt: row.fulfilledAt?.toISOString() ?? null })),
+    // The note an admin writes when fulfilling is the hand-over itself — a
+    // voucher code, an access link, pickup instructions — so it reaches the
+    // participant. Only while the claim stands fulfilled: a claim reversed
+    // afterwards keeps the column, but no longer delivers anything.
+    redemptions: redemptionHistory.map(({ fulfillmentReference, ...row }) => ({
+      ...row,
+      redeemedAt: row.redeemedAt.toISOString(),
+      fulfilledAt: row.fulfilledAt?.toISOString() ?? null,
+      deliveryNote: row.status === "FULFILLED" ? fulfillmentReference : null,
+    })),
   };
 }
 

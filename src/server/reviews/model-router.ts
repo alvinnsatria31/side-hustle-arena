@@ -140,9 +140,27 @@ export class ApiReviewProvider implements ReviewProvider {
   }
 }
 
+/**
+ * Provider names that mean "an OpenAI-shaped /chat/completions endpoint".
+ *
+ * There is one transport in this file, and both names describe it. The split
+ * was accidental: deployments write `openai` (it is what the endpoint is), the
+ * factory only ever accepted `openai-compatible`, and nothing reconciled them.
+ * Nothing noticed either, because the primary reviewer runs in n8n and calls
+ * the provider itself — only the paths that build a provider in-process, the
+ * second judge above all, went through this guard, and they threw
+ * "AI review provider is not configured" on a box that was configured.
+ */
+const API_PROVIDER_NAMES = ['openai-compatible', 'openai'];
+
+/** Is this environment pointed at a real (non-stub) review provider? */
+export function isApiReviewProvider(env: NodeJS.ProcessEnv = process.env): boolean {
+  return API_PROVIDER_NAMES.includes(env.AI_REVIEW_PROVIDER ?? '');
+}
+
 export function createReviewProvider(profile: ReviewModelProfile = 'review', env: NodeJS.ProcessEnv = process.env): ReviewProvider {
   if (env.AI_REVIEW_PROVIDER === 'stub' && env.APP_ENV === 'development') return new StubReviewProvider();
-  if (env.AI_REVIEW_PROVIDER !== 'openai-compatible' || !env.AI_API_BASE_URL || !env.AI_API_KEY) throw new Error('AI review provider is not configured.');
+  if (!isApiReviewProvider(env) || !env.AI_API_BASE_URL || !env.AI_API_KEY) throw new Error('AI review provider is not configured.');
   const models = {
     review: env.AI_REVIEW_MODEL ?? '', judge: env.AI_JUDGE_MODEL ?? '',
     validate: env.AI_VALIDATOR_MODEL ?? '', generation: env.AI_GENERATION_MODEL ?? '',

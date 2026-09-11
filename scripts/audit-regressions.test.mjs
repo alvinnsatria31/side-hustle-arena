@@ -43,12 +43,24 @@ test('production completion validates the lease before requesting a judge provid
 
 test('manual override resolves disagreement and preserves the original AI score', async () => {
   const row = { id: 'review', status: 'NEEDS_RESOLUTION', aiScore: '60.00', finalScore: '60.00' };
-  const db = fakeDb([[row]]);
+  const db = fakeDb([[{ versionId: 'version' }], [{ weekId: 'week' }], [{ status: 'FINALIZING' }], [row]]);
   await overrideReview({ reviewId: row.id, actorSubject: 'admin', newScore: 75, reason: 'Evidence reviewed', db });
   const update = db.writes.find((write) => write.table === reviews).value;
   assert.equal(update.status, 'COMPLETED_HIDDEN');
   assert.equal(update.finalScore, '75.00');
   assert.equal(update.aiScore, undefined);
+});
+
+test('manual override is refused once the week is finalized, so ranking and points cannot diverge', async () => {
+  for (const status of ['FINALIZED', 'ARCHIVED']) {
+    const row = { id: 'review', status: 'COMPLETED_HIDDEN', aiScore: '65.50', finalScore: '65.50' };
+    const db = fakeDb([[{ versionId: 'version' }], [{ weekId: 'week' }], [{ status }], [row]]);
+    await assert.rejects(
+      overrideReview({ reviewId: row.id, actorSubject: 'admin', newScore: 11, reason: 'Late correction', db }),
+      (error) => error.code === 'WEEK_ALREADY_FINALIZED',
+    );
+    assert.equal(db.writes.length, 0);
+  }
 });
 
 test('targeted webhook lease includes the requested job and respects retry availability', async () => {

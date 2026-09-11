@@ -7,12 +7,31 @@ function finalist(userId, finalScore, finalSubmittedAt) {
   return { userId, finalScore, finalSubmittedAt: new Date(finalSubmittedAt) };
 }
 
-test("points follow the 300/200/150/100 ladder", () => {
-  assert.equal(ranking.pointsForRank(1), 300);
-  assert.equal(ranking.pointsForRank(2), 200);
-  assert.equal(ranking.pointsForRank(3), 150);
-  assert.equal(ranking.pointsForRank(4), 100);
-  assert.equal(ranking.pointsForRank(99), 100);
+test("rank bonus is 200/100/50 on the podium and nothing below it", () => {
+  assert.equal(ranking.rankBonus(1), 200);
+  assert.equal(ranking.rankBonus(2), 100);
+  assert.equal(ranking.rankBonus(3), 50);
+  assert.equal(ranking.rankBonus(4), 0);
+  assert.equal(ranking.rankBonus(99), 0);
+});
+
+test("points are the rounded score plus the rank bonus", () => {
+  assert.equal(ranking.pointsForResult(1, 90), 290);
+  assert.equal(ranking.pointsForResult(2, 84.5), 185, "a half point rounds up");
+  assert.equal(ranking.pointsForResult(3, 70.49), 120);
+  assert.equal(ranking.pointsForResult(4, 75), 75);
+  assert.equal(ranking.pointsForResult(12, 0), 0);
+});
+
+test("better work earns more at the same rank", () => {
+  assert.ok(ranking.pointsForResult(5, 95) > ranking.pointsForResult(5, 55));
+});
+
+test("an out-of-range or broken score cannot mint or remove points", () => {
+  assert.equal(ranking.scorePoints(140), 100);
+  assert.equal(ranking.scorePoints(-5), 0);
+  assert.equal(ranking.scorePoints(Number.NaN), 0);
+  assert.equal(ranking.pointsForResult(1, Number.POSITIVE_INFINITY), 200);
 });
 
 test("leaderboard orders by score DESC, submit time ASC", () => {
@@ -23,7 +42,7 @@ test("leaderboard orders by score DESC, submit time ASC", () => {
   ]);
   assert.deepEqual(ranked.map((row) => row.userId), ["user-a", "user-c", "user-b"]);
   assert.deepEqual(ranked.map((row) => row.rank), [1, 2, 3]);
-  assert.deepEqual(ranked.map((row) => row.points), [300, 200, 150]);
+  assert.deepEqual(ranked.map((row) => row.points), [290, 180, 130]);
 });
 
 test("identical score and timestamp still ranks deterministically", () => {
