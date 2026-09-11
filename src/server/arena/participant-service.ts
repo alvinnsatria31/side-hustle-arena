@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { catalog, divisions, enrollments, pointLedger, projects, redemptions, skillEvidence, skills, submissions, weeklyRankings, weeks, workspaceProgress } from "../db/schema";
+import { PUBLISHED_WEEK_STATUSES, isPublishedWeekStatus } from "./published-weeks";
 import { getWeekSelectionState, resolveCurrentWeekFromCandidates } from "./week-service";
 
 export async function getParticipantOverview(userId: string, db = getDb()) {
@@ -20,7 +21,7 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
       .innerJoin(weeks, eq(enrollments.weekId, weeks.id))
       .leftJoin(workspaceProgress, eq(workspaceProgress.enrollmentId, enrollments.id))
       .leftJoin(submissions, eq(submissions.enrollmentId, enrollments.id))
-      .leftJoin(weeklyRankings, and(eq(weeklyRankings.userId, enrollments.userId), eq(weeklyRankings.weekId, enrollments.weekId), eq(weeklyRankings.projectId, enrollments.projectId), eq(weeks.status, "FINALIZED")))
+      .leftJoin(weeklyRankings, and(eq(weeklyRankings.userId, enrollments.userId), eq(weeklyRankings.weekId, enrollments.weekId), eq(weeklyRankings.projectId, enrollments.projectId), inArray(weeks.status, [...PUBLISHED_WEEK_STATUSES])))
       .where(eq(enrollments.userId, userId)).orderBy(desc(weeks.opensAt)),
     db.select({
       balance: sql<number>`coalesce(sum(${pointLedger.amount}), 0)`.mapWith(Number),
@@ -29,7 +30,7 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
     db.select({ id: skillEvidence.id, skillId: skills.id, name: skills.name, score: skillEvidence.score, attribution: skillEvidence.attribution, criterionCount: skillEvidence.criterionCount, summary: skillEvidence.evidenceSummary, projectSlug: projects.slug, projectTitle: projects.title, weekCode: weeks.weekCode })
       .from(skillEvidence)
       .innerJoin(weeklyRankings, and(eq(skillEvidence.reviewId, weeklyRankings.reviewId), eq(skillEvidence.userId, weeklyRankings.userId), eq(skillEvidence.weekId, weeklyRankings.weekId), eq(skillEvidence.projectId, weeklyRankings.projectId)))
-      .innerJoin(weeks, and(eq(skillEvidence.weekId, weeks.id), eq(weeks.status, "FINALIZED")))
+      .innerJoin(weeks, and(eq(skillEvidence.weekId, weeks.id), inArray(weeks.status, [...PUBLISHED_WEEK_STATUSES])))
       .innerJoin(skills, eq(skillEvidence.skillId, skills.id))
       .innerJoin(projects, eq(skillEvidence.projectId, projects.id))
       .where(eq(skillEvidence.userId, userId)).orderBy(desc(weeks.opensAt), skills.name),
@@ -45,15 +46,17 @@ export async function getParticipantOverview(userId: string, db = getDb()) {
     week: { ...row.week, submissionDeadlineAt: row.week.submissionDeadlineAt.toISOString(), finalizedAt: row.week.finalizedAt?.toISOString() ?? null },
     workspace: row.workspace ? { ...row.workspace, updatedAt: row.workspace.updatedAt.toISOString() } : null,
     ranking: row.ranking ? { ...row.ranking, finalScore: Number(row.ranking.finalScore) } : null,
-    sealed: row.week.status !== "FINALIZED",
+    sealed: !isPublishedWeekStatus(row.week.status),
   }));
   return {
     currentWeek: currentWeek ? { id: currentWeek.id, weekCode: currentWeek.weekCode, title: currentWeek.title, status: currentWeek.status, submissionDeadlineAt: currentWeek.submissionDeadlineAt.toISOString(), canSelect: getWeekSelectionState(currentWeek).canSelect } : null,
     currentEnrollmentId: history.find((row) => row.week.id === current?.id)?.id ?? null,
     history,
     points: totals[0] ?? { balance: 0, lifetimeEarned: 0 },
-    completedProjects: history.filter((row) => row.ranking !== null).length,
+    completedProjects: history.filter((row) => row.ranking !== null && row.status !== "VOIDED").length,
     provenSkills: new Set(evidence.map((row) => row.skillId)).size,
+    // `attribution` travels with each row: CRITERION means a rubric criterion
+    // measured the skill; PROJECT means the project score is standing in.
     skillEvidence: evidence.map((row) => ({ ...row, score: Number(row.score) })),
     // The note an admin writes when fulfilling is the hand-over itself — a
     // voucher code, an access link, pickup instructions — so it reaches the

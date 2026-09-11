@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validatePackage, chooseCandidate, fingerprint, isDuplicate, publicationBlock, weeklyWindow, generationConfig } from "../src/server/generation/core.ts";
+import { validatePackage, chooseCandidate, fingerprint, isDuplicate, publicationBlock, publicationResourceBlock, weeklyWindow, generationConfig } from "../src/server/generation/core.ts";
 
 const divisionId = "11111111-1111-4111-8111-111111111111";
 const skillId = "22222222-2222-4222-8222-222222222222";
@@ -92,6 +92,11 @@ test("publication enforces dates, vetoes, preview interval and immutable week st
   assert.match(publicationBlock({ week: { ...week, status: "FINALIZED" }, project, now, validatedAt, previewHours: 6 }), /week/i);
   assert.match(publicationBlock({ week, project, now: new Date(now.getTime() - 1), validatedAt, previewHours: 6 }), /due/i);
   assert.match(publicationBlock({ week, project, now: week.submissionDeadlineAt, validatedAt, previewHours: 6 }), /deadline/i);
+});
+
+test("publication holds a validated project until at least one HTTPS resource exists", () => {
+  assert.match(publicationResourceBlock(fixture()), /resource/i);
+  assert.equal(publicationResourceBlock({ ...fixture(), resources: [{ label: "Dataset", url: "https://example.com/data.csv" }] }), null);
 });
 
 test("Jakarta weekly schedule is stable across the Sunday/Monday UTC boundary", () => {

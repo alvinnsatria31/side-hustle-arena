@@ -1,10 +1,10 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { catalog, redemptions } from "@/server/db/schema";
+import { catalog, logs, redemptions } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { writeAudit } from "@/server/reviews/audit";
-import { fulfillRedemption } from "./redemption-service";
+import { acquireDeliveryLease, fulfillRedemption, releaseDeliveryLease, reverseRedemption } from "./redemption-service";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -17,10 +17,12 @@ type Db = ReturnType<typeof getDb>;
  * once, at mint time, and the buyer's path never leaves the main site.
  *
  * Contract: `POST {MAIN_SITE_ORIGIN}/api/v1/vouchers`, Bearer
- * `MAIN_SITE_VOUCHER_TOKEN`, idempotent on `code`. Until both variables are
- * set the push reports `pushable: false` instead of throwing, and the claim is
- * left PENDING for an admin to fulfil by hand — nobody is marked as served who
- * wasn't, and nobody loses a valid claim because the main site is not ready.
+ * `MAIN_SITE_VOUCHER_TOKEN`, idempotent on `code`; and
+ * `POST {MAIN_SITE_ORIGIN}/api/v1/vouchers/{code}/void` to withdraw a code
+ * whose claim was cancelled. Until both variables are set the push reports
+ * `pushable: false` instead of throwing, and the claim is left PENDING for an
+ * admin to fulfil by hand — nobody is marked as served who wasn't, and nobody
+ * loses a valid claim because the main site is not ready.
  */
 
 export interface VoucherPushResult {
@@ -63,6 +65,12 @@ export function voucherDeliveryNote(code: string, rewardTitle: string, origin: s
 
 const TIMEOUT_MS = 10_000;
 
+function voucherContract() {
+  const origin = process.env.MAIN_SITE_ORIGIN;
+  const token = process.env.MAIN_SITE_VOUCHER_TOKEN;
+  return origin && token ? { base: `${origin.replace(/\/+$/, "")}/api/v1/vouchers`, token } : null;
+}
+
 export async function pushRewardCode(
   redemptionId: string,
   fetcher: typeof fetch = fetch,
@@ -73,15 +81,14 @@ export async function pushRewardCode(
   const sku = (await db.select().from(catalog).where(eq(catalog.id, redemption.rewardId)))[0];
   if (!sku) return { ok: false, pushable: false, error: "Reward SKU not found." };
 
-  const origin = process.env.MAIN_SITE_ORIGIN;
-  const token = process.env.MAIN_SITE_VOUCHER_TOKEN;
-  if (!origin || !token) {
+  const contract = voucherContract();
+  if (!contract) {
     return { ok: false, pushable: false, error: "Main-site voucher contract not configured." };
   }
   try {
-    const response = await fetcher(`${origin.replace(/\/+$/, "")}/api/v1/vouchers`, {
+    const response = await fetcher(contract.base, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${contract.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         code: voucherCodeFor(redemption.id),
         reward_slug: sku.slug,
@@ -102,11 +109,54 @@ export async function pushRewardCode(
   }
 }
 
+/**
+ * Withdraw a code the main site may hold, for a claim that no longer stands.
+ *
+ * Only a 2xx counts as done. A 404 cannot tell "nothing to void" from "the
+ * endpoint does not exist yet", and guessing wrong leaves a free voucher live —
+ * so every other answer is left for manual reconciliation and audited as such.
+ */
+export async function revokeRewardCode(input: { redemptionId: string; reason: string; fetcher?: typeof fetch }): Promise<VoucherPushResult> {
+  const contract = voucherContract();
+  if (!contract) return { ok: false, pushable: false, error: "Main-site voucher contract not configured." };
+  try {
+    const response = await (input.fetcher ?? fetch)(`${contract.base}/${encodeURIComponent(voucherCodeFor(input.redemptionId))}/void`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${contract.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ external_reference: input.redemptionId, reason: input.reason }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    return response.ok ? { ok: true, pushable: true } : { ok: false, pushable: true, error: `HTTP ${response.status}` };
+  } catch (error) {
+    return { ok: false, pushable: true, error: error instanceof Error ? error.message.slice(0, 300) : "Unknown error" };
+  }
+}
+
+async function recordRevocation(db: Db, input: {
+  redemptionId: string; actorType: "AUTOMATION" | "ADMIN"; actorSubject: string;
+  trigger: "DELIVERED_AFTER_CANCELLATION" | "ADMIN_REVERSAL" | "ADMIN_RETRY_VOID"; revoke: VoucherPushResult; detail?: Record<string, unknown>;
+}) {
+  await writeAudit(db, {
+    actorType: input.actorType, actorSubject: input.actorSubject,
+    // RECONCILIATION_REQUIRED is what the admin reward queue flags: the code may
+    // still be redeemable on the main site while the points are refunded here.
+    action: input.revoke.ok ? "REWARD_VOUCHER_VOIDED" : "REWARD_VOUCHER_RECONCILIATION_REQUIRED",
+    entityType: "redemption", entityId: input.redemptionId,
+    metadata: {
+      code: voucherCodeFor(input.redemptionId), trigger: input.trigger, voided: input.revoke.ok,
+      voidPushable: input.revoke.pushable, voidError: input.revoke.error ?? null, ...input.detail,
+    },
+  });
+}
+
 export type VoucherDelivery =
   | { status: "NOT_VOUCHER" }
   | { status: "ALREADY_SETTLED"; redemptionStatus: string }
+  | { status: "IN_PROGRESS"; code: string }
   | { status: "DELIVERED"; code: string }
-  | { status: "MANUAL_REQUIRED"; code: string; reason: string };
+  | { status: "MANUAL_REQUIRED"; code: string; reason: string }
+  | { status: "REVOKED"; code: string; voided: boolean; reason: string };
 
 /**
  * Deliver a voucher reward: push its code to the main site and, only if that
@@ -114,11 +164,16 @@ export type VoucherDelivery =
  *
  * Runs after the claim transaction has committed, never inside it: an HTTP
  * call must not hold the point-account lock, and a main site that is down must
- * not roll back a claim the participant already paid points for. When the
- * push cannot happen, the claim stays PENDING and the reason is written to the
- * audit log (`REWARD_VOUCHER_PUSH_DEFERRED`), which is what the admin reward
- * queue reads to flag it for manual fulfilment. Safe to call again: the code is
- * derived from the claim and the main site dedupes on it.
+ * not roll back a claim the participant already paid points for.
+ *
+ * The claim sits in PROCESSING for the push (`acquireDeliveryLease`), which is
+ * what keeps an admin reversal from refunding points while a code is on its
+ * way. If the claim was cancelled anyway — the lease lapsed — a code the main
+ * site accepted is voided and the outcome audited. When the push cannot happen,
+ * the claim returns to PENDING and the reason is written to the audit log
+ * (`REWARD_VOUCHER_PUSH_DEFERRED`), which the admin reward queue reads to flag
+ * it for manual fulfilment. Safe to call again: the code is derived from the
+ * claim and the main site dedupes on it.
  */
 export async function deliverVoucherReward(input: {
   redemptionId: string;
@@ -130,34 +185,119 @@ export async function deliverVoucherReward(input: {
   const db = input.db ?? getDb();
   const actorType = input.actorType ?? "AUTOMATION";
   const actorSubject = input.actorSubject ?? "voucher-push";
-  const [row] = await db.select({ status: redemptions.status, rewardType: catalog.rewardType, title: catalog.title })
-    .from(redemptions).innerJoin(catalog, eq(catalog.id, redemptions.rewardId))
-    .where(eq(redemptions.id, input.redemptionId));
-  if (!row) throw new ArenaDomainError("VALIDATION_ERROR", "Redemption not found.");
-  if (!isVoucherReward(row.rewardType)) return { status: "NOT_VOUCHER" };
-  if (row.status !== "PENDING" && row.status !== "PROCESSING") return { status: "ALREADY_SETTLED", redemptionStatus: row.status };
+  const [take] = await db.select({ rewardId: redemptions.rewardId }).from(redemptions).where(eq(redemptions.id, input.redemptionId));
+  if (!take) throw new ArenaDomainError("VALIDATION_ERROR", "Redemption not found.");
+  const [sku] = await db.select({ rewardType: catalog.rewardType, title: catalog.title }).from(catalog).where(eq(catalog.id, take.rewardId));
+  if (!sku) throw new ArenaDomainError("VALIDATION_ERROR", "Reward SKU not found.");
+  if (!isVoucherReward(sku.rewardType)) return { status: "NOT_VOUCHER" };
 
   const code = voucherCodeFor(input.redemptionId);
+  const lease = await acquireDeliveryLease({ redemptionId: input.redemptionId, db });
+  if (!lease.acquired) {
+    return lease.reason === "IN_PROGRESS"
+      ? { status: "IN_PROGRESS", code }
+      : { status: "ALREADY_SETTLED", redemptionStatus: lease.redemptionStatus };
+  }
+
   const push = await pushRewardCode(input.redemptionId, input.fetcher, db);
   let reason: string;
   if (push.ok) {
     try {
       await fulfillRedemption({
         redemptionId: input.redemptionId, actorSubject, actorType, verification: "MAIN_SITE_VOUCHER_PUSHED",
-        reference: voucherDeliveryNote(code, row.title, process.env.MAIN_SITE_ORIGIN), db,
+        reference: voucherDeliveryNote(code, sku.title, process.env.MAIN_SITE_ORIGIN), db,
       });
       return { status: "DELIVERED", code };
     } catch (error) {
-      reason = `Kode sudah diterima website utama, tetapi klaim gagal ditandai selesai: ${error instanceof Error ? error.message : String(error)}`;
+      const failure = error instanceof Error ? error.message : String(error);
+      const [after] = await db.select({ status: redemptions.status }).from(redemptions).where(eq(redemptions.id, input.redemptionId));
+      if (after?.status === "FULFILLED") return { status: "ALREADY_SETTLED", redemptionStatus: after.status };
+      if (after && after.status !== "PENDING" && after.status !== "PROCESSING") {
+        // Cancelled while the code was on its way: the points are back with the
+        // participant, so the code must not stay redeemable.
+        const revoke = await revokeRewardCode({ redemptionId: input.redemptionId, reason: `Claim ${after.status} before delivery completed.`, fetcher: input.fetcher });
+        await recordRevocation(db, {
+          redemptionId: input.redemptionId, actorType, actorSubject, trigger: "DELIVERED_AFTER_CANCELLATION", revoke,
+          detail: { redemptionStatus: after.status, fulfillError: failure },
+        });
+        return {
+          status: "REVOKED", code, voided: revoke.ok,
+          reason: revoke.ok
+            ? "Klaim sudah dibatalkan saat kode dikirim; kode ditarik kembali dari website utama."
+            : `Klaim sudah dibatalkan saat kode dikirim, dan kode belum berhasil ditarik (${revoke.error ?? "tanpa keterangan"}). Perlu rekonsiliasi manual.`,
+        };
+      }
+      reason = `Kode sudah diterima website utama, tetapi klaim gagal ditandai selesai: ${failure}`;
     }
   } else {
     reason = push.pushable
       ? `Website utama menolak atau tidak bisa dihubungi (${push.error ?? "tanpa keterangan"}).`
       : "Kontrak voucher website utama belum dikonfigurasi (MAIN_SITE_ORIGIN / MAIN_SITE_VOUCHER_TOKEN).";
   }
+  await releaseDeliveryLease({ redemptionId: input.redemptionId, leaseToken: lease.leaseToken, db });
   await writeAudit(db, {
     actorType, actorSubject, action: "REWARD_VOUCHER_PUSH_DEFERRED", entityType: "redemption", entityId: input.redemptionId,
     metadata: { code, pushable: push.pushable, pushed: push.ok, error: push.error ?? null, reason, fulfillment: "MANUAL_REQUIRED" },
   });
   return { status: "MANUAL_REQUIRED", code, reason };
+}
+
+/**
+ * Admin reversal for any claim, voiding the voucher code where one may exist.
+ *
+ * A voucher claim cancelled before fulfilment may still have a code on the main
+ * site if a push was ever attempted — a timed-out push can have landed — so the
+ * code is voided and the outcome audited. A claim never pushed makes no call. A
+ * fulfilled claim is left alone: its reversal policy refunds points and keeps
+ * what was handed over.
+ */
+export async function reverseRedemptionAndRevokeVoucher(input: {
+  redemptionId: string; actorSubject: string; reason: string;
+  fulfilledPolicy?: "REFUND_POINTS_KEEP_FULFILLED_STOCK"; fetcher?: typeof fetch; db?: Db;
+}) {
+  const db = input.db ?? getDb();
+  const [before] = await db.select({ status: redemptions.status, rewardId: redemptions.rewardId }).from(redemptions).where(eq(redemptions.id, input.redemptionId));
+  const reversed = await reverseRedemption({ redemptionId: input.redemptionId, actorSubject: input.actorSubject, reason: input.reason, fulfilledPolicy: input.fulfilledPolicy, db });
+  if (!before || (before.status !== "PENDING" && before.status !== "PROCESSING")) return { reversed, voucher: null };
+  const [sku] = await db.select({ rewardType: catalog.rewardType }).from(catalog).where(eq(catalog.id, before.rewardId));
+  if (!sku || !isVoucherReward(sku.rewardType)) return { reversed, voucher: null };
+
+  const code = voucherCodeFor(input.redemptionId);
+  const attempts = await db.select({ metadata: logs.metadata }).from(logs).where(and(
+    eq(logs.entityType, "redemption"), eq(logs.entityId, input.redemptionId), eq(logs.action, "REWARD_VOUCHER_PUSH_DEFERRED"),
+  ));
+  const pushAttempted = before.status === "PROCESSING"
+    || attempts.some((row) => (row.metadata as { pushable?: unknown } | null)?.pushable === true);
+  if (!pushAttempted) return { reversed, voucher: { code, voidAttempted: false, voided: false } };
+
+  const revoke = await revokeRewardCode({ redemptionId: input.redemptionId, reason: input.reason, fetcher: input.fetcher });
+  await recordRevocation(db, { redemptionId: input.redemptionId, actorType: "ADMIN", actorSubject: input.actorSubject, trigger: "ADMIN_REVERSAL", revoke });
+  return { reversed, voucher: { code, voidAttempted: true, voided: revoke.ok } };
+}
+
+export async function retryVoucherVoid(input: {
+  redemptionId: string; actorSubject: string; fetcher?: typeof fetch; db?: Db;
+}) {
+  const db = input.db ?? getDb();
+  const [take] = await db.select({ status: redemptions.status, rewardId: redemptions.rewardId }).from(redemptions).where(eq(redemptions.id, input.redemptionId));
+  if (!take || take.status !== "ADMIN_REVERSED") throw new ArenaDomainError("VALIDATION_ERROR", "Only a reversed voucher claim can retry voiding.");
+  const [sku] = await db.select({ rewardType: catalog.rewardType }).from(catalog).where(eq(catalog.id, take.rewardId));
+  if (!sku || !isVoucherReward(sku.rewardType)) throw new ArenaDomainError("VALIDATION_ERROR", "This reward is not a voucher.");
+
+  const [required] = await db.select({ id: logs.id, createdAt: logs.createdAt }).from(logs).where(and(
+    eq(logs.entityType, "redemption"), eq(logs.entityId, input.redemptionId), eq(logs.action, "REWARD_VOUCHER_RECONCILIATION_REQUIRED"),
+  )).orderBy(desc(logs.createdAt)).limit(1);
+  const [resolved] = await db.select({ createdAt: logs.createdAt }).from(logs).where(and(
+    eq(logs.entityType, "redemption"), eq(logs.entityId, input.redemptionId), eq(logs.action, "REWARD_VOUCHER_VOIDED"),
+  )).orderBy(desc(logs.createdAt)).limit(1);
+  if (!required || (resolved && resolved.createdAt >= required.createdAt)) {
+    throw new ArenaDomainError("VALIDATION_ERROR", "Voucher reconciliation is already resolved or was never requested.");
+  }
+
+  const revoke = await revokeRewardCode({ redemptionId: input.redemptionId, reason: "Admin retry for unresolved voucher reconciliation.", fetcher: input.fetcher });
+  await recordRevocation(db, {
+    redemptionId: input.redemptionId, actorType: "ADMIN", actorSubject: input.actorSubject,
+    trigger: "ADMIN_RETRY_VOID", revoke, detail: { resolvesAuditLogId: required.id },
+  });
+  return { code: voucherCodeFor(input.redemptionId), voided: revoke.ok, error: revoke.error ?? null };
 }

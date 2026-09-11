@@ -3,6 +3,8 @@
 import { useCallback, useState } from 'react';
 import { ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
+import { useDemo } from '@/features/demo/store';
+import { clearLocalAccountData } from '@/features/demo/state';
 import { getParticipantPrivacy, setParticipantShowcaseConsent, deleteParticipantAccount, useParticipantResource } from '@/lib/participant-client';
 import { participantDate } from './ParticipantDashboard';
 
@@ -18,6 +20,7 @@ import { participantDate } from './ParticipantDashboard';
  */
 export function PrivacyControls() {
   const privacy = useParticipantResource(useCallback(() => getParticipantPrivacy(), []));
+  const { logout } = useDemo();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,9 @@ export function PrivacyControls() {
     setError(null);
     try {
       await deleteParticipantAccount(confirmText);
+      // The server copy is gone; the analysis this browser kept must go too.
+      logout();
+      clearLocalAccountData();
       setNotice('Akun dihapus. Identitasmu sudah dianonimkan dan sesi ini tidak berlaku lagi.');
       await privacy.refresh();
     } catch (cause) {

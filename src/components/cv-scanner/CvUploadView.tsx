@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { FileDropzone, type DropzoneError, type SelectedFile } from '@/components/cv-scanner/FileDropzone';
-import { useDemo } from '@/features/demo/store';
+import { useCvOwnerGuard, useDemo } from '@/features/demo/store';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
 import { ANALYZE_COVERAGE } from '@/data/mock/cv';
@@ -19,6 +19,7 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const { state, dispatch } = useDemo();
+  const ownerId = useCvOwnerGuard();
   const [file, setFile] = useState<SelectedFile | null>(null);
   const [error, setError] = useState<DropzoneError>(null);
   // The File itself, kept out of the store because it cannot be serialised.
@@ -48,9 +49,9 @@ export function CvUploadView({ basePath }: { basePath: string }) {
       setError(null);
       setFile(picked);
       setRawFile(raw);
-      dispatch({ type: 'CV_SET_FILE', fileName: picked.name, fileSize: picked.size });
+      dispatch({ type: 'CV_SET_FILE', fileName: picked.name, fileSize: picked.size, ownerId });
     },
-    [dispatch],
+    [dispatch, ownerId],
   );
 
   const handleRemove = () => {
@@ -65,7 +66,7 @@ export function CvUploadView({ basePath }: { basePath: string }) {
     // Send the file before navigating: the analyzing route awaits this promise,
     // and a File cannot travel through the store to get there.
     startCvScan(rawFile, saveHistory);
-    dispatch({ type: 'CV_START' });
+    dispatch({ type: 'CV_START', ownerId });
     router.push(`${basePath}/analyzing`);
   };
 

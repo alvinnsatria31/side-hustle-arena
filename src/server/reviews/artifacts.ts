@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
+import { ArenaDomainError } from '@/server/arena/errors';
 import { getDb } from '@/server/db/client';
 import { reviewArtifacts, submissionVersions, submissionVersionItems } from '@/server/db/schema';
 import { downloadObjectBytes } from '@/server/storage';
@@ -29,6 +30,17 @@ const FREEZE_BUDGET_MS = 20_000;
  * has, and it looks it up by exactly this string.
  */
 export const sourceIdFor = (versionItemId: string) => `item:${versionItemId}`;
+export const LINK_SNAPSHOT_ERROR_MESSAGE = 'Tautan tidak dapat diakses atau gagal dibaca oleh sistem. Pastikan tautan disetel publik (Anyone with the link can view) atau unggah berkas dalam format PDF.';
+
+type LinkItem = Pick<typeof submissionVersionItems.$inferSelect, 'id' | 'itemType' | 'externalUrl' | 'originalFilename'>;
+export type CapturedLinkArtifact = {
+  itemId: string;
+  externalUrl: string;
+  sourceId: string;
+  kind: string;
+  sha256: string;
+  extractedText: string;
+};
 
 /** Injection seam: the freeze is exercised offline without a network. */
 export interface FreezeDeps {
@@ -54,54 +66,69 @@ const LIVE_FREEZE_DEPS: FreezeDeps = { fetch: fetchPublicArtifact, extract: extr
  * `ensureReviewSources` would have written, dated at submit. That function skips
  * any source it already has, so the frozen text is what the reviewer sees.
  *
- * Deliberately best-effort. A link that cannot be fetched or extracted here is
- * left for the claim path exactly as before: failing the submit would spend the
- * participant's deadline on our own extractor, and the accessibility check has
- * already established the link opens. What is lost in that case is the freeze,
- * not the submission — and the reason is logged rather than swallowed.
+ * Strict by design. A link that cannot be fetched and extracted inside the
+ * shared budget rejects the submit before a review attempt is allocated. The
+ * worker therefore never has to read a mutable live link after the deadline.
  */
-export async function freezeLinkArtifacts(
-  db: Db,
-  versionId: string,
-  items: Array<typeof submissionVersionItems.$inferSelect>,
+export async function captureLinkArtifacts(
+  items: LinkItem[],
   deps: FreezeDeps = LIVE_FREEZE_DEPS,
-): Promise<{ frozen: number; deferred: number }> {
+): Promise<CapturedLinkArtifact[]> {
   const links = items.filter((item) => item.itemType === 'LINK' && item.externalUrl);
-  if (!links.length) return { frozen: 0, deferred: 0 };
-  const pending: Array<{ submissionVersionId: string; sourceId: string; kind: string; sha256: string; extractedText: string }> = [];
-  let deferred = 0;
+  if (!links.length) return [];
+  const captured: CapturedLinkArtifact[] = [];
   // A participant is watching a spinner, seconds before a deadline. The whole
   // freeze is bounded so a slow host defers rather than holding the submit open.
   const deadline = deps.now() + FREEZE_BUDGET_MS;
   for (const item of links) {
     const remaining = deadline - deps.now();
     if (remaining < 1_000) {
-      deferred += 1;
-      console.warn(`version ${versionId}: link item ${item.id} not frozen at submit — the freeze budget ran out; the claim path will fetch it instead.`);
-      continue;
+      console.warn(`link item ${item.id} could not be frozen at submit: freeze budget exhausted.`);
+      throw new ArenaDomainError('VALIDATION_ERROR', LINK_SNAPSHOT_ERROR_MESSAGE);
     }
     try {
       const response = await deps.fetch(item.externalUrl!, { timeoutMs: remaining });
       const text = await deps.extract(response.bytes, item.originalFilename ?? '', response.mime, { timeoutMs: Math.max(1_000, deadline - deps.now()) });
       if (text.length < 12) throw new Error('Extracted text is too short to be evidence.');
-      pending.push({
-        submissionVersionId: versionId,
+      captured.push({
+        itemId: item.id,
+        externalUrl: item.externalUrl!,
         sourceId: sourceIdFor(item.id),
         kind: response.mime.startsWith('image/') ? 'IMAGE_OCR' : 'LINK',
         sha256: digest(response.bytes),
         extractedText: text,
       });
     } catch (error) {
-      deferred += 1;
       const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      console.warn(`version ${versionId}: link item ${item.id} could not be frozen at submit (${reason}); the claim path will fetch it instead.`);
+      console.warn(`link item ${item.id} could not be frozen at submit (${reason}).`);
+      if (error instanceof ArenaDomainError && error.message === LINK_SNAPSHOT_ERROR_MESSAGE) throw error;
+      throw new ArenaDomainError('VALIDATION_ERROR', LINK_SNAPSHOT_ERROR_MESSAGE);
     }
   }
-  if (pending.length) {
-    await db.insert(reviewArtifacts).values(pending)
-      .onConflictDoNothing({ target: [reviewArtifacts.submissionVersionId, reviewArtifacts.sourceId] });
+  return captured;
+}
+
+export function assertCapturedLinkSet(items: LinkItem[], captured: CapturedLinkArtifact[]) {
+  const expected = items.filter((item) => item.itemType === 'LINK' && item.externalUrl)
+    .map((item) => `${item.id}\u0000${item.externalUrl}`).sort();
+  const actual = captured.map((item) => `${item.itemId}\u0000${item.externalUrl}`).sort();
+  if (expected.length !== actual.length || expected.some((value, index) => value !== actual[index])) {
+    throw new ArenaDomainError('VALIDATION_ERROR', 'Daftar tautan berubah saat submission diproses. Silakan kirim ulang.');
   }
-  return { frozen: pending.length, deferred };
+}
+
+export async function persistLinkArtifacts(db: Db, versionId: string, captured: CapturedLinkArtifact[]) {
+  if (!captured.length) return;
+  await db.insert(reviewArtifacts).values(captured.map(({ itemId: _itemId, externalUrl: _externalUrl, ...artifact }) => ({
+    submissionVersionId: versionId,
+    ...artifact,
+  }))).onConflictDoNothing({ target: [reviewArtifacts.submissionVersionId, reviewArtifacts.sourceId] });
+}
+
+export async function freezeLinkArtifacts(db: Db, versionId: string, items: LinkItem[], deps: FreezeDeps = LIVE_FREEZE_DEPS) {
+  const captured = await captureLinkArtifacts(items, deps);
+  await persistLinkArtifacts(db, versionId, captured);
+  return { frozen: captured.length, deferred: 0 };
 }
 
 /**
@@ -114,10 +141,8 @@ export async function freezeLinkArtifacts(
  * The budget passed in here bounds the whole loop, and running out is reported
  * as a normal extraction failure — the job retries, no user attempt is spent.
  *
- * Anything already snapshotted is reused as-is, which is what makes the
- * submit-time link freeze above effective: a link frozen at submit is never
- * re-fetched here, so the score is given to what was sent, not to whatever the
- * document says by the time a worker gets to it.
+ * Link snapshots must already exist. Only files may be extracted here; a
+ * missing LINK artifact is an integrity failure and is never fetched live.
  */
 export async function ensureReviewSources(db: Db, version: typeof submissionVersions.$inferSelect, items: Array<typeof submissionVersionItems.$inferSelect>, options: { budget?: ExecutionBudget } = {}): Promise<ReviewSource[]> {
   const existing = await db.select().from(reviewArtifacts).where(eq(reviewArtifacts.submissionVersionId, version.id));
@@ -129,6 +154,7 @@ export async function ensureReviewSources(db: Db, version: typeof submissionVers
   for (const item of items) {
     const id = sourceIdFor(item.id);
     if (sources.has(id)) continue;
+    if (item.itemType === 'LINK') throw new Error(`Immutable link snapshot ${id} is missing; live-link review is forbidden.`);
     // Checked per item, not once up front: the point is to stop before the
     // item that would overrun, and to leave what is already snapshotted intact.
     options.budget?.assertRoomFor(1_000, `extracting ${item.itemType.toLowerCase()} artifact`);
@@ -146,9 +172,6 @@ export async function ensureReviewSources(db: Db, version: typeof submissionVers
       });
       assertArtifactIdentity(item, object);
       bytes = object.bytes;
-    } else if (item.itemType === 'LINK' && item.externalUrl) {
-      const response = await fetchPublicArtifact(item.externalUrl, { signal: stageSignal, timeoutMs: stageTimeoutMs });
-      bytes = response.bytes; mime = response.mime;
     } else { continue; }
     const text = await extractDocumentText(bytes, item.originalFilename ?? '', mime, { signal: stageSignal, timeoutMs: stageTimeoutMs });
     if (text.length < 12) throw new Error('Artifact requires manual inspection.');

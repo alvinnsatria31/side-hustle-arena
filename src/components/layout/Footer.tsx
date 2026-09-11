@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { WHATSAPP_SUPPORT_URL } from './FloatingWhatsApp';
 
 const PRODUCT_LINKS_ALL = [
   { label: 'CV Scanner', href: '/cv-scanner' },
@@ -61,6 +62,9 @@ export function Footer() {
           <p className="text-[13px] leading-relaxed text-sk-body">
             Sekolah Karir membantu kamu pindah dari &ldquo;bisa&rdquo; ke &ldquo;terbukti bisa&rdquo; — lewat project nyata, feedback, dan bukti skill.
           </p>
+          <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-[13px] font-semibold leading-relaxed text-sk-blue hover:underline">
+            Jika mengalami kendala, hubungi WhatsApp CS: +62 851-1730-4579
+          </a>
         </div>
       </div>
 

@@ -344,7 +344,9 @@ test("the participant view serves only OPEN openings from active sources", async
     }]).adapter },
   });
 
-  const overview = await getJobsOverview(user.id);
+  // Scoped to this source: the participant view is paged, and other suites'
+  // openings in the shared sandbox may fill the first page.
+  const overview = await getJobsOverview(user.id, { filters: { sourceSlug: source.slug } });
   const mine = overview.jobs.filter((job) => job.sourceSlug === source.slug);
   assert.equal(mine.length, 1, "an expired opening must not reach a participant");
   assert.equal(mine[0].title, "Junior Data Analyst");
@@ -359,6 +361,69 @@ test("the participant view serves only OPEN openings from active sources", async
   assert.ok(health, "the participant view names its sources");
   assert.equal(health.health, "HEALTHY");
   assert.equal(typeof health.freshnessMinutes, "number");
+});
+
+test("a deadline the database already holds hides an opening before any sync marks it EXPIRED", async () => {
+  const now = new Date();
+  const source = await createSource({ slug: "deadline", row: { lastSuccessfulSyncAt: now } });
+  const opening = (externalId, expiresAt) => ({
+    sourceId: source.id, externalId, canonicalKey: `${STAMP}-deadline-${externalId}`, title: `Deadline ${externalId}`,
+    company: "Fixture Co", applicationUrl: `https://example.invalid/${externalId}`, contentHash: externalId,
+    status: "OPEN", postedAt: now, lastSeenAt: now, expiresAt,
+  });
+  const inserted = await db.insert(schema.jobOpenings).values([
+    opening("past", new Date(now.getTime() - 60_000)),
+    opening("future", new Date(now.getTime() + 86_400_000)),
+    opening("open-ended", null),
+  ]).returning();
+  const idOf = Object.fromEntries(inserted.map((row) => [row.externalId, row.id]));
+
+  const overview = await getJobsOverview(fixture.userId, { now, filters: { sourceSlug: source.slug } });
+  const shown = overview.jobs.map((job) => job.id);
+  assert.equal(shown.includes(idOf.past), false, "a role past its deadline must not be offered as live");
+  assert.ok(shown.includes(idOf.future));
+  assert.ok(shown.includes(idOf["open-ended"]));
+  assert.equal(overview.totalMatching, 2);
+  assert.equal(overview.sources.find((entry) => entry.slug === source.slug).openOpenings, 2);
+  const [stored] = await db.select().from(schema.jobOpenings).where(eq(schema.jobOpenings.id, idOf.past));
+  assert.equal(stored.status, "OPEN", "premise: no sync has marked it EXPIRED yet");
+});
+
+test("search, paging and the open total reach openings beyond the first 200", async () => {
+  const source = await createSource({ slug: "beyond-200" });
+  const needle = `${STAMP}-needle`;
+  const opening = (key, postedAt) => ({
+    sourceId: source.id, externalId: `b-${key}`, canonicalKey: `${STAMP}-b-${key}`, title: `Bulk role ${key}`,
+    company: "Fixture Co", applicationUrl: `https://example.invalid/b-${key}`, contentHash: `b-${key}`, status: "OPEN", postedAt,
+  });
+  await db.insert(schema.jobOpenings).values(Array.from({ length: 205 }, (_, i) => opening(i, new Date(Date.UTC(2099, 0, 1, 0, 0, i)))));
+  // The oldest opening: the one a 200-row cap cut off before search or matching ever saw it.
+  const [oldest] = await db.insert(schema.jobOpenings).values({
+    ...opening("oldest", new Date("2001-01-01T00:00:00Z")), title: `Legacy analyst ${needle}`, requiredSkills: [fixture.excelSkill.name],
+  }).returning();
+  await db.insert(schema.jobOpeningSkills).values({ jobOpeningId: oldest.id, skillId: fixture.excelSkill.id, kind: "REQUIRED", matchedAlias: fixture.excelSkill.name });
+
+  const scoped = { sourceSlug: source.slug };
+  const first = await getJobsOverview(fixture.userId, { filters: scoped });
+  assert.equal(first.totalMatching, 206);
+  assert.ok(first.totalOpen >= 206, "the open total is counted in SQL, not the length of a page");
+  assert.equal(first.sources.find((entry) => entry.slug === source.slug).openOpenings, 206);
+  assert.equal(first.jobs.length, 30);
+  assert.equal(first.hasMore, true);
+
+  const byTitle = await getJobsOverview(fixture.userId, { filters: { ...scoped, search: needle } });
+  assert.deepEqual(byTitle.jobs.map((job) => job.id), [oldest.id]);
+  const bySkill = await getJobsOverview(fixture.userId, { filters: { ...scoped, search: fixture.excelSkill.name } });
+  assert.ok(bySkill.jobs.some((job) => job.id === oldest.id), "a resolved skill name finds the opening too");
+
+  const seen = new Set();
+  for (let offset = 0; ; offset += 100) {
+    const page = await getJobsOverview(fixture.userId, { filters: scoped, offset, limit: 100 });
+    for (const job of page.jobs) seen.add(job.id);
+    if (!page.hasMore) break;
+  }
+  assert.equal(seen.size, 206, "paging reaches every visible opening exactly once");
+  assert.ok(seen.has(oldest.id));
 });
 
 test("a curated alias makes a provider's spelling resolve to the same skill", async () => {

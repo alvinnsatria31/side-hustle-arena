@@ -31,6 +31,7 @@ export const arenaDomainErrorCodes = [
   "STORAGE_NOT_CONFIGURED",
   "FORBIDDEN",
   "VALIDATION_ERROR",
+  "REWARD_DELIVERY_IN_PROGRESS",
 ] as const;
 
 export type ArenaDomainErrorCode = (typeof arenaDomainErrorCodes)[number];
@@ -68,6 +69,7 @@ const statusByCode: Record<ArenaDomainErrorCode, number> = {
   STORAGE_NOT_CONFIGURED: 503,
   FORBIDDEN: 403,
   VALIDATION_ERROR: 400,
+  REWARD_DELIVERY_IN_PROGRESS: 409,
 };
 
 export class ArenaDomainError extends Error {

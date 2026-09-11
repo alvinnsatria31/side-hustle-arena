@@ -1,4 +1,5 @@
 import type { ParticipantOverview } from '@/server/arena/participant-service';
+import { isPublishedWeekStatus } from '@/server/arena/published-weeks';
 import { normalizeText } from './jobs/text';
 
 type ReportSource = Pick<ParticipantOverview, 'history' | 'skillEvidence' | 'points'> & {
@@ -26,7 +27,7 @@ const average = (values: number[]) => values.length
 
 /** Evidence scores describe reviewed work, never a probability of being hired. */
 export function buildCareerReport(source: ReportSource) {
-  const completed = source.history.filter(row => !row.sealed && row.week.status === 'FINALIZED' && row.status !== 'VOIDED' && row.ranking);
+  const completed = source.history.filter(row => !row.sealed && isPublishedWeekStatus(row.week.status) && row.status !== 'VOIDED' && row.ranking);
   const evidence = source.skillEvidence.filter(item => completed.some(row => row.project.slug === item.projectSlug && row.week.weekCode === item.weekCode));
   // Measured and inherited evidence are averaged separately, and the headline
   // score prefers the measured one.

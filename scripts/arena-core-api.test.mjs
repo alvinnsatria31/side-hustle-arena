@@ -59,6 +59,16 @@ test("current week selection uses persisted status priority and does not auto-tr
   assert.equal(current?.status, "OPEN", "the read model must not mutate persisted lifecycle status");
 });
 
+test("official kickoff week wins when test data accidentally overlaps as OPEN", () => {
+  const now = new Date("2026-09-11T10:00:00.000Z");
+  const current = weeks.resolveCurrentWeekFromCandidates([
+    { id: "newer-test", weekCode: "GEN-TEST-2026-W37", status: "OPEN", opensAt: new Date("2026-09-10T00:00:00.000Z"), submissionDeadlineAt: new Date("2026-09-18T16:59:00.000Z") },
+    { id: "official", weekCode: "ARENA-KICKOFF-WEEK-1", status: "OPEN", opensAt: new Date("2026-09-08T00:00:00.000Z"), submissionDeadlineAt: new Date("2026-09-18T16:59:00.000Z") },
+    { id: "e2e", weekCode: "E2E-SMOKE", status: "OPEN", opensAt: new Date("2026-09-11T00:00:00.000Z"), submissionDeadlineAt: new Date("2026-09-18T16:59:00.000Z") },
+  ], now);
+  assert.equal(current?.id, "official");
+});
+
 test("current week fallback is deterministic when no open week exists", () => {
   const now = new Date("2026-09-03T10:00:00.000Z");
   const scheduled = weeks.resolveCurrentWeekFromCandidates([

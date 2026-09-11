@@ -17,7 +17,7 @@ import { createImmutableSnapshot, createPresignedDownload, createPresignedUpload
 import { assertArenaFeatureOpen } from "@/server/ops/feature-flags";
 import { notifyBestEffort } from "@/server/notifications/service";
 import { enqueueReviewJob } from "@/server/reviews/queue-service";
-import { freezeLinkArtifacts } from "@/server/reviews/artifacts";
+import { assertCapturedLinkSet, captureLinkArtifacts, persistLinkArtifacts } from "@/server/reviews/artifacts";
 import { deadlineSentence } from "@/lib/deadline";
 import { overfilledRequirements, unmetRequirements } from "@/lib/submission-requirements";
 import { checkExternalUrlAccess } from "./url-access";
@@ -368,7 +368,7 @@ async function createVersion(tx: Db, submission: Submission, items: DraftItem[],
 }
 
 /**
- * Can a reviewer actually open everything this submission points at?
+ * Can a reviewer actually open every uploaded file?
  *
  * A false here costs the participant a version marked FAILED, so the reason has
  * to be recoverable afterwards. It previously was not: one `try` wrapped the
@@ -377,20 +377,12 @@ async function createVersion(tx: Db, submission: Submission, items: DraftItem[],
  * nothing written anywhere. That is a genuinely bad failure to debug — the
  * participant sees a rejected submission and the logs say nothing at all.
  *
- * The check still fails closed, because handing an unopenable link to a reviewer
- * wastes a real review attempt. What changes is that it says why, and per item:
- * the guard is now inside the loop, so the item that failed is the item named.
+ * Links use the stricter capture path before the transaction. This check is
+ * retained for private file objects and still fails closed per item.
  */
-async function draftItemsAccessible(items: DraftItem[], submissionId: string) {
+async function draftFilesAccessible(items: DraftItem[], submissionId: string) {
   for (const item of items) {
     try {
-      if (item.itemType === "LINK" && item.externalUrl) {
-        const access = await checkExternalUrlAccess(item.externalUrl);
-        if (!access.accessible) {
-          console.warn(`submission ${submissionId}: link item ${item.id} is not reachable (${item.externalUrl}).`);
-          return false;
-        }
-      }
       if (item.itemType === "FILE" && item.storageKey) await headPrivateObject(item.storageKey);
     } catch (error) {
       // Reached when the CHECK broke, not when the item was judged unreachable —
@@ -409,6 +401,15 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
   assertWeekOpenForSubmission(context.week, now);
+  const preflightSubmission = await ensureSubmission(db, context);
+  const preflightItems = await getDraftItems(db, preflightSubmission.id);
+  const preflightRequirements = await db.select().from(projectSubmissionRequirements).where(eq(projectSubmissionRequirements.projectId, context.enrollment.projectId));
+  validateRequirements(preflightRequirements, preflightItems);
+  if (preflightItems.filter((item) => item.itemType === "FILE").length > MAX_FILES) throw new ArenaDomainError("FILE_LIMIT_EXCEEDED", "The file limit for this submission has been reached.");
+  if (preflightItems.filter((item) => item.itemType === "LINK").length > MAX_LINKS) throw new ArenaDomainError("LINK_LIMIT_EXCEEDED", "The link limit for this submission has been reached.");
+  // External reads happen before the write transaction. Every captured source
+  // is matched again under the submission lock before it is persisted.
+  const capturedLinks = await captureLinkArtifacts(preflightItems);
   const result = await db.transaction(async (tx) => {
     await lockWeekOpenForSubmission(tx, context.week.id, now);
     const submission = await ensureSubmission(tx, context);
@@ -428,7 +429,8 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
     if (items.filter((item) => item.itemType === "LINK").length > MAX_LINKS) {
       throw new ArenaDomainError("LINK_LIMIT_EXCEEDED", "The link limit for this submission has been reached.");
     }
-    if (!await draftItemsAccessible(items, submission.id)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
+    assertCapturedLinkSet(items, capturedLinks);
+    if (!await draftFilesAccessible(items, submission.id)) return { version: await createVersion(tx, submission, items, "FAILED", null, now), allocatedReviewAttempt: false };
 
     // Freeze before the attempt is allocated: a storage failure here must not
     // burn one of the participant's three reviews (PRD §42).
@@ -439,31 +441,12 @@ export async function submitArenaSubmission({ userId, enrollmentId, now = new Da
       .returning({ reviewAttemptsUsed: submissions.reviewAttemptsUsed }))[0];
     if (!allocation) throw new ArenaDomainError("REVIEW_ATTEMPT_LIMIT_REACHED", "The review attempt limit has been reached.");
     const version = await createVersion(tx, submission, items, "ACCESSIBLE", allocation.reviewAttemptsUsed, now, frozen);
+    await persistLinkArtifacts(tx, version.id, capturedLinks);
     // Review queue is automation state: the user attempt is already allocated
     // above; the job row only schedules the reviewer worker (PRD §42).
     await enqueueReviewJob(tx, version.id, now);
     return { version, allocatedReviewAttempt: true };
   });
-
-  // Freeze what the links said AT SUBMIT, not at claim.
-  //
-  // Outside the transaction on purpose: this fetches external hosts, and the
-  // submit holds a row lock on the submission until it commits. The window it
-  // leaves open is milliseconds instead of the hours between a deadline and a
-  // worker picking the job up, which is the gap that let a Google Doc be edited
-  // after the deadline and still be the thing that got graded.
-  if (result.version.accessStatus === "ACCESSIBLE") {
-    try {
-      const versionItems = await db.select().from(submissionVersionItems)
-        .where(eq(submissionVersionItems.submissionVersionId, result.version.id));
-      await freezeLinkArtifacts(db, result.version.id, versionItems);
-    } catch (error) {
-      // The submission is already committed and the attempt already allocated.
-      // A freeze failure must not turn a valid submit into an error the
-      // participant sees; the claim path still fetches anything left unfrozen.
-      console.warn(`submission version ${result.version.id}: link freeze failed at submit —`, error);
-    }
-  }
 
   // Best-effort inbox notice: must never break the submit itself (PRD §36).
   // Canonical slug deep link — the detail route resolves slugs and UUIDs, but

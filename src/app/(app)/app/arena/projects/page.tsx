@@ -6,8 +6,8 @@ import { getPublicProjects } from '@/lib/arena-view';
 export const metadata = { title: 'Arena · Projects' };
 export const dynamic = 'force-dynamic';
 
-export default async function AppArenaProjectsPage() {
-  const { groups, projects } = await getPublicProjects();
+export default async function AppArenaProjectsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [{ groups, projects }, params] = await Promise.all([getPublicProjects(), searchParams]);
   return (
     <div>
       <Breadcrumb items={[{ label: 'App', href: '/app' }, { label: 'Arena', href: '/app/arena' }, { label: 'Projects' }]} />
@@ -22,7 +22,7 @@ export default async function AppArenaProjectsPage() {
           Belum ada project yang dibuka. Project baru rilis setiap Senin — cek lagi nanti.
         </p>
       ) : (
-        <ProjectBrowser hrefPrefix="/app/arena/projects" projects={projects} groups={groups} showRecommended={false} />
+        <ProjectBrowser hrefPrefix="/app/arena/projects" projects={projects} groups={groups} showRecommended={false} initialSavedOnly={params.view === 'saved'} />
       )}
     </div>
   );

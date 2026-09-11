@@ -6,6 +6,7 @@ import {
   getAdminInventory,
   listAdminRedemptionsClient,
   pushAdminVoucher,
+  retryAdminVoucherVoid,
   reverseAdminRedemption,
   setAdminInventoryQuantity,
   setAdminRewardActive,
@@ -66,6 +67,22 @@ function RedemptionsQueue() {
       await redemptions.refresh();
     } catch (err) {
       setNotice(err instanceof ArenaApiError ? err.message : 'Push voucher gagal.');
+    } finally {
+      setPushing(null);
+    }
+  };
+
+  const retryVoid = async (row: AdminRedemption) => {
+    setPushing(row.id);
+    setNotice(null);
+    try {
+      const result = await retryAdminVoucherVoid(row.id);
+      setNotice(result.voided
+        ? `Voucher ${result.code} berhasil dibatalkan di website utama.`
+        : `Pembatalan voucher belum berhasil${result.error ? ` (${result.error})` : ''}. Coba lagi setelah koneksi diperiksa.`);
+      await redemptions.refresh();
+    } catch (err) {
+      setNotice(err instanceof ArenaApiError ? err.message : 'Pembatalan ulang voucher gagal.');
     } finally {
       setPushing(null);
     }
@@ -136,6 +153,19 @@ function RedemptionsQueue() {
                   {row.voucher.deferral
                     ? <> · <span className="text-sk-error">perlu penyerahan manual</span> ({jakartaDate(row.voucher.deferral.deferredAt)}): {row.voucher.deferral.reason ?? 'push ditunda'}</>
                     : ' · belum ada catatan push'}
+                </div>
+              )}
+              {row.status === 'ADMIN_REVERSED' && row.voucher?.revocation && !row.voucher.revocation.voided && (
+                <Button size="sm" variant="ghost" loading={pushing === row.id} disabled={pushing !== null} onClick={() => void retryVoid(row)}>
+                  Coba Batalkan Ulang Kode
+                </Button>
+              )}
+              {row.voucher?.revocation && (
+                <div className="mt-1 text-xs text-sk-muted">
+                  Voucher <span className="font-mono">{row.voucher.code}</span>
+                  {row.voucher.revocation.voided
+                    ? ' · kode sudah ditarik dari website utama'
+                    : <> · <span className="text-sk-error">kode mungkin masih aktif di website utama — perlu rekonsiliasi manual</span> ({jakartaDate(row.voucher.revocation.at)}){row.voucher.revocation.error ? `: ${row.voucher.revocation.error}` : ''}</>}
                 </div>
               )}
             </div>

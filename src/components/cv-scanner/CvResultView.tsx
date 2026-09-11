@@ -14,7 +14,7 @@ import { Tabs } from '@/components/primitives/Tabs';
 import { StateBox } from '@/components/primitives/StateBox';
 import { EvidenceRow } from '@/components/arena/EvidenceRow';
 import { ButtonLink } from '@/components/primitives/Button';
-import { useDemo } from '@/features/demo/store';
+import { useCvOwnerGuard, useDemo } from '@/features/demo/store';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
 import type { CvResult } from '@/types/cv';
@@ -59,6 +59,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
   const router = useRouter();
   const reduce = useReducedMotion();
   const { state } = useDemo();
+  const ownerId = useCvOwnerGuard();
   const [activeTab, setActiveTab] = useState('overview');
   const [history, setHistory] = useState<{ checked: boolean; result: CvResult | null; error: string | null }>({ checked: false, result: null, error: null });
 
@@ -77,10 +78,10 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
 
   // Direct visits without a completed demo scan get a calm recovery state.
   useEffect(() => {
-    if (!new URLSearchParams(window.location.search).has('historyId') && (state.cvScan.status === 'file_selected' || state.cvScan.status === 'analyzing')) {
+    if (!new URLSearchParams(window.location.search).has('historyId') && state.cvScan.ownerId === ownerId && (state.cvScan.status === 'file_selected' || state.cvScan.status === 'analyzing')) {
       router.replace(`${basePath}/analyzing`);
     }
-  }, [state.cvScan.status, router, basePath]);
+  }, [state.cvScan.status, state.cvScan.ownerId, ownerId, router, basePath]);
 
   // After every hook: an early return above them would change hook order
   // between renders the moment the flag flips.
@@ -88,9 +89,14 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
   if (!history.checked) return <p role="status" className="px-6 py-32 text-center text-sk-muted">Memuat hasil CV…</p>;
   if (history.error) return <div className="px-6 py-32"><StateBox tone="error" title="Hasil belum dapat dibuka." description={history.error} primaryAction={{ label: 'Kembali ke riwayat', href: basePath }} /></div>;
 
+  // The browser copy is shown only to the identity that ran the scan. A copy
+  // left on this browser by another account, or by a guest, is not theirs —
+  // checked here at render, not only by the guard's effect, so it never flashes.
+  const localResult = state.cvScan.status === 'completed' && state.cvScan.ownerId === ownerId ? state.cvScan.result : null;
+
   // Both conditions matter: a state persisted before the scanner had a backend
   // can be 'completed' with no analysis attached.
-  if (!history.result && (state.cvScan.status !== 'completed' || !state.cvScan.result)) {
+  if (!history.result && !localResult) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-sk-bg px-6 pb-24 pt-24">
         <StateBox
@@ -106,7 +112,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
   // Everything below renders the analysis returned by /api/cv-scan. The guard
   // above means a missing result has already sent the visitor back to upload,
   // so nothing here falls back to sample data.
-  const result = history.result ?? state.cvScan.result!;
+  const result = history.result ?? localResult!;
   const save = cvSaveStatus(result.analyzedAt);
   const saveMessage = history.result || save?.status === 'saved'
     ? 'Hasil ini tersimpan privat di akunmu. Kamu bisa menghapusnya dari riwayat.'
@@ -274,7 +280,7 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
           </Entrance>
         </div>
 
-        <div className="mb-8 rounded-xl border border-sk-border bg-white p-4 text-sm text-sk-body"><p role="status">{saveMessage}</p><p className="mt-2 text-xs text-sk-muted">Hasil scan saat ini juga tersedia di browser ini. Hasil riwayat yang dibuka dari akun tidak disalin ke penyimpanan browser.</p><ButtonLink href={basePath} size="sm" variant="text">Buka riwayat / scan lagi</ButtonLink></div>
+        <div className="mb-8 rounded-xl border border-sk-border bg-white p-4 text-sm text-sk-body"><p role="status">{saveMessage}</p><p className="mt-2 text-xs text-sk-muted">Salinan hasil scan terakhir disimpan sementara di browser ini — paling lama 24 jam, dan dihapus saat kamu keluar. Hasil riwayat yang dibuka dari akun tidak disalin ke penyimpanan browser.</p><ButtonLink href={basePath} size="sm" variant="text">Buka riwayat / scan lagi</ButtonLink></div>
 
         {/* Metrics */}
         <StaggerGroup className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

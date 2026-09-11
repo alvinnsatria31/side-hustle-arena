@@ -177,6 +177,12 @@ export const pushAdminVoucher = (redemptionId: string) =>
     body: '{}',
   }).then((r) => r.done);
 
+export const retryAdminVoucherVoid = (redemptionId: string) =>
+  adminRequest<{ done: { code: string; voided: boolean; error: string | null } }>(`/api/internal/rewards/${redemptionId}/retry-void`, {
+    method: 'POST',
+    body: '{}',
+  }).then((r) => r.done);
+
 export const reverseAdminRedemption = (input: { redemptionId: string; reason: string }) =>
   adminRequest(`/api/internal/rewards/${input.redemptionId}/reverse`, {
     method: 'POST',

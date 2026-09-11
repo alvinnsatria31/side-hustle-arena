@@ -24,10 +24,16 @@ test('configured provider sends blind JSON and parses provider output', async ()
     body = JSON.parse(init.body);
     return Response.json({ choices: [{ message: { content: JSON.stringify(output) }, finish_reason: 'stop' }] });
   });
-  const result = await provider.review({ profile: 'review', model: 'primary', input: { projectTitle: 'Research', divisionName: 'Strategy', rubric, explanation: sources[0].text, notes: null, attemptNumber: 2, items: [], sources } });
+  const brief = { caseBackground: 'Retention declined last quarter.', roleDescription: 'Act as an analyst.', mission: 'Find the cause.', objective: 'Recommend a measurable response.' };
+  const evidenceLimits = ['Links are frozen text and do not prove interactive behaviour.'];
+  const result = await provider.review({ profile: 'review', model: 'primary', input: { projectTitle: 'Research', divisionName: 'Strategy', brief, rubric, explanation: sources[0].text, notes: null, attemptNumber: 2, items: [], sources, evidenceLimits } });
   assert.equal(result.criteria[0].score, 80);
   assert.equal(body.model, 'primary');
-  assert.ok(!body.messages[1].content.includes('attemptNumber'));
+  const gradingInput = JSON.parse(body.messages[1].content);
+  assert.deepEqual(gradingInput.brief, brief);
+  assert.equal(gradingInput.explanation, sources[0].text);
+  assert.deepEqual(gradingInput.evidenceLimits, evidenceLimits);
+  assert.ok(!('attemptNumber' in gradingInput));
   assert.equal(body.response_format.type, 'json_object');
 });
 

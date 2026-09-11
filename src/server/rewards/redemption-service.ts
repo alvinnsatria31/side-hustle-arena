@@ -55,6 +55,55 @@ async function lockedRedemption(id: string, db: RewardDb) {
   return take;
 }
 
+/**
+ * How long a voucher delivery may hold a claim in PROCESSING. The push itself
+ * gives up after 10 seconds, so a lease still held long after that belongs to
+ * a process that died mid-delivery and must not block reversal for good.
+ */
+export const DELIVERY_LEASE_MS = 60_000;
+
+function deliveryLeaseHeld(take: Redemption, now: Date) {
+  return take.status === "PROCESSING" && now.getTime() - new Date(take.updatedAt).getTime() < DELIVERY_LEASE_MS;
+}
+
+export type DeliveryLease =
+  | { acquired: true; leaseToken: Date }
+  | { acquired: false; reason: "SETTLED"; redemptionStatus: Redemption["status"] }
+  | { acquired: false; reason: "IN_PROGRESS" };
+
+/**
+ * Start a voucher delivery: PENDING — or PROCESSING whose lease has lapsed —
+ * becomes PROCESSING under the same account -> redemption locks a reversal
+ * takes. A reversal therefore lands either before the lease, and delivery finds
+ * a settled claim and pushes nothing, or after it, where it is refused until
+ * the delivery finishes or its lease lapses. No transaction spans the HTTP call.
+ */
+export async function acquireDeliveryLease(input: { redemptionId: string; now?: Date; db?: RewardDb }): Promise<DeliveryLease> {
+  const now = input.now ?? new Date();
+  return (input.db ?? getDb()).transaction(async (tx) => {
+    const take = await lockedRedemption(input.redemptionId, tx);
+    if (take.status !== "PENDING" && take.status !== "PROCESSING") return { acquired: false, reason: "SETTLED", redemptionStatus: take.status };
+    if (deliveryLeaseHeld(take, now)) return { acquired: false, reason: "IN_PROGRESS" };
+    await tx.update(redemptions).set({ status: "PROCESSING", updatedAt: now }).where(eq(redemptions.id, take.id));
+    return { acquired: true, leaseToken: now };
+  });
+}
+
+/**
+ * Hand an unfinished delivery back to the manual queue. Only the lease this
+ * delivery took is released: if it lapsed and another delivery took over, that
+ * one's lease stays.
+ */
+export async function releaseDeliveryLease(input: { redemptionId: string; leaseToken: Date; db?: RewardDb }) {
+  await (input.db ?? getDb()).transaction(async (tx) => {
+    await tx.update(redemptions).set({ status: "PENDING", updatedAt: new Date() }).where(and(
+      eq(redemptions.id, input.redemptionId),
+      eq(redemptions.status, "PROCESSING"),
+      eq(redemptions.updatedAt, input.leaseToken),
+    ));
+  });
+}
+
 async function changeReservation(take: Redemption, fulfill: boolean, db: RewardDb) {
   if (!take.inventoryPeriodId) return;
   const [period] = await db.select().from(inventoryPeriods)
@@ -193,7 +242,13 @@ export async function fulfillRedemption(input: {
   });
 }
 
-/** Fulfilled reversals need explicit points-only semantics; funds/consumed stock are not recalled. */
+/**
+ * Fulfilled reversals need explicit points-only semantics; funds/consumed stock are not recalled.
+ *
+ * A claim whose voucher code is being pushed right now is refused: refunding
+ * mid-push is how a participant ended up with both their points back and a
+ * live code on the main site.
+ */
 export async function reverseRedemption(input: {
   redemptionId: string; actorSubject: string; reason: string; db?: RewardDb;
   fulfilledPolicy?: "REFUND_POINTS_KEEP_FULFILLED_STOCK";
@@ -203,6 +258,10 @@ export async function reverseRedemption(input: {
   return (input.db ?? getDb()).transaction(async (tx) => {
     const take = await lockedRedemption(input.redemptionId, tx);
     if (take.status === "ADMIN_REVERSED") return take;
+    if (deliveryLeaseHeld(take, new Date())) {
+      throw new ArenaDomainError("REWARD_DELIVERY_IN_PROGRESS",
+        "Kode voucher klaim ini sedang dikirim ke website utama. Tunggu pengiriman selesai, lalu batalkan lagi bila masih perlu.");
+    }
     const wasFulfilled = take.status === "FULFILLED";
     if (wasFulfilled && input.fulfilledPolicy !== "REFUND_POINTS_KEEP_FULFILLED_STOCK") {
       invalid("Fulfilled reward requires explicit REFUND_POINTS_KEEP_FULFILLED_STOCK policy; this does not recall paid funds.");

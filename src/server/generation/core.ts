@@ -295,6 +295,10 @@ export function publicationBlock(input: {
   return null;
 }
 
+export function publicationResourceBlock(project: Pick<ProjectPackage, "resources">): string | null {
+  return project.resources.length > 0 ? null : "Project requires at least one HTTPS resource before publication.";
+}
+
 export function weeklyWindow(now: Date) {
   const day = 86_400_000;
   const local = new Date(now.getTime() + 7 * 3_600_000);

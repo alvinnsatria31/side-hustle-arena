@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { LogoutForm } from '@/components/auth/LogoutForm';
 import { usePathname } from 'next/navigation';
 import {
   CalendarClock,
@@ -247,7 +248,7 @@ export function AdminSidebar({
           <SquareArrowOutUpRight size={16} aria-hidden />
           Kembali ke Arena
         </Link>
-        <form action="/auth/logout" method="post">
+        <LogoutForm>
           <button
             type="submit"
             className="flex w-full items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-left text-[13px] font-medium text-sk-error transition-colors hover:bg-sk-error-wash"
@@ -255,7 +256,7 @@ export function AdminSidebar({
             <LogOut size={16} aria-hidden />
             Keluar
           </button>
-        </form>
+        </LogoutForm>
       </div>
     </aside>
   );

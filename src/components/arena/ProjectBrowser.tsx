@@ -8,6 +8,7 @@ import { FilterChip } from '@/components/primitives/FilterChip';
 import { SearchInput } from '@/components/primitives/SearchInput';
 import { EmptyState } from '@/components/states/EmptyState';
 import { ProjectCard } from '@/components/arena/ProjectCard';
+import { useSavedProjects } from '@/lib/saved-projects';
 import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
 
@@ -32,6 +33,8 @@ interface ProjectBrowserProps {
   /** Live division names (without 'Semua'). Defaults to the mock groups. */
   groups?: string[];
   recommendedSlug?: string;
+  /** Open on the saved projects — the page passes `?view=saved`, linked from the dashboard. */
+  initialSavedOnly?: boolean;
 }
 
 /** Working search + filters over the project catalog (no reload, animated). */
@@ -41,6 +44,7 @@ export function ProjectBrowser({
   projects,
   groups,
   recommendedSlug,
+  initialSavedOnly = false,
 }: ProjectBrowserProps) {
   const GROUPS = useMemo(() => ['Semua', ...(groups ?? [...FALLBACK_GROUPS].slice(1))], [groups]);
   const [query, setQuery] = useState('');
@@ -49,6 +53,13 @@ export function ProjectBrowser({
   const [skill, setSkill] = useState<string | null>(null);
   const [timeBucket, setTimeBucket] = useState<string | null>(null);
   const [openPanel, setOpenPanel] = useState<'difficulty' | 'skill' | 'time' | null>(null);
+  const { saved, prune } = useSavedProjects();
+  const [savedOnly, setSavedOnly] = useState(initialSavedOnly);
+
+  const catalogSlugs = useMemo(() => new Set(projects.map((p) => p.slug)), [projects]);
+  const savedHere = useMemo(() => saved.filter((slug) => catalogSlugs.has(slug)), [saved, catalogSlugs]);
+  // The catalog is weekly: a project saved last week may no longer be open.
+  const savedElsewhere = saved.length - savedHere.length;
 
   const allSkills = useMemo(() => {
     const counts = new Map<string, number>();
@@ -62,6 +73,7 @@ export function ProjectBrowser({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return projects.filter((p) => {
+      if (savedOnly && !saved.includes(p.slug)) return false;
       if (group !== 'Semua' && p.group !== group) return false;
       if (difficulty && p.difficulty !== difficulty) return false;
       if (skill && !p.skills.some((s) => s.toLowerCase() === skill.toLowerCase())) return false;
@@ -75,19 +87,24 @@ export function ProjectBrowser({
       if (q && ![p.title, p.category, p.shortDescription, ...p.skills].join(' ').toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [query, group, difficulty, skill, timeBucket, projects]);
+  }, [query, group, difficulty, skill, timeBucket, projects, savedOnly, saved]);
 
-  // Recommended card floats to the top when it survives filtering.
+  // Saved view: most recently saved first. Otherwise the recommended card
+  // floats to the top when it survives filtering.
   const ordered = useMemo(() => {
+    if (savedOnly) {
+      const position = new Map(saved.map((slug, index) => [slug, index]));
+      return [...filtered].sort((a, b) => (position.get(b.slug) ?? -1) - (position.get(a.slug) ?? -1));
+    }
     if (!showRecommended) return filtered;
     const idx = filtered.findIndex((p) => p.slug === recommendedSlug);
     if (idx <= 0) return filtered;
     const clone = [...filtered];
     const [rec] = clone.splice(idx, 1);
     return [rec, ...clone];
-  }, [filtered, showRecommended, recommendedSlug]);
+  }, [filtered, savedOnly, saved, showRecommended, recommendedSlug]);
 
-  const hasActiveFilters = group !== 'Semua' || difficulty !== null || skill !== null || timeBucket !== null || query !== '';
+  const hasActiveFilters = savedOnly || group !== 'Semua' || difficulty !== null || skill !== null || timeBucket !== null || query !== '';
 
   const resetAll = () => {
     setQuery('');
@@ -95,6 +112,7 @@ export function ProjectBrowser({
     setDifficulty(null);
     setSkill(null);
     setTimeBucket(null);
+    setSavedOnly(false);
   };
 
   const panelButton = (key: 'difficulty' | 'skill' | 'time', label: string, active: boolean) => (
@@ -175,8 +193,10 @@ export function ProjectBrowser({
         )}
       </AnimatePresence>
 
-      {/* Group chips */}
+      {/* Saved + group chips */}
       <div className="no-scrollbar mb-6 flex gap-2 overflow-x-auto pb-1">
+        <FilterChip label="Tersimpan" active={savedOnly} onClick={() => setSavedOnly((value) => !value)} count={savedHere.length} />
+        <span aria-hidden className="mx-1 w-px shrink-0 self-stretch bg-sk-border" />
         {GROUPS.map((g) => (
           <FilterChip
             key={g}
@@ -188,9 +208,18 @@ export function ProjectBrowser({
         ))}
       </div>
 
+      {savedOnly && savedElsewhere > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border bg-white px-4 py-3 text-[12.5px] text-sk-muted">
+          <span>{savedElsewhere} project tersimpan sudah tidak dibuka di katalog ini.</span>
+          <Button variant="text" size="sm" onClick={() => prune(catalogSlugs)}>Hapus dari simpanan</Button>
+        </div>
+      )}
+
       {/* Results */}
       <div className="mb-4 flex items-center justify-between" aria-live="polite">
-        <p className="font-mono text-[11.5px] tracking-[0.05em] text-sk-muted">{filtered.length} PROJECT DITEMUKAN</p>
+        <p className="font-mono text-[11.5px] tracking-[0.05em] text-sk-muted">
+          {filtered.length} PROJECT {savedOnly ? 'TERSIMPAN' : 'DITEMUKAN'}
+        </p>
         {hasActiveFilters && (
           <Button variant="text" size="sm" iconLeft={<X size={13} aria-hidden />} onClick={resetAll}>
             Reset filter
@@ -199,11 +228,19 @@ export function ProjectBrowser({
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState
-          title="Tidak ada project yang cocok."
-          description="Coba longgarkan filter atau cari dengan kata kunci lain — project baru datang setiap Senin."
-          primaryAction={{ label: 'Reset Semua Filter', onClick: resetAll }}
-        />
+        savedOnly && savedHere.length === 0 ? (
+          <EmptyState
+            title="Belum ada project tersimpan."
+            description="Buka detail project lalu tekan “Simpan untuk nanti”. Project yang kamu simpan muncul di sini — tersimpan di browser ini, belum ikut ke perangkat lain."
+            primaryAction={{ label: 'Lihat semua project', onClick: () => setSavedOnly(false) }}
+          />
+        ) : (
+          <EmptyState
+            title="Tidak ada project yang cocok."
+            description="Coba longgarkan filter atau cari dengan kata kunci lain — project baru datang setiap Senin."
+            primaryAction={{ label: 'Reset Semua Filter', onClick: resetAll }}
+          />
+        )
       ) : (
         <motion.div layout className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence mode="popLayout">
@@ -212,7 +249,7 @@ export function ProjectBrowser({
                 key={project.slug}
                 project={project}
                 hrefPrefix={hrefPrefix}
-                recommended={showRecommended && project.slug === recommendedSlug}
+                recommended={!savedOnly && showRecommended && project.slug === recommendedSlug}
               />
             ))}
           </AnimatePresence>

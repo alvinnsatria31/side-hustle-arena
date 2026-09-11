@@ -99,9 +99,28 @@ export async function listAdminRedemptions(query: Query, status?: typeof redempt
     if (!row.entityId || latest.has(row.entityId)) continue;
     latest.set(row.entityId, { deferredAt: row.createdAt, reason: (row.metadata as { reason?: string } | null)?.reason ?? null });
   }
+  // A cancelled voucher claim whose code could not be voided may still be
+  // redeemable on the main site with the points already refunded here.
+  const reversedVouchers = rows.filter((row) => isVoucherReward(row.rewardType) && row.status === "ADMIN_REVERSED").map((row) => row.id);
+  const revocations = reversedVouchers.length
+    ? await db.select({ entityId: logs.entityId, action: logs.action, metadata: logs.metadata, createdAt: logs.createdAt }).from(logs)
+      .where(and(inArray(logs.action, ["REWARD_VOUCHER_VOIDED", "REWARD_VOUCHER_RECONCILIATION_REQUIRED"]), inArray(logs.entityId, reversedVouchers)))
+      .orderBy(desc(logs.createdAt))
+    : [];
+  const revoked = new Map<string, { at: Date; voided: boolean; error: string | null }>();
+  for (const row of revocations) {
+    if (!row.entityId || revoked.has(row.entityId)) continue;
+    revoked.set(row.entityId, {
+      at: row.createdAt,
+      voided: row.action === "REWARD_VOUCHER_VOIDED",
+      error: (row.metadata as { voidError?: string | null } | null)?.voidError ?? null,
+    });
+  }
   return rows.map((row) => ({
     ...row,
-    voucher: isVoucherReward(row.rewardType) ? { code: voucherCodeFor(row.id), deferral: latest.get(row.id) ?? null } : null,
+    voucher: isVoucherReward(row.rewardType)
+      ? { code: voucherCodeFor(row.id), deferral: latest.get(row.id) ?? null, revocation: revoked.get(row.id) ?? null }
+      : null,
   }));
 }
 

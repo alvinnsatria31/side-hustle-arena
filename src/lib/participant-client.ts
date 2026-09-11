@@ -10,6 +10,8 @@ export type { ParticipantOverview };
 export type ParticipantEnrollment = ParticipantOverview['history'][number];
 export interface ParticipantInbox {
   items: Array<{ id: string; type: string; title: string; body: string | null; actionUrl: string | null; readAt: string | null; createdAt: string }>;
+  /** Pass back as `cursor` to read older messages; null when there are none. */
+  nextCursor: string | null;
   unread: number;
 }
 
@@ -28,8 +30,10 @@ export const takeParticipantReward = (slug: string, retryOf?: string | null) =>
   participantRequest<{ taken: { redemptionId: string; pointsSpent: number; delivery: VoucherDelivery | null } }>('/api/arena/milestones/take', { method: 'POST', body: JSON.stringify(retryOf ? { slug, retryOf } : { slug }) });
 export const setParticipantAvatar = (avatarId: string) =>
   participantRequest<{ avatarId: string }>('/api/arena/me/avatar', { method: 'PUT', body: JSON.stringify({ avatarId }) });
-export const getParticipantInbox = (unreadOnly = false, limit = 20) => participantRequest<ParticipantInbox>(`/api/arena/notifications?limit=${limit}${unreadOnly ? '&unread=1' : ''}`);
-export const readParticipantInbox = (eventIds?: string[]) => participantRequest('/api/arena/notifications', { method: 'POST', body: JSON.stringify(eventIds ? { eventIds } : { all: true }) });
+export const getParticipantInbox = (unreadOnly = false, limit = 20, cursor?: string | null) =>
+  participantRequest<ParticipantInbox>(`/api/arena/notifications?limit=${limit}${unreadOnly ? '&unread=1' : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+export const readParticipantInbox = (eventIds?: string[]) =>
+  participantRequest<{ read: { marked: number } }>('/api/arena/notifications', { method: 'POST', body: JSON.stringify(eventIds ? { eventIds } : { all: true }) });
 
 /** Privacy: Showcase consent and account deletion. Both act on the session's own user. */
 export const getParticipantPrivacy = () =>

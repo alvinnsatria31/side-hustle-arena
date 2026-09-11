@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { LogoutForm } from '@/components/auth/LogoutForm';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bell, LogOut, ShieldCheck, UserRound } from 'lucide-react';
@@ -148,7 +149,7 @@ export function AppNavbar() {
           >
             <UserRound size={15} aria-hidden /> Profil
           </Link>
-          <form action="/auth/logout" method="post">
+          <LogoutForm>
           <button
             type="submit"
             role="menuitem"
@@ -156,7 +157,7 @@ export function AppNavbar() {
           >
             <LogOut size={15} aria-hidden /> Keluar
           </button>
-          </form>
+          </LogoutForm>
         </div>
       )}
     </header>

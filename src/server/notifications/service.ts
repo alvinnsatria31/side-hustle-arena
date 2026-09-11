@@ -112,15 +112,44 @@ export interface InboxItem {
   createdAt: Date;
 }
 
-/** User-scoped inbox (IDOR-safe: userId always comes from the server session). */
-export async function listUserNotifications(
+export interface InboxPage {
+  items: InboxItem[];
+  /** Where the next older page starts; null once the history is exhausted. */
+  nextCursor: string | null;
+}
+
+const INBOX_CURSOR = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/**
+ * A position in an inbox: the last item's creation time at Postgres's full
+ * microsecond precision, plus its id as the tiebreak. A millisecond JavaScript
+ * Date would round the time and skip or repeat messages created within one
+ * millisecond. Unlike an offset, it does not shift when new messages arrive or
+ * when marking read removes items from the unread filter.
+ */
+export function encodeInboxCursor(createdAtMicros: string, id: string): string {
+  return `${createdAtMicros}_${id}`;
+}
+
+export function decodeInboxCursor(cursor: string): { createdAt: string; id: string } {
+  const match = INBOX_CURSOR.exec(cursor);
+  if (!match) throw new ArenaDomainError("VALIDATION_ERROR", "Invalid inbox cursor.");
+  return { createdAt: match[1], id: match[2] };
+}
+
+/** User-scoped inbox page, newest first (IDOR-safe: userId always comes from the server session). */
+export async function listUserNotificationPage(
   userId: string,
-  options: { limit?: number; unreadOnly?: boolean } = {},
+  options: { limit?: number; unreadOnly?: boolean; cursor?: string | null } = {},
   db: Db = getDb(),
-): Promise<InboxItem[]> {
+): Promise<InboxPage> {
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
   const conditions = [eq(events.userId, userId)];
   if (options.unreadOnly) conditions.push(isNull(events.readAt));
+  if (options.cursor) {
+    const position = decodeInboxCursor(options.cursor);
+    conditions.push(sql`(${events.createdAt}, ${events.id}) < (${position.createdAt}::timestamptz, ${position.id}::uuid)`);
+  }
   const rows = await db
     .select({
       id: events.id,
@@ -130,12 +159,27 @@ export async function listUserNotifications(
       actionUrl: events.actionUrl,
       readAt: events.readAt,
       createdAt: events.createdAt,
+      position: sql<string>`to_char(${events.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
     })
     .from(events)
     .where(and(...conditions))
-    .orderBy(desc(events.createdAt))
-    .limit(limit);
-  return rows;
+    .orderBy(desc(events.createdAt), desc(events.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    items: page.map(({ id, type, title, body, actionUrl, readAt, createdAt }) => ({ id, type, title, body, actionUrl, readAt, createdAt })),
+    nextCursor: rows.length > limit && last ? encodeInboxCursor(last.position, last.id) : null,
+  };
+}
+
+/** The newest page only; kept for callers that never page. */
+export async function listUserNotifications(
+  userId: string,
+  options: { limit?: number; unreadOnly?: boolean } = {},
+  db: Db = getDb(),
+): Promise<InboxItem[]> {
+  return (await listUserNotificationPage(userId, options, db)).items;
 }
 
 export async function getUnreadCount(userId: string, db: Db = getDb()): Promise<number> {

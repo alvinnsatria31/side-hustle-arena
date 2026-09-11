@@ -4,6 +4,7 @@ export type WeekLifecycleStatus = "DRAFT" | "PREVIEW" | "SCHEDULED" | "OPEN" | "
 
 export type WeekCandidate = {
   id: string;
+  weekCode?: string;
   status: WeekLifecycleStatus;
   opensAt: Date;
   submissionDeadlineAt: Date;
@@ -11,6 +12,13 @@ export type WeekCandidate = {
   finalizationStartedAt?: Date | null;
   finalizedAt?: Date | null;
 };
+
+function openWeekPriority(week: WeekCandidate): number {
+  const code = week.weekCode?.toUpperCase() ?? "";
+  if (code.startsWith("ARENA-KICKOFF")) return 0;
+  if (code.includes("GEN-TEST") || code.includes("E2E")) return 2;
+  return 1;
+}
 
 function descendingDate(left: Date, right: Date): number {
   return right.getTime() - left.getTime();
@@ -27,7 +35,7 @@ function latestLifecycleDate(week: WeekCandidate): Date {
  */
 export function resolveCurrentWeekFromCandidates(candidates: WeekCandidate[], now = new Date()): WeekCandidate | null {
   const open = candidates.filter((week) => week.status === "OPEN" && week.opensAt <= now)
-    .sort((left, right) => descendingDate(left.opensAt, right.opensAt));
+    .sort((left, right) => openWeekPriority(left) - openWeekPriority(right) || descendingDate(left.opensAt, right.opensAt));
   if (open[0]) return open[0];
 
   const upcoming = candidates.filter((week) => (week.status === "SCHEDULED" || week.status === "PREVIEW") && week.opensAt > now)

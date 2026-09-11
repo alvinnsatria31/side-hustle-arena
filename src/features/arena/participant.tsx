@@ -49,6 +49,11 @@ export function useParticipant() {
   return useParticipantValue().user;
 }
 
+/** The signed-in participant where the app layout provides one; null on public pages. */
+export function useOptionalParticipant(): Participant | null {
+  return useContext(ParticipantContext)?.user ?? null;
+}
+
 /** Whether to offer the admin console in navigation. Never a permission check. */
 export function useIsAdmin() {
   return useParticipantValue().user.isAdmin;

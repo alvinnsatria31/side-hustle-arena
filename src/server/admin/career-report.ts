@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "@/server/db/client";
 import { cvScans, enrollments, pointAccounts, skillEvidence, users, weeklyRankings, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
+import { PUBLISHED_WEEK_STATUSES } from "@/server/arena/published-weeks";
 import { writeAudit } from "@/server/reviews/audit";
 import { getCareerReport } from "@/server/career/report-service";
 
@@ -58,13 +59,13 @@ export async function listAdminCareerReports(query: z.infer<typeof careerReportL
       scores: sql<string[]>`array_agg(${weeklyRankings.finalScore}::text)`,
       lastFinalizedAt: sql<string | null>`max(${weeks.finalizedAt})::text`,
     }).from(weeklyRankings).innerJoin(weeks, eq(weeks.id, weeklyRankings.weekId))
-      .where(and(inArray(weeklyRankings.userId, ids), eq(weeks.status, "FINALIZED")))
+      .where(and(inArray(weeklyRankings.userId, ids), inArray(weeks.status, [...PUBLISHED_WEEK_STATUSES])))
       .groupBy(weeklyRankings.userId),
     db.select({ userId: skillEvidence.userId, skillId: skillEvidence.skillId, attribution: skillEvidence.attribution, score: skillEvidence.score })
       .from(skillEvidence)
       .innerJoin(weeklyRankings, eq(weeklyRankings.reviewId, skillEvidence.reviewId))
       .innerJoin(weeks, eq(weeks.id, skillEvidence.weekId))
-      .where(and(inArray(skillEvidence.userId, ids), eq(weeks.status, "FINALIZED"))),
+      .where(and(inArray(skillEvidence.userId, ids), inArray(weeks.status, [...PUBLISHED_WEEK_STATUSES]))),
     db.selectDistinctOn([cvScans.userId], { userId: cvScans.userId, result: cvScans.result, createdAt: cvScans.createdAt })
       .from(cvScans).where(inArray(cvScans.userId, ids)).orderBy(cvScans.userId, desc(cvScans.createdAt)),
     db.select({ userId: pointAccounts.userId, balance: pointAccounts.balance, lifetimeEarned: pointAccounts.lifetimeEarned })

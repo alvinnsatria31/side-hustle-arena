@@ -126,6 +126,12 @@ function fakeDb() {
     try { const value = await fn(tx); tx.finish(); return value; }
     catch (error) { tx.finish(error); throw error; }
   };
+  // Voucher delivery reads and audits outside any transaction, so that its
+  // HTTP call never holds a lock. Plain reads here take no row locks.
+  const direct = makeTx();
+  root.select = direct.select;
+  root.insert = direct.insert;
+  root.update = direct.update;
   return root;
 }
 
@@ -340,4 +346,188 @@ test('racing fulfillment and reversal never release fulfilled stock accidentally
   assert.equal(period.quantityReserved, 0);
   assert.equal(period.quantityFulfilled, take.status === 'FULFILLED' ? 1 : 0);
   assert.equal(db.tables.get(pointAccounts)[0].balance, take.status === 'FULFILLED' ? 1000 : 3000);
+});
+
+// ---- Voucher delivery versus reversal: points and a live code must never both survive.
+
+const voucherPush = () => import('../src/server/rewards/voucher-push.ts');
+
+function voucherSetup() {
+  const context = setup({ cost: 500 });
+  context.sku.rewardType = 'DISCOUNT';
+  return context;
+}
+
+/** Runs with the main-site contract configured (or explicitly absent), restoring the environment after. */
+async function withVoucherContract(run, configured = true) {
+  const saved = { MAIN_SITE_ORIGIN: process.env.MAIN_SITE_ORIGIN, MAIN_SITE_VOUCHER_TOKEN: process.env.MAIN_SITE_VOUCHER_TOKEN };
+  if (configured) {
+    process.env.MAIN_SITE_ORIGIN = 'https://main.example.test';
+    process.env.MAIN_SITE_VOUCHER_TOKEN = 'offline-test-token';
+  } else {
+    delete process.env.MAIN_SITE_ORIGIN;
+    delete process.env.MAIN_SITE_VOUCHER_TOKEN;
+  }
+  try {
+    return await run();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+const accepted = () => new Response('{}', { status: 201 });
+const balanceOf = (db) => db.tables.get(pointAccounts)[0].balance;
+const voidUrl = (code) => `https://main.example.test/api/v1/vouchers/${code}/void`;
+
+test('a reversal that arrives while the voucher code is being pushed is refused; the claim is delivered once', async () => {
+  const { deliverVoucherReward } = await voucherPush();
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  let refusal = null;
+  const delivery = await withVoucherContract(() => deliverVoucherReward({ redemptionId, db, fetcher: async () => {
+    // Deterministic interleaving: the admin reverses while the request is in flight.
+    refusal = await reverse(db, redemptionId).then(() => null, (error) => error);
+    return accepted();
+  } }));
+  assert.equal(refusal?.code, 'REWARD_DELIVERY_IN_PROGRESS');
+  assert.equal(delivery.status, 'DELIVERED');
+  assert.equal(db.tables.get(redemptions)[0].status, 'FULFILLED');
+  assert.equal(db.tables.get(pointLedger).filter((row) => row.entryType === 'ADMIN_REVERSAL').length, 0, 'no refund while a code went out');
+  assert.equal(balanceOf(db), 2500);
+});
+
+test('a delivery started after the reversal committed pushes nothing', async () => {
+  const { deliverVoucherReward } = await voucherPush();
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  await reverse(db, redemptionId);
+  const calls = [];
+  const delivery = await withVoucherContract(() => deliverVoucherReward({ redemptionId, db, fetcher: async (url) => { calls.push(String(url)); return accepted(); } }));
+  assert.equal(delivery.status, 'ALREADY_SETTLED');
+  assert.equal(calls.length, 0);
+  assert.equal(balanceOf(db), 3000);
+});
+
+test('a second delivery while one holds the lease reports IN_PROGRESS instead of pushing again', async () => {
+  const { deliverVoucherReward } = await voucherPush();
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  let nested = null;
+  let pushes = 0;
+  await withVoucherContract(() => deliverVoucherReward({ redemptionId, db, fetcher: async () => {
+    pushes += 1;
+    if (!nested) nested = await deliverVoucherReward({ redemptionId, db, fetcher: async () => { pushes += 1; return accepted(); } });
+    return accepted();
+  } }));
+  assert.equal(nested.status, 'IN_PROGRESS');
+  assert.equal(pushes, 1);
+});
+
+test('a code accepted after a lapsed lease let the reversal through is voided on the main site and audited', async () => {
+  const { deliverVoucherReward, voucherCodeFor } = await voucherPush();
+  const { DELIVERY_LEASE_MS } = await import('../src/server/rewards/redemption-service.ts');
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  const calls = [];
+  const delivery = await withVoucherContract(() => deliverVoucherReward({ redemptionId, db, fetcher: async (url, init) => {
+    calls.push({ url: String(url), body: JSON.parse(init.body) });
+    if (calls.length === 1) {
+      // The push stalls past its lease, so a reversal is allowed through meanwhile.
+      db.tables.get(redemptions)[0].updatedAt = new Date(Date.now() - DELIVERY_LEASE_MS - 1000);
+      await reverse(db, redemptionId);
+    }
+    return accepted();
+  } }));
+  const code = voucherCodeFor(redemptionId);
+  assert.equal(delivery.status, 'REVOKED');
+  assert.equal(delivery.voided, true);
+  assert.deepEqual(calls.map((call) => call.url), ['https://main.example.test/api/v1/vouchers', voidUrl(code)]);
+  assert.equal(calls[1].body.external_reference, redemptionId);
+  assert.equal(db.tables.get(redemptions)[0].status, 'ADMIN_REVERSED');
+  assert.equal(balanceOf(db), 3000);
+  const audit = db.tables.get(logs).find((row) => row.action === 'REWARD_VOUCHER_VOIDED');
+  assert.equal(audit?.metadata.trigger, 'DELIVERED_AFTER_CANCELLATION');
+  assert.equal(audit?.metadata.code, code);
+});
+
+test('a void the main site does not confirm is flagged for reconciliation, never reported as done', async () => {
+  const { deliverVoucherReward } = await voucherPush();
+  const { DELIVERY_LEASE_MS } = await import('../src/server/rewards/redemption-service.ts');
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  let calls = 0;
+  const delivery = await withVoucherContract(() => deliverVoucherReward({ redemptionId, db, fetcher: async () => {
+    calls += 1;
+    if (calls === 1) {
+      db.tables.get(redemptions)[0].updatedAt = new Date(Date.now() - DELIVERY_LEASE_MS - 1000);
+      await reverse(db, redemptionId);
+      return accepted();
+    }
+    // 404 cannot tell "nothing to void" from "no such endpoint".
+    return new Response('', { status: 404 });
+  } }));
+  assert.equal(delivery.status, 'REVOKED');
+  assert.equal(delivery.voided, false);
+  const flagged = db.tables.get(logs).find((row) => row.action === 'REWARD_VOUCHER_RECONCILIATION_REQUIRED');
+  assert.equal(flagged?.metadata.voidError, 'HTTP 404');
+  assert.equal(db.tables.get(logs).some((row) => row.action === 'REWARD_VOUCHER_VOIDED'), false);
+});
+
+test('admin can retry an unresolved voucher void once and the resolution is audited', async () => {
+  const { deliverVoucherReward, retryVoucherVoid } = await voucherPush();
+  const { DELIVERY_LEASE_MS } = await import('../src/server/rewards/redemption-service.ts');
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  let calls = 0;
+  await withVoucherContract(async () => {
+    await deliverVoucherReward({ redemptionId, db, fetcher: async () => {
+      calls += 1;
+      if (calls === 1) {
+        db.tables.get(redemptions)[0].updatedAt = new Date(Date.now() - DELIVERY_LEASE_MS - 1000);
+        await reverse(db, redemptionId);
+        return accepted();
+      }
+      return new Response('', { status: 503 });
+    } });
+    const retried = await retryVoucherVoid({ redemptionId, actorSubject: 'admin', db, fetcher: async () => accepted() });
+    assert.equal(retried.voided, true);
+    assert.equal(db.tables.get(logs).filter((row) => row.action === 'REWARD_VOUCHER_VOIDED').at(-1)?.metadata.trigger, 'ADMIN_RETRY_VOID');
+    await assert.rejects(() => retryVoucherVoid({ redemptionId, actorSubject: 'admin', db, fetcher: async () => accepted() }), /already|resolved|selesai/i);
+  });
+});
+
+test('a failed push hands the claim back to PENDING, and reversing it then voids the code the main site may hold', async () => {
+  const { deliverVoucherReward, reverseRedemptionAndRevokeVoucher, voucherCodeFor } = await voucherPush();
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  const calls = [];
+  await withVoucherContract(async () => {
+    const delivery = await deliverVoucherReward({ redemptionId, db, fetcher: async (url) => { calls.push(String(url)); throw new Error('socket hang up'); } });
+    assert.equal(delivery.status, 'MANUAL_REQUIRED');
+    assert.equal(db.tables.get(redemptions)[0].status, 'PENDING', 'the lease is released so an admin can act at once');
+    const result = await reverseRedemptionAndRevokeVoucher({ redemptionId, actorSubject: 'admin', reason: 'Main site never confirmed', db,
+      fetcher: async (url) => { calls.push(String(url)); return new Response('{}', { status: 200 }); } });
+    assert.equal(result.reversed.status, 'ADMIN_REVERSED');
+    assert.deepEqual(result.voucher, { code: voucherCodeFor(redemptionId), voidAttempted: true, voided: true });
+  });
+  assert.equal(calls.at(-1), voidUrl(voucherCodeFor(redemptionId)));
+  assert.equal(balanceOf(db), 3000);
+  assert.equal(db.tables.get(logs).find((row) => row.action === 'REWARD_VOUCHER_VOIDED')?.metadata.trigger, 'ADMIN_REVERSAL');
+});
+
+test('reversing a voucher claim that was never pushed makes no call to the main site', async () => {
+  const { deliverVoucherReward, reverseRedemptionAndRevokeVoucher } = await voucherPush();
+  const { db, claim } = voucherSetup();
+  const { redemptionId } = await claim();
+  await withVoucherContract(async () => {
+    const delivery = await deliverVoucherReward({ redemptionId, db, fetcher: async () => assert.fail('no contract, no push') });
+    assert.equal(delivery.status, 'MANUAL_REQUIRED');
+    const result = await reverseRedemptionAndRevokeVoucher({ redemptionId, actorSubject: 'admin', reason: 'Not needed', db,
+      fetcher: async () => assert.fail('a code that was never pushed has nothing to void') });
+    assert.equal(result.voucher.voidAttempted, false);
+  }, false);
+  assert.equal(balanceOf(db), 3000);
 });

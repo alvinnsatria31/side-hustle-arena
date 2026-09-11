@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
 import { Check, CircleDashed } from 'lucide-react';
 import { StateBox } from '@/components/primitives/StateBox';
-import { useDemo } from '@/features/demo/store';
+import { useCvOwnerGuard, useDemo } from '@/features/demo/store';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
 import { MOCK_ANALYZE_STEPS } from '@/data/mock/cv';
@@ -25,6 +25,7 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const { state, dispatch } = useDemo();
+  const ownerId = useCvOwnerGuard();
   const [progress, setProgress] = useState(0);
   const [failed, setFailed] = useState(false);
   const startedRef = useRef(false);
@@ -38,7 +39,7 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
     if (!startedRef.current) {
       startedRef.current = true;
       if (state.cvScan.status === 'file_selected' || state.cvScan.status === 'analyzing') {
-        dispatch({ type: 'CV_START' });
+        dispatch({ type: 'CV_START', ownerId });
       }
     }
     if (state.cvScan.status === 'completed') {

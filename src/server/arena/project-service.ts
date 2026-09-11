@@ -9,6 +9,7 @@ const currentWeekStatuses = ["OPEN", "SCHEDULED", "PREVIEW", "CLOSED", "FINALIZI
 function toWeekCandidate(week: typeof weeks.$inferSelect): WeekCandidate {
   return {
     id: week.id,
+    weekCode: week.weekCode,
     status: week.status,
     opensAt: week.opensAt,
     submissionDeadlineAt: week.submissionDeadlineAt,

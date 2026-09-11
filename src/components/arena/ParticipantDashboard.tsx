@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, CalendarClock, Gift, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Trophy, UserRound } from 'lucide-react';
+import { Bell, Bookmark, CalendarClock, Gift, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Trophy, UserRound } from 'lucide-react';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { useParticipant } from '@/features/arena/participant';
 import { SignInButton } from '@/components/auth/SignInButton';
+import { LogoutForm } from '@/components/auth/LogoutForm';
 import { MilestoneRoadmap, RewardProgress } from '@/components/arena/MilestoneRoadmap';
 import { ArenaApiError } from '@/lib/arena-client';
 import { getParticipantMilestones, getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
 import type { ReactNode } from 'react';
+import { WHATSAPP_SUPPORT_URL } from '@/components/layout/FloatingWhatsApp';
 
 export function participantDate(value: string) {
   return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
@@ -95,7 +97,7 @@ export function EnrollmentHistory({ history }: { history: ParticipantOverview['h
 }
 
 export function ParticipantLogout() {
-  return <form action="/auth/logout" method="post"><Button type="submit" variant="ghost" iconLeft={<LogOut size={15} aria-hidden />}>Keluar</Button></form>;
+  return <LogoutForm><Button type="submit" variant="ghost" iconLeft={<LogOut size={15} aria-hidden />}>Keluar</Button></LogoutForm>;
 }
 
 /** The reward ladder with the participant's own progress, on the Arena page. */
@@ -135,8 +137,9 @@ export default function ParticipantDashboard({ arena = false }: { arena?: boolea
       </section>}
       <ParticipantStats data={data} />
       {arena && <ArenaRewardLadder balance={data.points.balance} />}
-      <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua Project</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Leaderboard</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Reward</ButtonLink></div>
+      <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua Project</ButtonLink><ButtonLink href="/app/arena/projects?view=saved" variant="ghost" iconLeft={<Bookmark size={15} aria-hidden />}>Tersimpan</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Leaderboard</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Reward</ButtonLink></div>
       <EnrollmentHistory history={data.history.filter((row) => row.id !== active?.id)} />
+      <p className="mt-8 text-sm text-sk-muted">Jika mengalami kendala, hubungi WhatsApp CS: <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-sk-blue hover:underline">+62 851-1730-4579</a></p>
     </>}
   </ParticipantShell>;
 }

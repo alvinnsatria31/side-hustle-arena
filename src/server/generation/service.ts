@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { divisions, featureFlags, logs, projects, projectResources, projectRubricCriteria, projectSkills, projectSubmissionRequirements, runs, skills, weekRules, weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, resourceKind, rubricHash, validatePackage, weeklyWindow,
+import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, publicationResourceBlock, resourceKind, rubricHash, validatePackage, weeklyWindow,
   type BaseCriterion, type GenerationProvider, type LibraryEntry, type ProjectPackage } from "./core";
 import { EXECUTION_CONTRACT, type ExecutionBudget } from "@/server/ops/execution-budget";
 
@@ -386,6 +386,10 @@ export async function publishWeek(input: Options & { weekId: string }) {
         if (!validation) throw new ArenaDomainError("VALIDATION_ERROR", "No validation record exists.");
         const block = publicationBlock({ week, project, now, validatedAt: validation.createdAt, previewHours: generationConfig().previewHours });
         if (block) throw new ArenaDomainError("WEEK_NOT_READY", block);
+        const persistedResources = await tx.select({ label: projectResources.label, url: projectResources.url })
+          .from(projectResources).where(eq(projectResources.projectId, project.id)).limit(1);
+        const resourceBlock = publicationResourceBlock({ resources: persistedResources });
+        if (resourceBlock) throw new ArenaDomainError("WEEK_NOT_READY", resourceBlock);
         const p = ordered(validatePackage(await storedPackage(tx, project, validation.metadata.package), await contextFor(tx, project.divisionId, week.weekCode)));
         if (contentHash(p) !== validation.metadata.contentHash || rubricHash(p.rubric) !== validation.metadata.baseRubricHash) throw new ArenaDomainError("VALIDATION_ERROR", "Stored package changed after validation.");
         if (isDuplicate(p, await recentHistory(tx, week, project.id), generationConfig().threshold)) throw new ArenaDomainError("VALIDATION_ERROR", "Recent project duplicate.");

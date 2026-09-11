@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, MapPin, RefreshCw, Target } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { Entrance, StaggerGroup, StaggerItem } from '@/components/motion/Reveal';
-import { filterOpenings } from '@/server/career/jobs/matching-core';
 import type { JobsOverview } from '@/server/career/jobs-service';
 
 const WORK_MODE_LABEL: Record<string, string> = {
@@ -21,6 +20,9 @@ const HEALTH_LABEL: Record<string, string> = {
   HEALTHY: 'Sehat', DEGRADED: 'Data menua', FAILING: 'Gagal berulang',
   NEVER_SYNCED: 'Belum pernah sync', DISABLED: 'Dinonaktifkan',
 };
+const PAGE_SIZE = 30;
+
+interface JobsQuery { q: string; employmentType: string; workMode: string; location: string }
 
 function freshnessText(minutes: number | null): string {
   if (minutes === null) return 'belum pernah diperbarui';
@@ -39,37 +41,84 @@ function salaryText(salary: JobsOverview['jobs'][number]['salary']): string | nu
   return [salary.currency, range, salary.period ? `/ ${salary.period.toLowerCase()}` : null].filter(Boolean).join(' ');
 }
 
+/** Search and filters run on the server, so every visible opening is reachable — not only the first page. */
+async function fetchJobsPage(query: JobsQuery, offset: number, signal?: AbortSignal): Promise<JobsOverview> {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(PAGE_SIZE) });
+  for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+  const response = await fetch(`/api/career/jobs?${params}`, { cache: 'no-store', signal });
+  if (!response.ok) throw new Error(response.status === 401 ? 'Sesi berakhir. Masuk kembali untuk melihat skill kamu.' : 'Jobs belum bisa dimuat. Coba lagi sebentar.');
+  const body = await response.json();
+  return body.data as JobsOverview;
+}
+
 export default function JobsPage() {
   const [data, setData] = useState<JobsOverview | null>(null);
+  const [jobs, setJobs] = useState<JobsOverview['jobs']>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [retry, setRetry] = useState(0);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [employmentType, setEmploymentType] = useState('');
   const [workMode, setWorkMode] = useState('');
   const [location, setLocation] = useState('');
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function load() {
-      setError(null);
-      try {
-        const response = await fetch('/api/career/jobs', { cache: 'no-store', signal: controller.signal });
-        if (!response.ok) throw new Error(response.status === 401 ? 'Sesi berakhir. Masuk kembali untuk melihat skill kamu.' : 'Jobs belum bisa dimuat. Coba lagi sebentar.');
-        const body = await response.json();
-        if (!controller.signal.aborted) setData(body.data);
-      } catch (cause) {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Jobs belum bisa dimuat.');
-      }
-    }
-    void load();
-    return () => controller.abort();
-  }, [retry]);
+    const id = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
 
-  const jobs = useMemo(
-    () => (data ? filterOpenings(data.jobs, { search, employmentType, workMode, location }) : []),
-    [data, search, employmentType, workMode, location],
+  const query = useMemo<JobsQuery>(
+    () => ({ q: debouncedSearch, employmentType, workMode, location }),
+    [debouncedSearch, employmentType, workMode, location],
   );
-  const top = data?.jobs.find(job => (job.matchScore ?? 0) > 0);
+  // Which request the list on screen answers. Loading is derived from it, and a
+  // response for filters the participant has already changed never lands.
+  const requestKey = `${JSON.stringify(query)}#${retry}`;
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+  const latestKey = useRef(requestKey);
+  const loading = settledKey !== requestKey;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    latestKey.current = requestKey;
+    fetchJobsPage(query, 0, controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setData(next);
+        setJobs(next.jobs);
+        setError(null);
+        setSettledKey(requestKey);
+      })
+      .catch((cause) => {
+        if (controller.signal.aborted) return;
+        setError(cause instanceof Error ? cause.message : 'Jobs belum bisa dimuat.');
+        setSettledKey(requestKey);
+      });
+    return () => controller.abort();
+  }, [query, requestKey]);
+
+  async function loadMore() {
+    if (loadingMore) return;
+    const key = requestKey;
+    setLoadingMore(true);
+    try {
+      const next = await fetchJobsPage(query, jobs.length);
+      if (latestKey.current !== key) return;
+      setData(next);
+      setJobs((previous) => {
+        const seen = new Set(previous.map((job) => job.id));
+        return [...previous, ...next.jobs.filter((job) => !seen.has(job.id))];
+      });
+    } catch (cause) {
+      if (latestKey.current === key) setError(cause instanceof Error ? cause.message : 'Jobs belum bisa dimuat.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const resetFilters = () => { setSearch(''); setDebouncedSearch(''); setEmploymentType(''); setWorkMode(''); setLocation(''); };
+  const top = data?.topMatch ?? null;
   const fieldClass = 'mt-1.5 w-full rounded-[var(--radius-sk-md)] border border-sk-border bg-white px-3 py-2.5 text-[13px] text-sk-navy focus-visible:outline-2 focus-visible:outline-sk-blue';
   const stalest = data?.sources.reduce<number | null>((worst, source) =>
     source.freshnessMinutes === null ? worst : Math.max(worst ?? 0, source.freshnessMinutes), null) ?? null;
@@ -91,7 +140,7 @@ export default function JobsPage() {
             <div className="mb-6 grid max-w-[650px] gap-2.5 sm:grid-cols-3">
               <div className="rounded-[var(--radius-sk-lg)] border border-white/15 bg-white/10 p-4">
                 <div className="font-mono text-[10px] tracking-[0.1em] text-white/65">LOWONGAN AKTIF</div>
-                <div className="mt-1.5 text-[26px] font-extrabold">{data?.totalOpen ?? '—'}</div>
+                <div className="mt-1.5 text-[26px] font-extrabold">{data ? data.totalOpen.toLocaleString('id-ID') : '—'}</div>
               </div>
               <div className="rounded-[var(--radius-sk-lg)] border border-white/15 bg-white/10 p-4">
                 <div className="font-mono text-[10px] tracking-[0.1em] text-white/65">KECOCOKAN TERTINGGI</div>
@@ -99,7 +148,7 @@ export default function JobsPage() {
               </div>
               <div className="rounded-[var(--radius-sk-lg)] border border-white/15 bg-white/10 p-4">
                 <div className="font-mono text-[10px] tracking-[0.1em] text-white/65">CAKUPAN SKILL TERTINGGI</div>
-                <div className="mt-1.5 text-[26px] font-extrabold text-[#5ae0a0]">{top?.matchScore != null ? `${top.matchScore}%` : '—'}</div>
+                <div className="mt-1.5 text-[26px] font-extrabold text-[#5ae0a0]">{top ? `${top.matchScore}%` : '—'}</div>
               </div>
             </div>
             {data?.portalUrl ? <>
@@ -110,7 +159,7 @@ export default function JobsPage() {
         </div>
       </Entrance>
 
-      {error ? <Card className="mt-6 p-5">
+      {error && !data ? <Card className="mt-6 p-5">
         <p role="alert" className="mb-3 text-sm text-sk-error">{error}</p>
         <div className="flex flex-wrap gap-3">
           <Button onClick={() => setRetry(value => value + 1)} iconLeft={<RefreshCw size={14} aria-hidden />}>Coba lagi</Button>
@@ -156,26 +205,32 @@ export default function JobsPage() {
             <label className="text-[12px] font-semibold text-sk-muted">Tipe pekerjaan
               <select value={employmentType} onChange={event => setEmploymentType(event.target.value)} className={fieldClass}>
                 <option value="">Semua tipe</option>
-                {[...new Set(data.jobs.map(job => job.employmentType))].sort().map(value => <option key={value} value={value}>{EMPLOYMENT_LABEL[value] ?? value}</option>)}
+                {data.facets.employmentTypes.map(value => <option key={value} value={value}>{EMPLOYMENT_LABEL[value] ?? value}</option>)}
               </select>
             </label>
             <label className="text-[12px] font-semibold text-sk-muted">Model kerja
               <select value={workMode} onChange={event => setWorkMode(event.target.value)} className={fieldClass}>
                 <option value="">Semua model</option>
-                {[...new Set(data.jobs.map(job => job.workMode))].sort().map(value => <option key={value} value={value}>{WORK_MODE_LABEL[value] ?? value}</option>)}
+                {data.facets.workModes.map(value => <option key={value} value={value}>{WORK_MODE_LABEL[value] ?? value}</option>)}
               </select>
             </label>
             <label className="text-[12px] font-semibold text-sk-muted">Lokasi
               <select value={location} onChange={event => setLocation(event.target.value)} className={fieldClass}>
                 <option value="">Semua lokasi</option>
-                {[...new Set(data.jobs.map(job => job.location).filter(Boolean))].sort().map(value => <option key={value!}>{value}</option>)}
+                {data.facets.locations.map(value => <option key={value}>{value}</option>)}
               </select>
             </label>
           </div>
-          <p role="status" className="mb-3 text-[12px] text-sk-muted">{jobs.length} dari {data.totalOpen} lowongan aktif ditampilkan</p>
-          {jobs.length === 0 ? <Card className="p-6 text-center">
+          <p role="status" className="mb-3 text-[12px] text-sk-muted">
+            {loading
+              ? 'Memperbarui hasil…'
+              : `${jobs.length.toLocaleString('id-ID')} dari ${data.totalMatching.toLocaleString('id-ID')} lowongan yang sesuai ditampilkan · ${data.totalOpen.toLocaleString('id-ID')} lowongan aktif`}
+          </p>
+          {data.truncated && <p className="mb-3 text-[11.5px] text-sk-muted">Lowongan aktif sangat banyak; pencarian saat ini menjangkau lowongan terbaru saja. Persempit dengan filter untuk hasil yang lebih tepat.</p>}
+          {error && <p role="alert" className="mb-3 text-sm text-sk-error">{error}</p>}
+          {!loading && jobs.length === 0 ? <Card className="p-6 text-center">
             <p className="mb-3 text-sm text-sk-muted">Tidak ada lowongan yang sesuai filter ini.</p>
-            <Button variant="ghost" onClick={() => { setSearch(''); setEmploymentType(''); setWorkMode(''); setLocation(''); }}>Reset filter</Button>
+            <Button variant="ghost" onClick={resetFilters}>Reset filter</Button>
           </Card> : <StaggerGroup className="grid gap-4 md:grid-cols-2">
             {jobs.map(job => <StaggerItem key={job.id}>
               <Card className="flex h-full flex-col p-5 transition-all duration-200 hover:border-sk-blue/40 hover:shadow-sk-md">
@@ -210,6 +265,9 @@ export default function JobsPage() {
               </Card>
             </StaggerItem>)}
           </StaggerGroup>}
+          {!loading && data.hasMore && <div className="mt-5 flex justify-center">
+            <Button variant="ghost" loading={loadingMore} disabled={loadingMore} onClick={() => void loadMore()}>Muat lebih banyak</Button>
+          </div>}
         </>}
 
         <div className="mt-8 flex items-start gap-3 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border bg-white px-4 py-3.5 text-[12.5px] leading-relaxed text-sk-muted">

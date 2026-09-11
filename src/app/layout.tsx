@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { JetBrains_Mono, Manrope } from 'next/font/google';
 import { DemoProvider } from '@/features/demo/store';
 import { ToastProvider } from '@/features/ui/toast';
+import { FloatingWhatsApp } from '@/components/layout/FloatingWhatsApp';
 import './globals.css';
 
 const manrope = Manrope({
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <DemoProvider>
           <ToastProvider>{children}</ToastProvider>
+          <FloatingWhatsApp />
         </DemoProvider>
       </body>
     </html>

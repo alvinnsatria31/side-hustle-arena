@@ -11,9 +11,8 @@ import { LoginModal } from '@/components/layout/LoginModal';
 import { ResourceList } from '@/components/arena/KanbanPreview';
 import { ArenaApiError, getCurrentEnrollment, getVisibleProject, selectProject } from '@/lib/arena-client';
 import { useToast } from '@/features/ui/toast';
+import { useSavedProjects } from '@/lib/saved-projects';
 import type { ArenaProject } from '@/types/project';
-
-const SAVED_KEY = 'sk-saved-projects';
 
 /* ---------------- CTA actions (hero) ---------------- */
 
@@ -21,19 +20,11 @@ export function CtaActions({ slug }: { slug: string }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [loginOpen, setLoginOpen] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const { saved: savedSlugs, toggle } = useSavedProjects();
+  const saved = savedSlugs.includes(slug);
   // Live enrollment state: null while resolving (or anonymous). The label must
   // reflect the server session, never the localStorage demo store.
   const [enrolledHere, setEnrolledHere] = useState(false);
-
-  useEffect(() => {
-    try {
-      const list = JSON.parse(window.localStorage.getItem(SAVED_KEY) ?? '[]') as string[];
-      setSaved(list.includes(slug));
-    } catch {
-      /* ignore */
-    }
-  }, [slug]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,15 +42,9 @@ export function CtaActions({ slug }: { slug: string }) {
   }, [slug]);
 
   const toggleSave = () => {
-    try {
-      const list = JSON.parse(window.localStorage.getItem(SAVED_KEY) ?? '[]') as string[];
-      const next = list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug];
-      window.localStorage.setItem(SAVED_KEY, JSON.stringify(next));
-      setSaved(next.includes(slug));
-      showToast(next.includes(slug) ? 'Disimpan untuk nanti.' : 'Dihapus dari daftar simpanan.');
-    } catch {
-      /* ignore */
-    }
+    const nowSaved = toggle(slug);
+    if (nowSaved === null) return;
+    showToast(nowSaved ? 'Disimpan. Buka lagi lewat filter "Tersimpan" di daftar project.' : 'Dihapus dari daftar simpanan.');
   };
 
   const [choosing, setChoosing] = useState(false);

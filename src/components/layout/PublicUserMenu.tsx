@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { LogOut, UserRound } from 'lucide-react';
 import { AvatarBadge } from '@/components/arena/AvatarBadge';
+import { LogoutForm } from '@/components/auth/LogoutForm';
 
 export interface PublicNavUser {
   displayName: string | null;
@@ -83,7 +84,7 @@ export function PublicUserMenu({ user }: { user: PublicNavUser }) {
           >
             <UserRound size={15} aria-hidden /> Profil
           </Link>
-          <form action="/auth/logout" method="post">
+          <LogoutForm>
             <button
               type="submit"
               role="menuitem"
@@ -91,7 +92,7 @@ export function PublicUserMenu({ user }: { user: PublicNavUser }) {
             >
               <LogOut size={15} aria-hidden /> Keluar
             </button>
-          </form>
+          </LogoutForm>
         </div>
       )}
     </div>
