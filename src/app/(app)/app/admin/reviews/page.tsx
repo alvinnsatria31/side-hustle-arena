@@ -44,6 +44,8 @@ export default function AdminReviewsPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const closeAction = useCallback(() => setAction(null), []);
+
   const openAction = (a: Action) => {
     setAction(a);
     setScore(a.kind === 'override' ? String(a.review.finalScore ?? a.review.aiScore ?? '') : '');
@@ -164,7 +166,7 @@ export default function AdminReviewsPage() {
         )}
       </div>
 
-      <Modal open={action !== null} onClose={() => setAction(null)} labelledBy="review-action-title">
+      <Modal open={action !== null} onClose={closeAction} labelledBy="review-action-title">
         <div className="p-7">
           <h3 id="review-action-title" className="mb-2 text-lg font-bold text-sk-navy">
             {action?.kind === 'override' && 'Override skor'}

@@ -444,6 +444,10 @@ export async function completeReviewJob(input: {
     .set({ reviewStatus: "COMPLETED" })
     .where(eq(submissionVersions.id, job.submissionVersionId));
   await tx
+    .update(submissions)
+    .set({ status: "REVIEWED_HIDDEN", updatedAt: now })
+    .where(eq(submissions.id, version.submissionId));
+  await tx
     .update(reviewJobs)
     .set({ status: "COMPLETED", lastErrorCode: null, lastErrorMessage: null, updatedAt: now })
     .where(eq(reviewJobs.id, jobId));

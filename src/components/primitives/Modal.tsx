@@ -26,6 +26,8 @@ interface ModalProps {
  */
 export function Modal({ open, onClose, children, labelledBy, className, dismissable = true }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +38,7 @@ export function Modal({ open, onClose, children, labelledBy, className, dismissa
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        if (dismissable) onClose();
+        if (dismissable) onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !panelRef.current) return;
@@ -56,15 +58,19 @@ export function Modal({ open, onClose, children, labelledBy, className, dismissa
     };
 
     document.addEventListener('keydown', onKeyDown);
-    const firstFocus = panelRef.current?.querySelector<HTMLElement>('button, a[href], input');
-    firstFocus?.focus();
+    if (!panelRef.current?.contains(document.activeElement)) {
+      const firstFocus = panelRef.current?.querySelector<HTMLElement>(
+        'input, textarea, select, button:not([aria-label="Tutup dialog"]), a[href]',
+      );
+      firstFocus?.focus();
+    }
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = overflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose, dismissable]);
+  }, [open, dismissable]);
 
   return (
     <AnimatePresence>

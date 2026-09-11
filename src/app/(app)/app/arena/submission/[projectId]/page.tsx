@@ -375,7 +375,7 @@ export default function SubmissionPage() {
                 // done for it was the whole misinformation: everything below it
                 // then read as a queue the participant was waiting in.
                 { label: accessFailed ? 'Submission ditolak: lampiran tidak dapat diakses' : 'Submission diterima', done: queued, failed: accessFailed },
-                { label: 'Reviewer memeriksa deliverables', done: queued && submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT', failed: false },
+                { label: 'Reviewer memeriksa deliverables', done: queued && (submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT' || version?.reviewStatus === 'COMPLETED'), failed: false },
                 { label: 'Feedback tersedia', done: finalized, failed: false },
               ].map((s) => (
                 <li key={s.label} className="flex items-center gap-3">
