@@ -111,8 +111,11 @@ The home page lives in the owner's workspace as a private draft: https://app.not
 - **New-application template (optional):** in the Lamaran Kerja database, add a template from one example row's structure, so new applications start with the note sections.
 - **Publishing:** Share → Publish, enable "Allow duplicate as template", copy the public link, and paste it as the fulfilment note for `notion-kit` claims.
 
+## Delivery
+
+Automatic delivery was built the same day — see `2026-09-12-digital-reward-delivery-design.md`. Once the page is published and its link is set on the admin Reward page, claiming this reward fulfils it, shows the link on the profile, and emails the same link.
+
 ## Out of scope
 
 - Making links in the fulfilment note clickable on the profile (a code change and deploy).
-- Automatic delivery of digital rewards on claim.
 - The e-book and the remaining four rewards.
