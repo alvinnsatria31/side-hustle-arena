@@ -1,0 +1,484 @@
+/*
+ * HR Interview Cheat Code v2 — print stylesheet (A4, Chromium → PDF).
+ *
+ * Direction: premium editorial, not arcade. No pixel type, no pixel art, no
+ * chunky offset shadows. The "cheat code" flavour survives only as monospace
+ * labels and one dark terminal card per blueprint.
+ *
+ * Rules the whole book obeys:
+ *  - Two grounds: navy for openers and terminals, near-white paper for work.
+ *  - One accent colour per stage, carried by a hairline rule and the stage tag.
+ *  - Hairline borders (1px) plus one soft elevation. Nothing heavier.
+ *  - Every diagram is markup or SVG. ASCII art is banned: it is what made v1
+ *    misalign.
+ *  - No emoji: they render differently in every PDF viewer.
+ */
+
+:root {
+  --navy: #081226;
+  --navy-2: #0e1d38;
+  --navy-3: #17294a;
+  --ink: #0b1830;
+  --paper: #fbfcfe;
+  --paper-2: #f2f5fa;
+  --line: #e4e9f2;
+  --line-2: #d3dbe9;
+  --body: #44546f;
+  --muted: #7b89a1;
+
+  --blue: #246bfd;   /* Sekolah Karir brand blue */
+  --teal: #0fa892;
+  --violet: #6c5ce7;
+  --coral: #ff6b5a;
+  --amber: #e8a33d;
+  --mint: #17b97f;
+
+  --stage: var(--blue);
+}
+
+@page { size: A4; margin: 0; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #aab4c4;
+  font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  /* The subsetted font files carry the ligature substitution rules but not the
+     ligature glyphs, so "biografi" printed as "biograf". Off for the whole book. */
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.page {
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
+  background: var(--paper);
+  page-break-after: always;
+  break-after: page;
+  margin: 0 auto;
+}
+.page:last-child { page-break-after: auto; break-after: auto; }
+
+@media screen {
+  .page { margin: 22px auto; box-shadow: 0 20px 60px rgba(8, 18, 38, 0.28); }
+}
+
+.page.dark { background: var(--navy); color: #fff; }
+
+.page.dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.038) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.page.light-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(11, 24, 48, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 24, 48, 0.032) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.inner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: 48px 54px 38px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Slack left over on a page is shared between the blocks rather than pooling at
+   the bottom, which is what made half of v1's pages look abandoned. */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.content > * { flex: none; }
+
+/* ---------- type ---------- */
+
+h1, h2, h3, h4 {
+  font-family: Manrope, "Segoe UI", sans-serif;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+.label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.6px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.dark .label { color: #8296b5; }
+
+.q-title { font-size: 34px; line-height: 1.02; }
+.h-section {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ---------- page furniture ---------- */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line-2);
+  margin-bottom: 20px;
+}
+.dark .topbar { border-bottom-color: rgba(255, 255, 255, 0.14); }
+
+.stage-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.6px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--stage);
+  font-weight: 700;
+}
+.stage-tag::before {
+  content: "";
+  width: 14px;
+  height: 3px;
+  background: var(--stage);
+  border-radius: 2px;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.dark .footer { border-top-color: rgba(255, 255, 255, 0.14); color: #8296b5; }
+
+.xp { flex: 1; height: 3px; background: var(--line); position: relative; border-radius: 2px; overflow: hidden; }
+.dark .xp { background: rgba(255, 255, 255, 0.14); }
+.xp i { position: absolute; inset: 0 auto 0 0; background: var(--stage); display: block; border-radius: 2px; }
+
+/* ---------- cards ---------- */
+
+.card {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px -22px rgba(8, 18, 38, 0.5);
+  overflow: hidden;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.card-body { padding: 13px 14px; }
+
+.accent-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--stage);
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+/* Terminal card: one per blueprint, holding the worked answer. */
+.term {
+  background: var(--navy);
+  border-radius: 10px;
+  color: #d6e2f4;
+  font-family: "JetBrains Mono", monospace;
+  overflow: hidden;
+  box-shadow: 0 14px 34px -26px rgba(8, 18, 38, 0.9);
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 8.6px;
+  letter-spacing: 0.16em;
+  color: #8296b5;
+  text-transform: uppercase;
+}
+.term-bar .dots { display: flex; gap: 4px; }
+.term-bar .dots i { width: 5px; height: 5px; border-radius: 50%; display: block; background: rgba(255, 255, 255, 0.22); }
+.term-body { padding: 12px 15px 14px; font-size: 9.7px; line-height: 1.66; }
+.term-body p { margin: 0 0 8px; }
+.term-body p:last-child { margin-bottom: 0; }
+.term-body .tag { color: #5ee3b0; font-weight: 700; }
+.term-body .hl { color: #ffd166; }
+.term-body .hl-b { color: #7cc4ff; }
+
+/* ---------- small parts ---------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: #fff;
+  color: var(--body);
+  font-weight: 600;
+}
+.chip.solid { background: var(--stage); border-color: transparent; color: #fff; }
+.chip.dark-ghost { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.22); color: #dce6f5; }
+
+.pull {
+  border-left: 3px solid var(--amber);
+  padding: 3px 0 3px 15px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  font-weight: 500;
+}
+.pull b { font-weight: 800; }
+
+ul.list { margin: 0; padding: 0; list-style: none; }
+ul.list li {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 10.9px;
+  line-height: 1.47;
+  color: var(--body);
+}
+ul.list li:last-child { margin-bottom: 0; }
+/* Drawn markers: see the ICONS note in build.mjs. */
+.li-ico { width: 11px; height: 11px; flex: none; margin-top: 2px; display: block; }
+ul.bad { color: var(--coral); }
+ul.good { color: var(--mint); }
+ul.dot { color: var(--stage); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+.mini-head {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mini-head.bad { color: var(--coral); }
+.mini-head.good { color: var(--mint); }
+.mini-head::before { content: ""; width: 10px; height: 2px; background: currentColor; display: block; border-radius: 2px; }
+
+/* ---------- diagrams ---------- */
+
+.flow { display: flex; align-items: stretch; gap: 0; }
+.flow .node {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--stage);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 11px;
+  min-width: 0;
+}
+.flow .node .n-key {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.2px;
+  letter-spacing: 0.14em;
+  color: var(--stage);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 5px;
+}
+.flow .node .n-label { font-size: 11px; font-weight: 800; display: block; margin-bottom: 3px; font-family: Manrope, sans-serif; }
+.flow .node .n-note { font-size: 9.4px; line-height: 1.42; color: var(--body); }
+.flow .arrow {
+  align-self: center;
+  flex: none;
+  width: 20px;
+  display: flex;
+  justify-content: center;
+  color: var(--line-2);
+}
+.flow .arrow svg { width: 13px; height: 10px; display: block; }
+
+.grid-table { width: 100%; border-collapse: collapse; font-size: 10.4px; }
+.grid-table th {
+  background: var(--paper-2);
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.2px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line-2);
+}
+.grid-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  vertical-align: top;
+  line-height: 1.45;
+  color: var(--body);
+}
+.grid-table td strong { color: var(--ink); font-weight: 700; }
+.grid-table tr:last-child td { border-bottom: 0; }
+
+.vs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.vs .col-head {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--line);
+}
+.vs .col-head.bad { background: #fff2f0; color: #c0402f; }
+.vs .col-head.good { background: #edfaf4; color: #0d7d58; }
+.vs .cell {
+  padding: 8px 11px;
+  font-size: 10.2px;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--line);
+  color: var(--body);
+}
+.vs .cell.l { border-right: 1px solid var(--line); }
+.vs .cell.last { border-bottom: 0; }
+
+.meter { display: inline-flex; gap: 3px; align-items: center; }
+.meter i { width: 12px; height: 3px; border-radius: 2px; background: currentColor; opacity: 0.22; display: block; }
+.meter i.on { opacity: 1; }
+
+/* ---------- cover ---------- */
+
+.glow {
+  position: absolute;
+  width: 760px;
+  height: 760px;
+  right: -240px;
+  top: -220px;
+  background: radial-gradient(closest-side, rgba(36, 107, 253, 0.34), transparent);
+  z-index: 1;
+}
+.glow.b {
+  right: auto;
+  left: -280px;
+  top: auto;
+  bottom: -300px;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(closest-side, rgba(23, 185, 127, 0.18), transparent);
+}
+
+.cover-title {
+  font-family: Manrope, sans-serif;
+  font-weight: 800;
+  font-size: 58px;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+}
+/* Plain fill, no stroke. An outlined headline prints as two overlapping text
+   runs, so the words come out twice when the PDF is copied — the v1 defect. */
+.outline { color: var(--mint); }
+
+.brand-lockup { display: flex; align-items: center; gap: 11px; }
+.brand-lockup img { width: 28px; height: 28px; }
+.brand-lockup .txt {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: #fff;
+  font-weight: 600;
+}
+.brand-lockup .txt span { color: #8296b5; }
+
+/* ---------- index ---------- */
+
+.stage-card { border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+.stage-card .sc-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.stage-card .sc-head .num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.2px;
+  letter-spacing: 0.14em;
+  color: #fff;
+  background: var(--stage);
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.stage-card .sc-head .nm { font-family: Manrope, sans-serif; font-weight: 800; font-size: 12.5px; }
+.stage-card ol { margin: 0; padding: 8px 12px 10px; list-style: none; }
+.stage-card li { display: flex; align-items: baseline; gap: 8px; font-size: 10.5px; padding: 4px 0; }
+.stage-card li .id { font-family: "JetBrains Mono", monospace; font-size: 8.6px; color: var(--muted); width: 24px; flex: none; }
+.stage-card li .nm2 { color: var(--ink); }
+.stage-card li .dots { flex: 1; border-bottom: 1px dotted var(--line-2); margin: 0 3px 3px; }
+.stage-card li .pg { font-family: "JetBrains Mono", monospace; font-size: 9px; color: var(--muted); }
+
+a { color: inherit; text-decoration: none; }
+
+/* ---------- worksheet ---------- */
+
+.rule-line { border-bottom: 1px dashed var(--line-2); height: 18px; }
+.ws-box { border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 11px 13px; }
+.ws-box .ws-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8.4px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: block;
+}
