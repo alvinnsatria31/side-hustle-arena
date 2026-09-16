@@ -41,6 +41,17 @@ test('persisted analysis is bounded and strips non-result raw document fields', 
   assert.equal(cvHistoryResultSchema.safeParse({ ...result, strengths: Array(50).fill('test') }).success, false);
 });
 
+test('a saved scan keeps its chosen position and fit, and older scans without one still load', () => {
+  const targeted = {
+    ...result,
+    target: { roleId: 'data_analyst', roleLabel: 'Data Analyst', level: 'junior' },
+    roleFit: { score: 64, label: 'Cukup cocok', readAs: 'Data Analyst, junior', summary: 'Sudah dekat.', gaps: ['Tambahkan link dashboard.'] },
+  };
+  assert.deepEqual(cvHistoryResultSchema.parse(targeted), targeted, 'zod must not strip the new fields on save');
+  assert.deepEqual(cvHistoryResultSchema.parse(result), result);
+  assert.equal(cvHistoryResultSchema.safeParse({ ...targeted, roleFit: { ...targeted.roleFit, gaps: Array(4).fill('gap') } }).success, false);
+});
+
 test('generated migration adds owner FK, index and analysis-only columns', async () => {
   const migration = await readFile(new URL('../drizzle/0010_neat_psylocke.sql', import.meta.url), 'utf8');
   assert.match(migration, /CREATE TABLE "arena"\."cv_scans"/);

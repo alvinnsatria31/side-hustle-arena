@@ -11,6 +11,10 @@ const score = z.number().int().min(0).max(100);
 const check = z.object({ label: z.string().max(80), pass: z.boolean(), note: z.string().max(220) });
 /** Explicit allowlist also prevents accidental raw document persistence. */
 export const cvHistoryResultSchema = z.object({
+  // Optional: scans that skipped the position question, and every scan saved
+  // before the question existed, have neither.
+  target: z.object({ roleId: z.string().max(40), roleLabel: z.string().max(60), level: z.string().max(40).optional(), company: z.string().max(40).optional() }).optional(),
+  roleFit: z.object({ score, label: z.string().max(40), readAs: z.string().max(80), summary: z.string().max(300), gaps: z.array(z.string().max(220)).max(3) }).optional(),
   score, statusLabel: z.string().max(40),
   metrics: z.array(z.object({ key: z.enum(['quality', 'ats', 'impact', 'evidence']), label: z.string().max(80), score, weak: z.boolean().optional() })).length(4),
   strengths: z.array(z.string().max(220)).max(4),
@@ -41,7 +45,10 @@ export async function saveCvScan(userId: string, result: CvResult, db: Db = getD
 
 export async function listCvScans(userId: string, db: Db = getDb()) {
   const rows = await db.select(columns).from(cvScans).where(eq(cvScans.userId, userId)).orderBy(...newest).limit(CV_HISTORY_LIMIT);
-  return rows.map(row => ({ id: row.id, createdAt: row.createdAt, fileName: row.result.fileName, score: row.result.score }));
+  return rows.map(row => ({
+    id: row.id, createdAt: row.createdAt, fileName: row.result.fileName, score: row.result.score,
+    ...(row.result.target && row.result.roleFit ? { targetLabel: row.result.target.roleLabel, fitScore: row.result.roleFit.score } : {}),
+  }));
 }
 
 export async function getCvScan(userId: string, id: string, db: Db = getDb()) {

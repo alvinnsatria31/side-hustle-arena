@@ -1,7 +1,8 @@
 import { extname } from "node:path";
 import { arenaData } from "@/server/arena/http";
 import { extractDocumentText } from "@/server/reviews/extract";
-import { analyseCvText, toCvResult } from "@/server/cv/analyzer";
+import { analyseCvText, resolveCvProviderConfig, toCvResult } from "@/server/cv/analyzer";
+import { parseCvTarget, type CvTarget } from "@/lib/cv-target";
 import { checkRateLimit, clientKey } from "@/server/cv/rate-limit";
 import { saveCompletedCvScan } from "@/server/cv/history";
 import { hasAllowedMutationOrigin } from "@/server/auth/origin";
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
 
   let file: File;
   let saveRequested = false;
+  let target: CvTarget | null;
   try {
     const form = await request.formData();
     saveRequested = form.get("saveHistory") === "true";
@@ -72,6 +74,15 @@ export async function POST(request: Request) {
     const candidate = form.get("file");
     if (!(candidate instanceof File)) return fail("Tidak ada file yang dikirim.", 400);
     file = candidate;
+    // Optional: no role means the visitor skipped it and the role is inferred.
+    const parsed = parseCvTarget({
+      role: form.get("targetRole") ?? undefined,
+      customRole: form.get("targetRoleCustom") ?? undefined,
+      level: form.get("targetLevel") ?? undefined,
+      company: form.get("targetCompany") ?? undefined,
+    });
+    if (!parsed.ok) return fail(parsed.message, 400);
+    target = parsed.target;
   } catch {
     return fail("Permintaan tidak valid.", 400);
   }
@@ -99,8 +110,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const analysis = await analyseCvText(text);
-    const result = toCvResult(analysis, file.name);
+    const analysis = await analyseCvText(text, resolveCvProviderConfig(), fetch, target);
+    const result = toCvResult(analysis, file.name, new Date(), target);
     const save = await saveCompletedCvScan(result, saveRequested);
     return arenaData({ result, save });
   } catch (error) {

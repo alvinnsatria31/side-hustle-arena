@@ -32,7 +32,30 @@ export interface CvImpactExample {
   after: string;
 }
 
+/** The position the visitor chose to be scanned against. */
+export interface CvResultTarget {
+  roleId: string;
+  roleLabel: string;
+  level?: string;
+  company?: string;
+}
+
+/** How well the CV fits the chosen position. Present only when one was chosen. */
+export interface CvRoleFit {
+  score: number;
+  /** Server-derived from the score, so the verdict always matches the number. */
+  label: string;
+  /** The role the CV currently reads as, which may differ from the target. */
+  readAs: string;
+  summary: string;
+  /** What stands between this CV and the chosen position. */
+  gaps: string[];
+}
+
 export interface CvResult {
+  /** Absent when the visitor skipped the question and the role was inferred. */
+  target?: CvResultTarget;
+  roleFit?: CvRoleFit;
   score: number;
   statusLabel: string;
   metrics: CvMetric[];

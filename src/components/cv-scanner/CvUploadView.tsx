@@ -9,8 +9,9 @@ import { useCvOwnerGuard, useDemo } from '@/features/demo/store';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { CvScannerClosed } from './CvScannerClosed';
 import { ANALYZE_COVERAGE } from '@/data/mock/cv';
-import { startCvScan } from '@/lib/cv-scan-client';
+import { startCvScan, type CvTargetChoice } from '@/lib/cv-scan-client';
 import { CvHistoryView } from './CvHistoryView';
+import { CvTargetPicker, EMPTY_CV_TARGET, cvTargetProblem } from './CvTargetPicker';
 
 const TRUST_POINTS = ['Gratis', 'Aman & Terenkripsi', 'Privat — tidak dibagikan'];
 
@@ -27,6 +28,8 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   // which is why the button asks for the file again in that case.
   const [rawFile, setRawFile] = useState<File | null>(null);
   const [saveHistory, setSaveHistory] = useState(false);
+  const [target, setTarget] = useState<CvTargetChoice>(EMPTY_CV_TARGET);
+  const targetProblem = cvTargetProblem(target);
 
   // Sync with the persisted demo state once it hydrates (and on external changes).
   useEffect(() => {
@@ -62,10 +65,10 @@ export function CvUploadView({ basePath }: { basePath: string }) {
   };
 
   const startAnalysis = () => {
-    if (!rawFile) return;
+    if (!rawFile || targetProblem) return;
     // Send the file before navigating: the analyzing route awaits this promise,
     // and a File cannot travel through the store to get there.
-    startCvScan(rawFile, saveHistory);
+    startCvScan(rawFile, saveHistory, target.role ? target : null);
     dispatch({ type: 'CV_START', ownerId });
     router.push(`${basePath}/analyzing`);
   };
@@ -91,6 +94,8 @@ export function CvUploadView({ basePath }: { basePath: string }) {
       <motion.div initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15, ease: 'easeOut' }}>
         <FileDropzone file={file} error={error} onPick={handlePick} onRemove={handleRemove} />
 
+        {file && !error && <CvTargetPicker value={target} onChange={setTarget} />}
+
         <label className="mt-5 flex items-start gap-3 rounded-xl border border-sk-border bg-white p-4 text-[13px] leading-relaxed text-sk-body">
           <input type="checkbox" checked={saveHistory} onChange={(event) => setSaveHistory(event.target.checked)} className="mt-1 h-4 w-4 accent-sk-blue" />
           <span>Saya setuju menyimpan hasil analisis secara privat di akun saya (perlu masuk). Riwayat menyimpan 50 hasil terbaru, termasuk nama file dan cuplikan pada saran perbaikan; hasil lebih lama otomatis dihapus. File CV dan teks lengkapnya tidak disimpan di server.</span>
@@ -103,13 +108,18 @@ export function CvUploadView({ basePath }: { basePath: string }) {
             transition={{ duration: 0.35, ease: 'easeOut' }}
             className="mt-5 flex flex-wrap gap-3"
           >
-            <Button size="lg" onClick={startAnalysis} disabled={!rawFile} className="min-w-[220px]">
+            <Button size="lg" onClick={startAnalysis} disabled={!rawFile || Boolean(targetProblem)} className="min-w-[220px]">
               Mulai Analisis
             </Button>
             <Button size="lg" variant="ghost" onClick={handleRemove}>
               Ganti File
             </Button>
           </motion.div>
+        )}
+        {file && !error && targetProblem && !target.customRole.trim() && (
+          <p role="status" className="mt-3 text-[13px] text-sk-muted">
+            Tulis nama posisinya dulu, pilih posisi lain, atau lewati pertanyaannya.
+          </p>
         )}
         {file && !error && !rawFile && (
           <p role="status" className="mt-3 text-[13px] text-sk-muted">

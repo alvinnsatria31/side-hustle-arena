@@ -20,6 +20,7 @@ import { CvScannerClosed } from './CvScannerClosed';
 import type { CvResult } from '@/types/cv';
 import { cvSaveStatus } from '@/lib/cv-scan-client';
 import { cn } from '@/lib/cn';
+import { cvTargetCompanyLabel, cvTargetLevelLabel } from '@/lib/cv-target';
 
 const formatDateID = (iso: string) =>
   new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -52,6 +53,66 @@ function ImpactExample({ example, index }: { example: { before: string; after: s
       <div className="mb-2 font-mono text-[10px] tracking-[0.12em] text-sk-success">SESUDAH</div>
       <p className="text-[13.5px] font-medium leading-relaxed text-sk-navy">{example.after}</p>
     </StaggerItem>
+  );
+}
+
+/** The answer to "how close is this CV to the seat I chose". */
+function RoleFitPanel({ result }: { result: CvResult }) {
+  const { target, roleFit } = result;
+  if (!target || !roleFit) {
+    return (
+      <p className="mb-8 rounded-xl border border-dashed border-sk-border bg-white px-4 py-3 text-[12.5px] leading-relaxed text-sk-muted">
+        CV ini dinilai tanpa target posisi, jadi posisinya ditebak dari isi CV. Mau tahu seberapa cocok dengan posisi
+        tertentu? Scan lagi dan pilih posisi yang kamu lamar.
+      </p>
+    );
+  }
+  const context = [cvTargetLevelLabel(target.level), cvTargetCompanyLabel(target.company)].filter(Boolean).join(' · ');
+  const tone = roleFit.score >= 60 ? 'good' : roleFit.score >= 40 ? 'mid' : 'low';
+  return (
+    <Card className="mb-8 p-6">
+      <div className="flex flex-col gap-6 md:flex-row md:items-start">
+        <div className="shrink-0 md:w-[220px]">
+          <div className="font-mono text-[10px] tracking-[0.12em] text-sk-muted">KECOCOKAN DENGAN POSISI</div>
+          <div className="mt-1.5 text-[17px] font-bold leading-snug text-sk-navy">{target.roleLabel}</div>
+          {context && <div className="mt-0.5 text-[12.5px] text-sk-muted">{context}</div>}
+          <div
+            className={cn(
+              'mt-3 text-[48px] font-extrabold leading-none tracking-[-0.03em]',
+              tone === 'good' ? 'text-sk-success' : tone === 'mid' ? 'text-sk-warning-ink' : 'text-[#c8442a]',
+            )}
+          >
+            <CountUp to={roleFit.score} />
+            <small className="text-[18px] font-semibold text-sk-muted">/100</small>
+          </div>
+          <div className="mt-2">
+            <Badge variant={tone === 'good' ? 'mint' : 'amber'}>{roleFit.label}</Badge>
+          </div>
+          <ProgressBar value={roleFit.score} delay={0.2} className="mt-3" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] text-sk-muted">
+            CV kamu saat ini terbaca sebagai: <b className="text-sk-navy">{roleFit.readAs}</b>
+          </p>
+          <p className="mt-2 text-[14px] leading-relaxed text-sk-text">{roleFit.summary}</p>
+          {roleFit.gaps.length > 0 && (
+            <>
+              <div className="mb-2 mt-5 text-[13.5px] font-bold text-sk-navy">Yang masih kurang untuk posisi ini</div>
+              <ul className="flex flex-col gap-2.5">
+                {roleFit.gaps.map((gap, i) => (
+                  <li key={i} className="flex gap-3 text-[13.5px] leading-relaxed text-sk-text">
+                    <span aria-hidden className="mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-sk-warning-wash font-mono text-[11px] font-bold text-sk-warning-ink">
+                      {i + 1}
+                    </span>
+                    {gap}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -281,6 +342,8 @@ export function CvResultView({ basePath, hrefPrefix = "/arena/projects" }: { bas
         </div>
 
         <div className="mb-8 rounded-xl border border-sk-border bg-white p-4 text-sm text-sk-body"><p role="status">{saveMessage}</p><p className="mt-2 text-xs text-sk-muted">Salinan hasil scan terakhir disimpan sementara di browser ini — paling lama 24 jam, dan dihapus saat kamu keluar. Hasil riwayat yang dibuka dari akun tidak disalin ke penyimpanan browser.</p><ButtonLink href={basePath} size="sm" variant="text">Buka riwayat / scan lagi</ButtonLink></div>
+
+        <RoleFitPanel result={result} />
 
         {/* Metrics */}
         <StaggerGroup className="mb-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

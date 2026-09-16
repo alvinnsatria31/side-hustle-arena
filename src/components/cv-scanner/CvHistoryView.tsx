@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 
-type Scan = { id: string; fileName: string; score: number; createdAt: string };
+type Scan = { id: string; fileName: string; score: number; createdAt: string; targetLabel?: string; fitScore?: number };
 
 export function CvHistoryView({ basePath }: { basePath: string }) {
   const [scans, setScans] = useState<Scan[]>([]);
@@ -44,7 +44,7 @@ export function CvHistoryView({ basePath }: { basePath: string }) {
       {status === 'error' && <div className="mt-4"><p role="alert" className="mb-3 text-sm text-sk-muted">Riwayat belum dapat dimuat.</p><Button size="sm" variant="ghost" onClick={() => setRefresh(n => n + 1)}>Coba lagi</Button></div>}
       {status === 'ready' && scans.length === 0 && <p className="mt-4 text-sm text-sk-muted">Belum ada hasil tersimpan. Centang persetujuan sebelum memulai scan.</p>}
       {status === 'ready' && <ul className="mt-4 divide-y divide-sk-border">{scans.map(scan => <li key={scan.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-        <div className="min-w-0"><p className="break-all text-sm font-semibold text-sk-navy">{scan.fileName}</p><p className="mt-1 text-xs text-sk-muted">{new Date(scan.createdAt).toLocaleString('id-ID')} · Skor {scan.score}/100</p></div>
+        <div className="min-w-0"><p className="break-all text-sm font-semibold text-sk-navy">{scan.fileName}</p><p className="mt-1 text-xs text-sk-muted">{new Date(scan.createdAt).toLocaleString('id-ID')} · Skor {scan.score}/100{scan.targetLabel && ` · ${scan.targetLabel}: cocok ${scan.fitScore}/100`}</p></div>
         <div className="flex gap-2"><ButtonLink href={`${basePath}/result?historyId=${scan.id}`} size="sm" variant="ghost">Buka hasil</ButtonLink><Button size="sm" variant="ghost" disabled={deleting !== null} onClick={() => void remove(scan.id)} aria-label={`Hapus hasil ${scan.fileName}`}>{deleting === scan.id ? 'Menghapus…' : 'Hapus'}</Button></div>
       </li>)}</ul>}
       {error && <p role="alert" className="mt-3 text-sm text-sk-error">{error}</p>}

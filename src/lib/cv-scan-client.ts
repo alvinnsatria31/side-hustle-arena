@@ -31,10 +31,24 @@ export class CvScanError extends Error {
   }
 }
 
-async function postScan(file: File, saveHistory: boolean): Promise<CvResult> {
+/** The position question as the upload page holds it. Empty role = skipped. */
+export interface CvTargetChoice {
+  role: string;
+  customRole: string;
+  level: string;
+  company: string;
+}
+
+async function postScan(file: File, saveHistory: boolean, target: CvTargetChoice | null): Promise<CvResult> {
   const body = new FormData();
   body.append('file', file);
   if (saveHistory) body.append('saveHistory', 'true');
+  if (target?.role) {
+    body.append('targetRole', target.role);
+    if (target.customRole) body.append('targetRoleCustom', target.customRole);
+    if (target.level) body.append('targetLevel', target.level);
+    if (target.company) body.append('targetCompany', target.company);
+  }
   let response: Response;
   try {
     response = await fetch('/api/cv-scan', { method: 'POST', body, credentials: 'same-origin', cache: 'no-store' });
@@ -52,11 +66,11 @@ async function postScan(file: File, saveHistory: boolean): Promise<CvResult> {
 }
 
 /** Begin a scan and park it for the analyzing route to await. */
-export function startCvScan(file: File, saveHistory = false): Promise<CvResult> {
+export function startCvScan(file: File, saveHistory = false, target: CvTargetChoice | null = null): Promise<CvResult> {
   // Swallow rejection here so parking an eventually-failed promise never
   // surfaces as an unhandled rejection; the awaiting page still sees it.
   lastSave = null;
-  const request = postScan(file, saveHistory);
+  const request = postScan(file, saveHistory, target);
   request.catch(() => undefined);
   pending = request;
   return request;
