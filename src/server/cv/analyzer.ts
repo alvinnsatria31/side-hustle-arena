@@ -203,7 +203,8 @@ const MAX_TEXT_CHARS = 16_000;
 const MAX_OUTPUT_TOKENS = 8_000;
 
 /**
- * The honest limit on how long someone waits.
+ * The honest limit on how long someone waits — for the whole analysis, retry
+ * included, not for each attempt.
  *
  * This used to be 45s to fail before Vercel's 60s function ceiling did.
  * Self-hosted there is no platform killer, so the number is now a product
@@ -211,8 +212,20 @@ const MAX_OUTPUT_TOKENS = 8_000;
  * cut short, short enough that nobody stares at a spinner wondering if it
  * broke. The route's own ceiling sits above this so the timeout that fires is
  * always ours, with a readable message.
+ *
+ * Per-attempt is what it used to mean, and that quietly broke the nesting the
+ * ceilings depend on: two attempts of 90s plus a 30s extraction is 210s, past
+ * the route's 120s and the proxy's 150s, so the retry that was meant to rescue
+ * a malformed reply handed the visitor a bare 504 instead. One budget for the
+ * whole call keeps the timeout that fires ours.
  */
-const REQUEST_TIMEOUT_MS = 90_000;
+const ANALYSIS_BUDGET_MS = 90_000;
+
+/**
+ * Below this there is not enough budget left for a second attempt to come back,
+ * so spending it would only move the failure later and make it less readable.
+ */
+const MIN_ATTEMPT_MS = 15_000;
 
 /**
  * Grounding guard against invented quotes.
@@ -277,14 +290,23 @@ export function assertAnalysisGrounded(sourceText: string, analysis: CvAnalysis)
   }
 }
 
+/** Shown in place of a fit summary that was entirely an invented quote. */
+const SUMMARY_WITHOUT_EXAMPLE = "Analisis kecocokan tersedia, tetapi satu contoh kutipan tidak bisa diverifikasi dari CV dan sudah dihapus.";
+
 /**
  * Strip invented quotes so a repeated hallucination is never shown.
  * Impact examples with an invented `before` line are dropped (empty is valid);
  * advice sentences keep their generic wording minus the false example.
+ *
+ * A sentence that was *nothing but* the invented quote has no generic wording
+ * left to keep, so it is dropped. The previous fallback re-emitted the original
+ * sentence minus its quote marks, which handed back the very fabrication this
+ * guard exists to remove: a `"bend ahara"` improvement came out as `bend
+ * ahara`, unquoted and now reading as fact.
  */
 export function sanitizeUngrounded(sourceText: string, analysis: CvAnalysis): CvAnalysis {
   const norm = normalizeForGrounding(sourceText);
-  const strip = (sentence: string): string => {
+  const strip = (sentence: string): string | null => {
     let out = sentence;
     for (const quote of quotedFragments(sentence)) {
       if (!norm.includes(normalizeForGrounding(quote))) out = out.split(quote).join("");
@@ -296,19 +318,31 @@ export function sanitizeUngrounded(sourceText: string, analysis: CvAnalysis): Cv
       .replace(/\s{2,}/g, " ")
       .replace(/\s+([.,;:!?])/g, "$1")
       .trim();
-    return out.length >= 4 ? out : sentence.replace(/["“”]/g, "").trim();
+    // Punctuation on its own is not advice; treat it as nothing left to say.
+    return /\p{L}|\p{N}/u.test(out) && out.length >= 4 ? out : null;
   };
+  const keep = (sentences: string[]): string[] =>
+    sentences.map(strip).filter((sentence): sentence is string => sentence !== null);
+  // A check whose note was only the fabrication has lost the finding behind it,
+  // so the row goes rather than showing a labelled check with nothing under it.
+  const keepChecks = <T extends { note: string }>(checks: T[]): T[] =>
+    checks.flatMap((check) => {
+      const note = strip(check.note);
+      return note === null ? [] : [{ ...check, note }];
+    });
   return {
     ...analysis,
-    improvements: analysis.improvements.map(strip),
-    qualityChecks: analysis.qualityChecks.map((c) => ({ ...c, note: strip(c.note) })),
-    atsChecks: analysis.atsChecks.map((c) => ({ ...c, note: strip(c.note) })),
+    improvements: keep(analysis.improvements),
+    qualityChecks: keepChecks(analysis.qualityChecks),
+    atsChecks: keepChecks(analysis.atsChecks),
     ...(analysis.roleFit
       ? {
           roleFit: {
             ...analysis.roleFit,
-            summary: strip(analysis.roleFit.summary),
-            gaps: analysis.roleFit.gaps.map(strip),
+            // The panel always renders a summary, so this one degrades to a
+            // stated absence rather than disappearing into a blank line.
+            summary: strip(analysis.roleFit.summary) ?? SUMMARY_WITHOUT_EXAMPLE,
+            gaps: keep(analysis.roleFit.gaps),
           },
         }
       : {}),
@@ -371,11 +405,12 @@ async function requestAnalysis(
   config: CvProviderConfig,
   transport: typeof fetch,
   target: CvTarget | null,
+  timeoutMs: number = ANALYSIS_BUDGET_MS,
 ): Promise<CvAnalysis> {
   const response = await transport(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
     redirect: "error",
     body: JSON.stringify({
       model: config.model,
@@ -446,6 +481,8 @@ export async function analyseCvText(
   config: CvProviderConfig = resolveCvProviderConfig(),
   transport: typeof fetch = fetch,
   target: CvTarget | null = null,
+  /** Seam so a test can spend the budget without spending the wall clock. */
+  clock: () => number = Date.now,
 ): Promise<CvAnalysis> {
   const trimmed = text.trim();
   if (trimmed.length < 120) {
@@ -466,10 +503,20 @@ export async function analyseCvText(
   // are all states a retry would only make worse, so they rethrow. A quote the
   // CV does not contain gets the same single second chance; hallucinating
   // twice sanitizes to generic advice rather than failing the whole scan.
+  //
+  // Both attempts draw on one deadline, so a slow first answer shortens the
+  // second rather than stacking another full timeout on top of it.
+  const deadline = clock() + ANALYSIS_BUDGET_MS;
+  const remaining = () => deadline - clock();
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    // A retry that cannot come back inside the budget would be cut off by the
+    // proxy mid-flight, which costs the visitor the readable error and buys
+    // nothing, so the first attempt's result stands instead.
+    if (attempt > 0 && remaining() < MIN_ATTEMPT_MS) break;
     let analysis: CvAnalysis;
     try {
-      analysis = await requestAnalysis(trimmed, config, transport, target);
+      analysis = await requestAnalysis(trimmed, config, transport, target, remaining());
     } catch (error) {
       if (isFatal(error) || attempt === 1) throw error;
       continue;
@@ -479,7 +526,7 @@ export async function analyseCvText(
       return analysis;
     } catch (error) {
       if ((error as { code?: string })?.code !== "UNGROUNDED_QUOTE") throw error;
-      if (attempt === 1) {
+      if (attempt === 1 || remaining() < MIN_ATTEMPT_MS) {
         console.warn("cv-scan: model repeated an ungrounded quote; showing generic advice instead.");
         return sanitizeUngrounded(trimmed, analysis);
       }

@@ -13,7 +13,22 @@ import { MOCK_ANALYZE_STEPS } from '@/data/mock/cv';
 import { clearCvScan, pendingCvScan } from '@/lib/cv-scan-client';
 import { cn } from '@/lib/cn';
 
-const TOTAL_MS = 5_200; // ~3–6s approved window
+/**
+ * How long the ring takes to walk up to CEILING.
+ *
+ * Was 5.2s, which is not how long a scan takes: the analyzer's budget is 90s
+ * and a typical read lands around 20-30s. The ring therefore hit its ceiling in
+ * five seconds and sat there, under a countdown frozen at "1 DETIK LAGI", for
+ * the rest of the wait — the page looked hung exactly when it was working.
+ * Pacing it to a real scan keeps the bar moving for the whole wait.
+ */
+const TOTAL_MS = 30_000;
+
+/**
+ * The ring tracks elapsed time only this far; the last stretch belongs to the
+ * response, so the bar never claims to be finished before the analysis is.
+ */
+const CEILING = 92;
 
 const STEP_LABELS = ['MEMBACA DATA', 'MEMBACA PENGALAMAN', 'MEMERIKSA STRUKTUR', 'MENGANALISIS SKILL', 'MEMBANDINGKAN', 'MENYIAPKAN'];
 
@@ -70,10 +85,6 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
 
     let cancelled = false;
     let raf = 0;
-    // The ring tracks elapsed time only as far as CEILING; the last stretch
-    // belongs to the response, so the bar never claims to be finished before
-    // the analysis is.
-    const CEILING = 92;
     const duration = reduce ? 1_200 : TOTAL_MS;
     const start = performance.now();
 
@@ -184,7 +195,12 @@ export function CvAnalyzingView({ basePath }: { basePath: string }) {
             </div>
             <div className="max-w-[360px] text-center">
               <div className="font-mono text-[11px] tracking-[0.1em] text-sk-muted">
-                ESTIMASI · {Math.max(1, Math.ceil(((100 - progress) / 100) * (TOTAL_MS / 1000)))} DETIK LAGI
+                {/* Past the ceiling the remaining time is the model's, and we
+                    cannot know it — so the estimate stops rather than counting
+                    down to a zero it would sit on. */}
+                {progress >= CEILING
+                  ? 'MENUNGGU HASIL ANALISIS…'
+                  : `ESTIMASI · ${Math.max(1, Math.ceil(((CEILING - progress) / 100) * (TOTAL_MS / 1000)))} DETIK LAGI`}
               </div>
               <p className="mt-2 text-[12.5px] leading-relaxed text-sk-body">
                 CV kamu tetap aman. Kami tidak menyimpan dokumen setelah analisis selesai.

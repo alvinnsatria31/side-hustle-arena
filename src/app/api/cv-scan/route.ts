@@ -38,32 +38,6 @@ export async function POST(request: Request) {
     return fail("CV Scanner belum dibuka.", 404);
   }
 
-  const limit = await checkRateLimit(clientKey(request));
-  if (limit.degraded) {
-    // The shared counter is unreachable, so this instance is guarding the AI
-    // bill on its own. Worth knowing about before the invoice says so.
-    console.warn("cv-scan rate limiter fell back to in-memory counting; the shared counter is unavailable.");
-  }
-  if (!limit.allowed) {
-    if (limit.scope === "global") {
-      // Not this caller's fault, and worth saying differently: the endpoint has
-      // spent its hourly budget, which is an operational event rather than a
-      // misbehaving visitor.
-      console.warn("cv-scan refused: the endpoint's hourly spend cap is exhausted.");
-    }
-    return Response.json(
-      {
-        error: {
-          code: "RATE_LIMITED",
-          message: limit.scope === "global"
-            ? "Kuota pemindaian CV untuk jam ini sudah penuh. Coba lagi nanti."
-            : "Terlalu banyak permintaan. Coba lagi nanti.",
-        },
-      },
-      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(limit.retryAfterSeconds) } },
-    );
-  }
-
   let file: File;
   let saveRequested = false;
   let target: CvTarget | null;
@@ -97,6 +71,38 @@ export async function POST(request: Request) {
   const declared = file.type ? CV_ACCEPTED_MIME[file.type] : undefined;
   if (!accepted || (file.type && declared && declared !== extension)) {
     return fail(`Format tidak didukung. Gunakan ${CV_ACCEPTED_EXTENSIONS.join(" atau ")}.`, 415);
+  }
+
+  // Counted here, not at the top of the request: the allowance guards the two
+  // costs below (document extraction, then the AI call), and a request that
+  // never reaches them has spent nothing. Charging for a missing file or an
+  // unsupported extension locked people out of an hour of scanning over a
+  // mistake the endpoint answered for free — five wrong picks and the next,
+  // correct upload was refused.
+  const limit = await checkRateLimit(clientKey(request));
+  if (limit.degraded) {
+    // The shared counter is unreachable, so this instance is guarding the AI
+    // bill on its own. Worth knowing about before the invoice says so.
+    console.warn("cv-scan rate limiter fell back to in-memory counting; the shared counter is unavailable.");
+  }
+  if (!limit.allowed) {
+    if (limit.scope === "global") {
+      // Not this caller's fault, and worth saying differently: the endpoint has
+      // spent its hourly budget, which is an operational event rather than a
+      // misbehaving visitor.
+      console.warn("cv-scan refused: the endpoint's hourly spend cap is exhausted.");
+    }
+    return Response.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: limit.scope === "global"
+            ? "Kuota pemindaian CV untuk jam ini sudah penuh. Coba lagi nanti."
+            : "Terlalu banyak permintaan. Coba lagi nanti.",
+        },
+      },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(limit.retryAfterSeconds) } },
+    );
   }
 
   let text: string;

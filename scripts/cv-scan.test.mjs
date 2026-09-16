@@ -599,3 +599,109 @@ test('the scan provider must be HTTPS', () => {
     /HTTPS/i,
   );
 });
+
+// --- what a failed request costs ---------------------------------------------
+// The allowance guards two real costs: document extraction and the AI call. A
+// request that reaches neither has spent nothing, and charging it locked people
+// out of an hour of scanning over a mistake the endpoint answered for free.
+
+test('a request that never reaches extraction does not spend the caller allowance', async () => {
+  resetRateLimit();
+  process.env.NEXT_PUBLIC_CV_SCANNER_ENABLED = 'true';
+  const { POST } = await import('../src/app/api/cv-scan/route.ts');
+
+  const noFile = () => {
+    const body = new FormData();
+    body.append('notAFile', '1');
+    return new Request('https://arena.test/api/cv-scan', {
+      method: 'POST',
+      body,
+      headers: { 'x-forwarded-for': '203.0.113.9' },
+    });
+  };
+
+  // Well past MAX_PER_WINDOW: none of these carry a file, so none may be counted.
+  for (let i = 0; i < 8; i += 1) {
+    const response = await POST(noFile());
+    assert.equal(response.status, 400, `call ${i + 1} should still be a validation error, not a 429`);
+    const payload = await response.json();
+    assert.match(payload.error.message, /Tidak ada file/);
+  }
+});
+
+test('both analyzer attempts share one budget instead of one each', async () => {
+  // A slow first answer must shorten the retry, never stack a second full
+  // timeout on top of it: 90s + 90s + extraction overruns the proxy, and the
+  // visitor gets a bare 504 in place of a readable message.
+  let calls = 0;
+  let clockMs = 1_000_000;
+  const clock = () => clockMs;
+  const slowThenFine = async () => {
+    calls += 1;
+    clockMs += 80_000; // the first answer ate most of the budget
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: '{"not":"the shape"}' }, finish_reason: 'stop' }] }),
+      { status: 200 },
+    );
+  };
+
+  await assert.rejects(analyseCvText(CV_TEXT, CONFIG, slowThenFine, null, clock), /unusable output/i);
+  assert.equal(calls, 1, 'the retry must be skipped once the shared budget is spent');
+});
+
+test('a sentence that was only an invented quote is dropped, not re-emitted', () => {
+  // The "bend ahara" incident in a second shape: when the whole sentence is the
+  // fabrication, there is no generic wording underneath to keep, and the old
+  // fallback handed the quote back unquoted — now reading as fact.
+  const analysis = {
+    ...reply(),
+    improvements: ['"bend ahara"'],
+    qualityChecks: [{ label: 'Penulisan jabatan', pass: false, note: 'Ada salah ketik "bend ahara" di pengalaman.' }],
+    impactExamples: [],
+  };
+  const clean = sanitizeUngrounded(CV_TEXT, analysis);
+
+  assert.deepEqual(clean.improvements, [], 'nothing survived that sentence, so it must go');
+  assert.equal(clean.qualityChecks.length, 1, 'this note has wording of its own to keep');
+  assert.doesNotMatch(clean.qualityChecks[0].note, /bend ahara/i);
+  for (const sentence of [...clean.improvements, ...clean.qualityChecks.map((c) => c.note)]) {
+    assert.doesNotMatch(sentence, /bend ahara/i, 'the fabrication must not survive in any form');
+  }
+});
+
+test('a check whose only content was the fabrication is dropped whole', () => {
+  const analysis = { ...reply(), qualityChecks: [{ label: 'Typo', pass: false, note: '"zzqq wwxx"' }], impactExamples: [] };
+  assert.deepEqual(sanitizeUngrounded(CV_TEXT, analysis).qualityChecks, []);
+});
+
+test('a global refusal hands the caller their slot back', async () => {
+  // The caller did nothing wrong and got nothing back; spending their hour on
+  // an endpoint-wide incident makes the outage twice as long for them.
+  const rows = new Map();
+  const keyOf = (v) => `${v.bucket}|${v.subject}|${v.windowStart.getTime()}`;
+  let updated = null;
+  const db = {
+    insert: () => ({
+      values: (value) => ({
+        onConflictDoUpdate: () => ({
+          returning: async () => {
+            const k = keyOf(value);
+            rows.set(k, (rows.get(k) ?? 0) + 1);
+            return [{ count: rows.get(k) }];
+          },
+        }),
+      }),
+    }),
+    update: () => ({ set: () => ({ where: async () => { updated = true; } }) }),
+  };
+
+  const now = Date.now();
+  // A ceiling of 1 means the second caller trips the global cap.
+  const env = { CV_SCAN_HOURLY_CAP: '1' };
+  assert.equal((await checkRateLimit('198.51.100.1', now, db, env)).allowed, true);
+
+  const refused = await checkRateLimit('198.51.100.2', now, db, env);
+  assert.equal(refused.allowed, false);
+  assert.equal(refused.scope, 'global');
+  assert.equal(updated, true, 'the refused caller’s own counter must be given back');
+});

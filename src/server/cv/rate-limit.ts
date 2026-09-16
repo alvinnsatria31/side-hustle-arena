@@ -124,6 +124,21 @@ export async function checkRateLimit(key: string, now = Date.now(), db?: Db, env
     }
     const totalCount = await bump(GLOBAL_SUBJECT);
     if (totalCount > globalCeiling(env)) {
+      // The caller did nothing wrong and got nothing back, so hand their slot
+      // back: during a global incident their own hour should not also be spent.
+      // Best effort — an allowance is not worth failing the refusal over.
+      try {
+        await client
+          .update(rateLimitCounters)
+          .set({ count: sql`greatest(${rateLimitCounters.count} - 1, 0)` })
+          .where(and(
+            eq(rateLimitCounters.bucket, BUCKET),
+            eq(rateLimitCounters.subject, key),
+            eq(rateLimitCounters.windowStart, windowStart),
+          ));
+      } catch {
+        // Leaves the caller one slot short this hour; the refusal still stands.
+      }
       return { allowed: false, retryAfterSeconds: retryAfterFor(windowStart, now), degraded: false, scope: "global" };
     }
     return { allowed: true, retryAfterSeconds: 0, degraded: false };
