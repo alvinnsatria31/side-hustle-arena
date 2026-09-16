@@ -35,8 +35,8 @@ export default async function ArenaLandingPage() {
     <div className="relative overflow-hidden bg-sk-bg">
       <div className="ambient" aria-hidden />
 
-      <div className="relative z-[2] mx-auto max-w-[1400px] px-6 pb-16 pt-28 md:pt-32">
-        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,720px)] xl:gap-12">
+      <div className="relative z-[2] mx-auto max-w-[1500px] px-6 pb-16 pt-28 md:pt-32">
+        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,900px)] xl:gap-12">
           {/* Left: hero */}
           <div className="pt-2 md:pt-6">
             <Entrance>
@@ -77,7 +77,7 @@ export default async function ArenaLandingPage() {
           </div>
 
           {/* Right: this week's drop preview */}
-          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[720px]">
+          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[900px]">
             <LiveArenaBoard
               projects={home?.projects ?? []}
               weekNo={home?.weekNo}

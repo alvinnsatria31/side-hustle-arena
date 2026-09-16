@@ -29,7 +29,7 @@ export function LiveArenaBoard({
       aria-labelledby="live-arena-title"
       className="overflow-hidden rounded-[18px] bg-white shadow-[0_26px_58px_-30px_rgba(7,21,45,0.36)]"
     >
-      <div className="flex items-center justify-between gap-4 bg-[#F7F8FF] px-4 py-4 sm:min-h-[58px] sm:px-6 sm:py-0">
+      <div className="flex items-center justify-between gap-4 bg-[#F7F8FF] px-4 py-4 sm:min-h-[58px] sm:px-[30px] sm:py-0">
         <Link
           id="live-arena-title"
           href="/arena/projects"
@@ -45,7 +45,7 @@ export function LiveArenaBoard({
         </Link>
       </div>
 
-      <div className="p-3.5 sm:px-6 sm:pb-6 sm:pt-4">
+      <div className="p-3.5 sm:px-[30px] sm:pb-6 sm:pt-6">
         {deadline && (
           <div className="mb-4 flex min-h-[40px] flex-wrap items-center justify-between gap-2 rounded-md bg-[#FDE8E6] px-4 py-2.5 text-[#9F101A]">
             <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase sm:text-[13px]">
@@ -68,7 +68,7 @@ export function LiveArenaBoard({
         ) : (
           <ul className="grid gap-2">
             {projects.map((project) => (
-              <li key={project.slug} className="flex rounded-xl border border-[#E3E7F4] bg-[#F0F2FD] px-3.5 py-3 shadow-[0_3px_8px_rgba(14,31,69,0.05)] sm:h-[132px] sm:flex-col sm:px-4 sm:py-3.5">
+              <li key={project.slug} className="flex rounded-xl border border-[#E3E7F4] bg-[#F0F2FD] px-3.5 py-3 shadow-[0_3px_8px_rgba(14,31,69,0.05)] sm:h-[164px] sm:flex-col sm:px-4 sm:py-3.5">
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                     <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-[#555D70] sm:text-[13px]">
@@ -86,18 +86,18 @@ export function LiveArenaBoard({
                     </span>
                   </div>
 
-                  <h3 className="mt-2 text-[15px] font-extrabold leading-snug tracking-[-0.015em] text-sk-navy sm:text-[17px]">
+                  <h3 className="mt-2 text-[15px] font-extrabold leading-snug tracking-[-0.015em] text-sk-navy sm:text-[22px]">
                     {project.title}
                   </h3>
 
-                  <div className="mt-2 flex flex-col gap-1.5 text-[12px] text-[#555D70] sm:mt-auto sm:flex-row sm:items-end sm:justify-between sm:pt-3 sm:text-[13px]">
+                  <div className="mt-2 flex flex-col gap-1.5 text-[12px] text-[#555D70] sm:mt-auto sm:flex-row sm:items-end sm:justify-between sm:pt-3 sm:text-[16px]">
                     <p className="min-w-0 leading-relaxed">
                       Deliverable: <strong className="font-bold text-sk-navy">{project.deliverable}</strong>
                     </p>
                     <Link
                       href={`/arena/projects/${project.slug}`}
                       aria-label={`Ikuti project ${project.title}`}
-                      className="inline-flex min-h-11 shrink-0 items-center gap-1 self-start font-extrabold text-[#064CB2] transition-colors hover:text-sk-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue focus-visible:ring-offset-2 sm:min-h-0 sm:self-auto sm:text-[13px]"
+                      className="inline-flex min-h-11 shrink-0 items-center gap-1 self-start font-extrabold text-[#064CB2] transition-colors hover:text-sk-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue focus-visible:ring-offset-2 sm:min-h-0 sm:self-auto sm:text-[16px]"
                     >
                       Ikuti <ArrowRight size={15} aria-hidden />
                     </Link>
