@@ -59,6 +59,7 @@ function toProjectSummary(row: { project: typeof projects.$inferSelect; division
     shortDescription: row.project.shortDescription,
     difficulty: row.project.difficulty,
     estimatedMinutes: row.project.estimatedMinutes,
+    coverImageUrl: row.project.coverImageUrl ?? null,
     division: {
       id: row.division.id,
       slug: row.division.slug,

@@ -1,7 +1,8 @@
 import "server-only";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db/client";
-import { projectSkills, skills } from "@/server/db/schema";
+import { enrollments, projectSkills, projectSubmissionRequirements, skills } from "@/server/db/schema";
 import { getCurrentArenaWeek, getVisibleArenaProject, listActiveArenaDivisions, listVisibleArenaProjects } from "@/server/arena";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { deadlineLabel } from "@/lib/deadline";
@@ -16,8 +17,7 @@ export { deadlineLabel };
  * components already render. Visuals stay frozen; only data sources move.
  *
  * Honest mappings (no invented numbers):
- * - points/participants stay ABSENT (per-project points and live counters
- *   were mock-only; PRD pays points by rank, not by project).
+ * - points stay absent; participant totals come from non-voided enrollments.
  * - difficulty "STANDARD" is the only band the schema knows today → shown as
  *   Intermediate until the generator phase ships real bands.
  * - week number is the ISO week of the project's own week, and the deadline
@@ -79,6 +79,9 @@ function toBaseProject(project: Summary, weekNo: number, deadline: string): Aren
     week: weekNo,
     title: project.title,
     shortDescription: project.shortDescription ?? "",
+    // Raw storage keys / provider URLs never reach the browser: cards render
+    // the proxy route, which streams private COS bytes server-side.
+    coverImageUrl: project.coverImageUrl ? `/api/arena/covers/${project.slug}` : null,
     caseBackground: "",
     role: "",
     mission: "",
@@ -98,11 +101,19 @@ export interface PublicArenaHome {
   weekNo: number;
   weekLabel: string;
   deadline: string;
+  deadlineAt: string;
   canSelect: boolean;
   status: string;
   projectCount: number;
   divisionCount: number;
-  projects: Array<{ slug: string; title: string; category: string }>;
+  projects: Array<{
+    slug: string;
+    title: string;
+    category: string;
+    estimatedTime: string;
+    deliverable: string;
+    participantCount: number;
+  }>;
 }
 
 /**
@@ -123,7 +134,20 @@ async function currentWeekOrNull() {
   }
 }
 
-export async function getPublicArenaHome(): Promise<PublicArenaHome | null> {
+/**
+ * Public readers below are cached for 5 minutes.
+ *
+ * These pages were `force-dynamic`: every pageview fired 3–5 queries at Neon
+ * (weeks + projects + divisions + skills + rewards) for content that changes
+ * weekly. Under traffic that burns straight through Neon's data-transfer
+ * quota and takes every DB-backed page down at once. A 5-minute stale window
+ * is irrelevant for weekly drops; enrollment state stays live because it
+ * resolves client-side. Errors are never cached, so pages recover on their
+ * own once the database is reachable again.
+ */
+const PUBLIC_TTL_SECONDS = 300;
+
+async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
   const week = await currentWeekOrNull();
   if (!week) return null;
   const [projects, divisions] = await Promise.all([
@@ -132,28 +156,57 @@ export async function getPublicArenaHome(): Promise<PublicArenaHome | null> {
   ]);
   const opensAt = new Date(week.opensAt);
   const weekNo = isoWeekNumber(opensAt);
+  const projectIds = projects.map((project) => project.id);
+  const [participantRows, deliverableRows] = projectIds.length
+    ? await Promise.all([
+        getDb()
+          .select({ projectId: enrollments.projectId, participantCount: count() })
+          .from(enrollments)
+          .where(and(inArray(enrollments.projectId, projectIds), ne(enrollments.status, "VOIDED")))
+          .groupBy(enrollments.projectId),
+        getDb()
+          .select({ projectId: projectSubmissionRequirements.projectId, label: projectSubmissionRequirements.label })
+          .from(projectSubmissionRequirements)
+          .where(inArray(projectSubmissionRequirements.projectId, projectIds))
+          .orderBy(asc(projectSubmissionRequirements.sortOrder)),
+      ])
+    : [[], []];
+  const participantsByProject = new Map(participantRows.map((row) => [row.projectId, row.participantCount]));
+  const deliverableByProject = new Map<string, string>();
+  for (const row of deliverableRows) {
+    if (!deliverableByProject.has(row.projectId)) deliverableByProject.set(row.projectId, row.label);
+  }
+  const deadlineAt = new Date(week.submissionDeadlineAt);
   return {
     weekNo,
     weekLabel: `WEEK ${weekNo} · ${monthDayLabel(opensAt)}`,
-    deadline: deadlineLabel(new Date(week.submissionDeadlineAt)),
+    deadline: deadlineLabel(deadlineAt),
+    deadlineAt: deadlineAt.toISOString(),
     canSelect: week.selection.canSelect,
     status: week.status,
     projectCount: projects.length,
     divisionCount: divisions.length,
-    projects: projects.slice(0, 4).map((project) => ({
+    projects: projects.slice(0, 3).map((project) => ({
       slug: project.slug,
       title: project.title,
       category: project.division.name,
+      estimatedTime: estimatedLabel(project.estimatedMinutes),
+      deliverable: deliverableByProject.get(project.id) ?? project.shortDescription ?? "Lihat detail project",
+      participantCount: participantsByProject.get(project.id) ?? 0,
     })),
   };
 }
+
+export const getPublicArenaHome = unstable_cache(fetchPublicArenaHome, ["arena-public-home"], {
+  revalidate: PUBLIC_TTL_SECONDS,
+});
 
 export interface PublicProjectList {
   groups: string[];
   projects: ArenaProject[];
 }
 
-export async function getPublicProjects(): Promise<PublicProjectList> {
+async function fetchPublicProjects(): Promise<PublicProjectList> {
   const week = await currentWeekOrNull();
   // No week and "a week with nothing published yet" are the same thing to a
   // browser page: an empty list. One code path covers both.
@@ -179,12 +232,28 @@ export async function getPublicProjects(): Promise<PublicProjectList> {
     list.push(row.name);
     skillsByProject.set(row.projectId, list);
   }
+  // Real participant totals, one batched query (same source the landing
+  // board uses: non-voided enrollments). Cards render "N Peserta Aktif"
+  // from this — never a mock number.
+  const participantRows = projects.length
+    ? await getDb()
+        .select({ projectId: enrollments.projectId, participantCount: count() })
+        .from(enrollments)
+        .where(and(inArray(enrollments.projectId, projects.map((project) => project.id)), ne(enrollments.status, "VOIDED")))
+        .groupBy(enrollments.projectId)
+    : [];
+  const participantsByProject = new Map(participantRows.map((row) => [row.projectId, row.participantCount]));
   const mapped: ArenaProject[] = projects.map((project) => ({
     ...toBaseProject(project, weekNo, deadline),
     skills: skillsByProject.get(project.id) ?? [],
+    participants: participantsByProject.get(project.id) ?? 0,
   }));
   return { groups: divisions.map((division) => division.name), projects: mapped };
 }
+
+export const getPublicProjects = unstable_cache(fetchPublicProjects, ["arena-public-projects"], {
+  revalidate: PUBLIC_TTL_SECONDS,
+});
 
 export async function getPublicProjectDetail(slug: string): Promise<ArenaProject | null> {
   let detail: Detail;
@@ -208,6 +277,7 @@ export async function getPublicProjectDetail(slug: string): Promise<ArenaProject
     week: weekNo,
     title: detail.title,
     shortDescription: detail.shortDescription ?? "",
+    coverImageUrl: detail.coverImageUrl ? `/api/arena/covers/${detail.slug}` : null,
     caseBackground: detail.caseBackground ?? "",
     role: detail.roleDescription ?? "",
     mission: detail.mission ?? "",

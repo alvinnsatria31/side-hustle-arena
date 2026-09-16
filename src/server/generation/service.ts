@@ -6,6 +6,7 @@ import { ArenaDomainError } from "@/server/arena/errors";
 import { chooseCandidate, contentHash, fingerprint, generationConfig, isDuplicate, publicationBlock, publicationResourceBlock, resourceKind, rubricHash, validatePackage, weeklyWindow,
   type BaseCriterion, type GenerationProvider, type LibraryEntry, type ProjectPackage } from "./core";
 import { EXECUTION_CONTRACT, type ExecutionBudget } from "@/server/ops/execution-budget";
+import { buildCoverPrompt, createCoverImageProvider, generateCoverImageBytes, saveCoverImage } from "./cover";
 
 type Db = ReturnType<typeof getDb>;
 type Store = Pick<Db, "select" | "insert" | "update" | "delete" | "execute">;
@@ -169,8 +170,59 @@ async function recordValidation(db: Store, actor: Actor, projectId: string, p: P
     baseRubricHash: rubricHash(p.rubric), fingerprint: fingerprint(p), validatorVersion: "arena-generation-v1" }, now);
 }
 
-/** Curate an existing stored project. A supplied package may enrich incomplete legacy templates. */
-export async function registerLibraryTemplate(input: Options & { projectId: string; tag: LibraryRecord["tag"]; package?: unknown; reason: string }) {
+/**
+ * Best-effort AI cover for one project (fail-open).
+ *
+ * Never throws: a missing provider, a failed render, or unavailable storage
+ * resolves to `{ skipped }` so text generation/publishing is never blocked.
+ * The cover regenerates only when the title, division, or content fingerprint
+ * changed since the last `generation.cover-ready` audit — otherwise the stored
+ * URL stays stable so published cards don't flicker.
+ */
+export async function ensureProjectCover(input: Options & {
+  projectId: string; force?: boolean; provider?: { baseUrl: string; apiKey: string; model: string; timeoutMs: number } | null;
+}) {
+  const db = input.db ?? getDb(); const now = input.now ?? new Date();
+  try {
+    const provider = input.provider !== undefined ? input.provider : createCoverImageProvider();
+    if (!provider) return { projectId: input.projectId, skipped: "cover provider not configured" };
+    const project = await projectRow(db, input.projectId);
+    const [division] = await db.select().from(divisions).where(eq(divisions.id, project.divisionId));
+    const validation = await validationRecord(db, project.id);
+    const fp = validation?.metadata.package.fingerprint as { coreSkill?: string; secondarySkill?: string; primaryDeliverable?: string; targetStakeholder?: string } | undefined;
+    const fpHash = validation ? contentHash(validation.metadata.package) : null;
+    if (!input.force && project.coverImageUrl) {
+      const [last] = await db.select().from(logs)
+        .where(and(eq(logs.action, "generation.cover-ready"), eq(logs.entityId, project.id)))
+        .orderBy(desc(logs.createdAt), desc(logs.id)).limit(1);
+      const meta = last?.metadata as { title?: string; divisionId?: string; fingerprintHash?: string } | undefined;
+      if (meta && meta.title === project.title && meta.divisionId === project.divisionId && meta.fingerprintHash === fpHash) {
+        return { projectId: project.id, skipped: "cover unchanged", coverImageUrl: project.coverImageUrl };
+      }
+    }
+    // Reuse the previous generation's cover when the content is identical
+    // (regeneration after a veto with no text change keeps the same visual).
+    const prompt = buildCoverPrompt({
+      divisionSlug: division?.slug ?? "", divisionName: division?.name ?? "",
+      title: project.title, coreSkill: fp?.coreSkill, secondarySkill: fp?.secondarySkill,
+      primaryDeliverable: fp?.primaryDeliverable, targetStakeholder: fp?.targetStakeholder,
+    });
+    const image = await generateCoverImageBytes(prompt, provider);
+    if (!image) return { projectId: project.id, skipped: "cover render failed" };
+    const stored = await saveCoverImage(project.slug, image.bytes, image.mimeType);
+    if (!stored) return { projectId: project.id, skipped: "cover storage unavailable" };
+    await locked(db, async (tx) => {
+      await tx.update(projects).set({ coverImageUrl: stored, updatedAt: now }).where(eq(projects.id, project.id));
+      await audit(tx, input, "cover-ready", "project", project.id,
+        { title: project.title, divisionId: project.divisionId, fingerprintHash: fpHash, coverImageUrl: stored }, now);
+    });
+    return { projectId: project.id, coverImageUrl: stored };
+  } catch {
+    return { projectId: input.projectId, skipped: "cover error" };
+  }
+}
+
+/** Curate an existing stored project. A supplied package may enrich incomplete legacy templates. */export async function registerLibraryTemplate(input: Options & { projectId: string; tag: LibraryRecord["tag"]; package?: unknown; reason: string }) {
   const db = input.db ?? getDb(); const now = input.now ?? new Date();
   return locked(db, async (tx) => {
     const project = await projectRow(tx, input.projectId);
@@ -256,6 +308,26 @@ export async function generateDivision(input: Options & { weekId: string; divisi
     await tx.update(runs).set({ status: "SUCCESS", itemsSuccess: 1, completedAt: now, updatedAt: now }).where(eq(runs.id, run.id));
     await tx.update(weeks).set({ status: "PREVIEW", previewAt: week.previewAt ?? now, updatedAt: now }).where(eq(weeks.id, week.id));
     return { projectId: project.id, runId: run.id, status: "PREVIEWED", source: chosen.source };
+  }).then(async (result) => {
+    // Cover art is best-effort and runs outside the content transaction: a
+    // failed render must never roll back an otherwise valid text package.
+    if (!("projectId" in result) || !result.projectId) return result;
+    const cover = await ensureProjectCover({ actorSubject: input.actorSubject, actorType: input.actorType, db, now, projectId: result.projectId });
+    if (!("coverImageUrl" in cover) && prepared.previousId) {
+      try {
+        const prev = await projectRow(db, prepared.previousId);
+        const next = await projectRow(db, result.projectId);
+        if (prev.coverImageUrl && prev.divisionId === next.divisionId) {
+          await locked(db, async (tx) => {
+            await tx.update(projects).set({ coverImageUrl: prev.coverImageUrl, updatedAt: now }).where(eq(projects.id, next.id));
+            await audit(tx, input, "cover-ready", "project", next.id,
+              { title: next.title, divisionId: next.divisionId, fingerprintHash: null, coverImageUrl: prev.coverImageUrl, reusedFrom: prev.id }, now);
+          });
+          return { ...result, coverImageUrl: prev.coverImageUrl, coverReused: true };
+        }
+      } catch { /* fail-open: card renders the fallback block */ }
+    }
+    return "coverImageUrl" in cover ? { ...result, coverImageUrl: cover.coverImageUrl } : { ...result, coverSkipped: cover.skipped };
   });
 }
 
@@ -365,6 +437,11 @@ export async function reviewProject(input: Options & { projectId: string; action
     }
     await audit(tx, input, input.action, "project", project.id, { reason: input.reason }, now);
     return { projectId: project.id, weekId: week.id, divisionId: project.divisionId, action: input.action };
+  }).then(async (result) => {
+    // An admin edit that changes the title/division/content invalidates the
+    // old visual; ensureProjectCover compares and regenerates only then.
+    if (result.action === "edit") await ensureProjectCover({ actorSubject: input.actorSubject, actorType: input.actorType, db, now, projectId: result.projectId });
+    return result;
   });
 }
 

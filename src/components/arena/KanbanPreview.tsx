@@ -69,7 +69,7 @@ export function KanbanPreview({
   total,
 }: {
   /** Live projects (top 4). Defaults to the mock catalog until wired. */
-  projects?: Array<{ slug: string; title: string; category: string }>;
+  projects?: Array<{ slug: string; title: string; category: string; coverImageUrl?: string | null }>;
   weekLabel?: string;
   total?: number;
 } = {}) {
@@ -94,6 +94,14 @@ export function KanbanPreview({
             key={p.slug}
             className={i === 0 ? 'flex items-center gap-3 rounded-xl border border-sk-blue bg-[#F7FAFF] p-3 shadow-[0_0_0_4px_rgba(36,107,253,0.1)]' : 'flex items-center gap-3 rounded-xl border border-sk-border p-3'}
           >
+            {p.coverImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.coverImageUrl} alt="" loading="lazy" className="h-10 w-16 shrink-0 rounded-md border border-sk-border object-cover" />
+            ) : (
+              <span aria-hidden className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md border border-sk-border bg-[#EFF4FF] font-mono text-[9px] font-bold text-sk-blue">
+                {p.category.slice(0, 3).toUpperCase()}
+              </span>
+            )}
             <div className="min-w-0">
               <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-sk-muted">{p.category}</div>
               <div className="mt-0.5 truncate text-[13px] font-semibold text-sk-navy">{p.title}</div>

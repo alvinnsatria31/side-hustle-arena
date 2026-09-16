@@ -4,7 +4,7 @@ import { Badge } from '@/components/primitives/Badge';
 import { Entrance, Reveal } from '@/components/motion/Reveal';
 import { StatCard } from '@/components/primitives/StatCard';
 import { HowItWorks } from '@/components/arena/HowItWorks';
-import { KanbanPreview } from '@/components/arena/KanbanPreview';
+import { LiveArenaBoard } from '@/components/arena/LiveArenaBoard';
 import { MilestoneRoadmap } from '@/components/arena/MilestoneRoadmap';
 import { getPublicArenaHome } from '@/lib/arena-view';
 import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
@@ -35,14 +35,14 @@ export default async function ArenaLandingPage() {
     <div className="relative overflow-hidden bg-sk-bg">
       <div className="ambient" aria-hidden />
 
-      <div className="relative z-[2] mx-auto max-w-6xl px-6 pb-16 pt-32 md:pt-36">
-        <div className="grid gap-14 lg:grid-cols-[1fr_460px] lg:gap-14">
+      <div className="relative z-[2] mx-auto max-w-[1400px] px-6 pb-16 pt-28 md:pt-32">
+        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,720px)] xl:gap-12">
           {/* Left: hero */}
           <div className="pt-2 md:pt-6">
             <Entrance>
               <span className="eyebrow">Side Hustle Arena</span>
             </Entrance>
-            <h1 className="mb-5 mt-4 text-[40px] font-extrabold leading-[1.02] tracking-[-0.035em] text-sk-navy sm:text-[52px] lg:text-[62px]">
+            <h1 className="mb-4 mt-3 text-[32px] font-extrabold leading-[1.05] tracking-[-0.03em] text-sk-navy sm:text-[40px] lg:text-[46px]">
               <Entrance delay={0.08} className="block">
                 Jangan cuma bilang bisa.
               </Entrance>
@@ -51,24 +51,24 @@ export default async function ArenaLandingPage() {
               </Entrance>
             </h1>
             <Entrance delay={0.32}>
-              <p className="mb-7 max-w-[520px] text-[15.5px] leading-relaxed text-sk-muted">
+              <p className="mb-6 max-w-[460px] text-[14.5px] leading-relaxed text-sk-muted">
                 Ambil satu project dunia nyata setiap minggu, kerjakan seperti kamu bekerja di industri, dapat feedback, dan
                 kumpulkan bukti untuk portfolio.
               </p>
             </Entrance>
             <Entrance delay={0.42}>
-              <div className="mb-8 flex flex-wrap gap-3">
-                <ButtonLink href="/arena/projects" size="lg">
+              <div className="mb-7 flex flex-wrap gap-3">
+                <ButtonLink href="/arena/projects" size="md">
                   Lihat Project Minggu Ini
                 </ButtonLink>
-                <ButtonLink href="#cara-kerja" variant="ghost" size="lg">
+                <ButtonLink href="#cara-kerja" variant="ghost" size="md">
                   Cara Kerjanya
                 </ButtonLink>
               </div>
             </Entrance>
 
             <Reveal delay={0.2}>
-              <div className="grid max-w-[480px] grid-cols-2 gap-3">
+              <div className="grid max-w-[420px] grid-cols-2 gap-2.5">
                 {stats.map((stat) => (
                   <StatCard key={stat.key} label={stat.label} value={stat.value} small={stat.small} />
                 ))}
@@ -77,11 +77,12 @@ export default async function ArenaLandingPage() {
           </div>
 
           {/* Right: this week's drop preview */}
-          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[480px]">
-            <KanbanPreview
+          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[720px]">
+            <LiveArenaBoard
               projects={home?.projects ?? []}
-              weekLabel={home?.weekLabel ?? 'Belum ada minggu aktif'}
-              total={home?.projectCount ?? 0}
+              weekNo={home?.weekNo}
+              deadline={home?.deadline}
+              deadlineAt={home?.deadlineAt}
             />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { arenaData, arenaError } from "@/server/arena/http";
 import { requireArenaAdmin } from "@/server/admin/auth";
 import { attributeProjectCriteria, criteriaAttributionSchema, setAdminProjectSchedule } from "@/server/admin/content";
-import { reviewProject } from "@/server/generation/service";
+import { reviewProject, ensureProjectCover } from "@/server/generation/service";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ const reason = z.string().trim().min(1).max(1000);
 const reviewSchema = z.object({ reason });
 const editSchema = z.object({ reason, package: z.unknown() });
 const scheduleSchema = z.object({ reason, scheduledPublishAt: z.string().min(1).nullable() });
+const coverSchema = z.object({ reason, force: z.boolean().optional() });
 
 /**
  * Project lifecycle, all of it through the domain service.
@@ -36,6 +37,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const parsed = editSchema.safeParse(body);
       if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
       return arenaData(await reviewProject({ projectId: id, action: "edit", reason: parsed.data.reason, package: parsed.data.package, actorSubject }));
+    }
+    if (action === "cover") {
+      // On-demand (re)generate of the AI card cover. Fail-open like the
+      // automatic hook: a missing provider or failed render resolves to
+      // `{ skipped }` and the card keeps its data-viz fallback block.
+      const parsed = coverSchema.safeParse(body);
+      if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
+      return arenaData(await ensureProjectCover({ projectId: id, force: parsed.data.force ?? false, actorSubject }));
     }
     if (action === "attribute") {
       // Rubric criterion → skill on a live project; drafts carry it in `edit`.

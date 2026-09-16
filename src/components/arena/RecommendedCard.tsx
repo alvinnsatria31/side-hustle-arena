@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Badge } from '@/components/primitives/Badge';
 import { DifficultyBadge, TimeBadge } from './ProjectBadges';
+import { ProjectCover } from './ProjectCover';
 import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
 
@@ -78,7 +79,14 @@ export function RecommendedCard({
         )}
       </div>
 
-      <div className="relative z-[1] mt-6 rounded-[var(--radius-sk-lg)] border border-white/25 bg-white/15 p-5 backdrop-blur-md md:mt-0">
+      <div className="relative z-[1] mt-6 overflow-hidden rounded-[var(--radius-sk-lg)] border border-white/25 bg-white/15 p-4 backdrop-blur-md md:mt-0">
+        <ProjectCover
+          slug={project.slug}
+          title={project.title}
+          category={project.category}
+          coverImageUrl={project.coverImageUrl}
+          className="mb-3 border-white/25 bg-white/10"
+        />
         <div className="mb-2.5 font-mono text-[10px] uppercase tracking-[0.15em] text-white/75">Direkomendasikan</div>
         <h4 className="mb-3 text-[17px] font-bold">{project.title}</h4>
         <div className="mb-3.5 flex flex-wrap gap-1.5">

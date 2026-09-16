@@ -1,0 +1,1 @@
+ALTER TABLE "arena"."projects" ADD COLUMN "cover_image_url" text;

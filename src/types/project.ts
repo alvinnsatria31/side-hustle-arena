@@ -52,6 +52,12 @@ export interface ArenaProject {
   week: number;
   title: string;
   shortDescription: string;
+  /**
+   * Public cover URL for the card header (`/api/arena/covers/<slug>` when a
+   * generated cover exists). Absent/null means "render the per-division
+   * data-viz fallback block instead of an image".
+   */
+  coverImageUrl?: string | null;
   caseBackground: string;
   role: string;
   mission: string;

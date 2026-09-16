@@ -5,6 +5,7 @@ import { Entrance } from '@/components/motion/Reveal';
 import { ResourceList } from '@/components/arena/KanbanPreview';
 import { Card } from '@/components/primitives/Card';
 import { CtaActions, DetailTabs } from '@/components/arena/ProjectDetail';
+import { ProjectCover } from '@/components/arena/ProjectCover';
 import { getPublicProjectDetail } from '@/lib/arena-view';
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +54,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
       </Entrance>
+
+      <ProjectCover
+        slug={project.slug}
+        title={project.title}
+        category={project.category}
+        coverImageUrl={project.coverImageUrl}
+        className="mb-7 aspect-[21/9]"
+      />
 
       <DetailTabs project={project} />
 

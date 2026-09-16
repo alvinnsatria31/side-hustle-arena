@@ -24,6 +24,15 @@ export const projects = arena.table("projects", {
   previewStatus: projectPreviewStatus("preview_status").default("PENDING").notNull(),
   discordPreviewMessageId: text("discord_preview_message_id"),
   automationRunId: uuid("automation_run_id").references(() => runs.id),
+  /**
+   * AI-generated card cover (nullable, fail-open).
+   *
+   * Stores either a credential-free HTTPS URL returned by the image provider
+   * or a private storage key (`arena-covers/<slug>.png`) served through
+   * GET /api/arena/covers/[slug]. Null means "no cover yet" — cards render
+   * the per-division data-viz fallback block instead of an image.
+   */
+  coverImageUrl: text("cover_image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

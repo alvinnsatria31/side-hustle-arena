@@ -14,7 +14,7 @@ export function StatCard({ label, value, suffix, small, className, dark }: StatC
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-sk-xl)] p-4 md:p-5',
+        'rounded-[var(--radius-sk-xl)] p-3 md:p-4',
         dark
           ? 'border border-white/15 bg-white/10 backdrop-blur-md'
           : 'glass-card',
@@ -32,7 +32,7 @@ export function StatCard({ label, value, suffix, small, className, dark }: StatC
       {small ? (
         <div className={cn('pt-1 text-[16px] font-bold', dark ? 'text-white' : 'text-sk-navy')}>{value}</div>
       ) : (
-        <div className={cn('text-[22px] font-extrabold tracking-[-0.02em] md:text-[26px]', dark ? 'text-white' : 'text-sk-navy')}>
+        <div className={cn('text-[18px] font-extrabold tracking-[-0.02em] md:text-[21px]', dark ? 'text-white' : 'text-sk-navy')}>
           {value}
           {suffix && (
             <small className={cn('ml-1.5 text-[12px] font-semibold', dark ? 'text-white/70' : 'text-sk-muted')}>
