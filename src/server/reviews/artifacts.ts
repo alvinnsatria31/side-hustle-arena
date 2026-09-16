@@ -161,7 +161,7 @@ export async function ensureReviewSources(db: Db, version: typeof submissionVers
     const stageSignal = options.budget?.signal(EXECUTION_CONTRACT.extractionBudgetMs);
     const stageTimeoutMs = options.budget?.remainingMs();
     let bytes: Buffer;
-    let mime = item.mimeType ?? '';
+    const mime = item.mimeType ?? '';
     if (item.itemType === 'FILE' && item.storageKey) {
       // Identity, not size. Equal length proves nothing against a replayed
       // presigned PUT — only the checksum recorded when the version was frozen

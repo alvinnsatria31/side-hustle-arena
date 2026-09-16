@@ -27,7 +27,9 @@ interface ModalProps {
 export function Modal({ open, onClose, children, labelledBy, className, dismissable = true }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
