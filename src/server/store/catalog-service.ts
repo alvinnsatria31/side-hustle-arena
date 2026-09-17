@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { entitlements, products } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
-import { isRupiahCheckoutConfigured } from "./config";
+import { isRupiahCheckoutConfigured, rupiahCheckoutEnvironment } from "./config";
 import { isLiveEntitlement } from "./entitlement-service";
 
 /**
@@ -34,6 +34,8 @@ export interface StoreProductDetail extends StoreListItem {
   /** How this product may be paid for right now, gateway configuration included. */
   payWithRupiah: boolean;
   payWithPoints: boolean;
+  /** "sandbox" means a rupiah payment here is a test and collects no money. */
+  paymentEnvironment: "sandbox" | "production" | null;
 }
 
 const shelfStatuses = ["ACTIVE", "COMING_SOON"] as const;
@@ -83,6 +85,7 @@ export async function getStoreProduct(slug: string): Promise<StoreProductDetail>
     ...(row as StoreListItem & { description: string | null }),
     payWithRupiah: sellable && row.priceIdrMinor !== null && isRupiahCheckoutConfigured(),
     payWithPoints: sellable && row.pointsCost !== null,
+    paymentEnvironment: rupiahCheckoutEnvironment(),
   };
 }
 

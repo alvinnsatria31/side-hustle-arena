@@ -69,11 +69,23 @@ export function getMidtransConfig(): MidtransConfig {
 
 /** True when a rupiah price can actually be charged; the UI hides the option otherwise. */
 export function isRupiahCheckoutConfigured(): boolean {
+  return rupiahCheckoutEnvironment() !== null;
+}
+
+/**
+ * Which Midtrans world a rupiah purchase would reach, or null when none is
+ * configured.
+ *
+ * The buyer is told this. A shop running on sandbox keys takes no money and
+ * hands over the goods anyway, which is indistinguishable from a working shop
+ * unless the page says so — and the mistake it guards against is the expensive
+ * direction: believing sales are real when they are tests.
+ */
+export function rupiahCheckoutEnvironment(): "sandbox" | "production" | null {
   try {
-    getMidtransConfig();
-    return true;
+    return getMidtransConfig().environment;
   } catch {
-    return false;
+    return null;
   }
 }
 

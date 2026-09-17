@@ -188,6 +188,19 @@ export function ProductDetail({ slug }: { slug: string }) {
           </>
         )}
 
+        {product.payWithRupiah && product.paymentEnvironment === 'sandbox' && (
+          /*
+           * A shop on sandbox keys takes no money and still hands over the
+           * product. Without this line that is indistinguishable from a working
+           * shop, and the way it fails is the expensive one: believing test
+           * payments were real sales.
+           */
+          <p role="status" className="mt-4 rounded-[var(--radius-sk-md)] border border-sk-warning/40 bg-sk-warning-tint px-3 py-2 text-[12px] leading-snug text-sk-warning-ink">
+            <strong className="font-bold">Mode uji coba.</strong> Pembayaran diproses di lingkungan sandbox Midtrans —
+            tidak ada uang yang benar-benar ditagih, dan transaksinya bukan pembelian sungguhan.
+          </p>
+        )}
+
         {error && <p role="alert" className="mt-4 text-[13px] leading-relaxed text-sk-error">{error}</p>}
         {notice && <p role="status" className="mt-4 text-[13px] leading-relaxed text-sk-navy">{notice}</p>}
       </Card>
