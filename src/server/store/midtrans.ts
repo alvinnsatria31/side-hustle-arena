@@ -41,6 +41,15 @@ export async function createSnapTransaction(input: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: authorization(config.serverKey),
+      /*
+       * The merchant account is shared with the Sekolah Karir main site, and
+       * the dashboard holds ONE notification URL — the main site's. Pointing it
+       * here would stop the website from ever learning its own payments. So each
+       * Arena transaction names its own webhook instead, and the dashboard is
+       * never touched. Override, not append: the main site has no order to match
+       * an Arena payment against, and sending it one would only be noise.
+       */
+      "X-Override-Notification": `${config.appOrigin}/api/webhooks/midtrans`,
     },
     body: JSON.stringify({
       transaction_details: { order_id: input.providerOrderId, gross_amount: grossAmount },

@@ -112,12 +112,23 @@ export function minorToGrossAmount(amountMinor: number): number {
 }
 
 /**
+ * The prefix every Arena shop payment carries at Midtrans.
+ *
+ * The merchant account is shared with the Sekolah Karir main site, whose ids
+ * are `SK-<hex>-<base36>`. Midtrans requires an order_id to be unique forever
+ * across the whole merchant, so the two sites must never be able to mint the
+ * same string — and a human reconciling the shared dashboard must be able to
+ * tell at a glance which site a payment belongs to. `ARENA-STORE-` does both.
+ */
+export const PROVIDER_ORDER_PREFIX = "ARENA-STORE-";
+
+/**
  * Our reference for a payment, minted before Midtrans is called.
  *
- * Midtrans requires it to be unique forever per merchant and at most 50
- * characters, so the order's own UUID carries the uniqueness and the prefix
- * makes a row in their dashboard legible to a human reconciling by hand.
+ * Midtrans caps order_id at 50 characters of `[A-Za-z0-9._~-]`: the prefix is
+ * 12 and a UUID 36, so the order's own id carries the uniqueness with two to
+ * spare.
  */
 export function buildProviderOrderId(orderId: string): string {
-  return `SKA-${orderId}`;
+  return `${PROVIDER_ORDER_PREFIX}${orderId}`;
 }

@@ -66,7 +66,7 @@ kita, tidak ada yang perlu ditunggu.
 ### Rupiah — order dulu, baru Midtrans
 
 1. Order `PENDING` dibuat dengan `provider_order_id` milik kita sendiri
-   (`SKA-<uuid>`) sebelum Midtrans dihubungi. Urutan terbalik — minta ke Midtrans
+   (`ARENA-STORE-<uuid>`) sebelum Midtrans dihubungi. Urutan terbalik — minta ke Midtrans
    dulu, catat belakangan — membuat pembayaran bisa lunas atas referensi yang
    tidak ada di sisi kita, satu-satunya kegagalan yang tidak bisa dibereskan
    otomatis.
@@ -126,15 +126,103 @@ STORE=true MIDTRANS_CLIENT_KEY=Mid-client-xxx deploy/sk-vps/build-and-ship.sh
 ```
 
 `MIDTRANS_SERVER_KEY` adalah rahasia dan tetap variabel runtime di file env VPS —
-jangan pernah dibakar ke image. Aplikasi menolak server key yang tidak cocok
-dengan `MIDTRANS_ENVIRONMENT` (sandbox berawalan `SB-`), karena Midtrans hanya
-menjawab 401 tanpa petunjuk kalau keduanya berselisih.
+jangan pernah dibakar ke image. `MIDTRANS_ENVIRONMENT` harus cocok dengan asal
+kuncinya: awalan kunci **tidak** menandakan lingkungan (kunci sandbox Sekolah
+Karir juga berbentuk `Mid-server-…`), dan pasangan yang salah hanya dijawab
+Midtrans dengan 401.
 
-Terakhir: arahkan **Payment Notification URL** di dashboard Midtrans
-(Settings → Configuration) ke `https://<host>/api/webhooks/midtrans`.
+**Akun merchant dipakai bersama website utama.** Jangan ubah Payment
+Notification URL di dashboard Midtrans — URL itu milik website, dan
+mengubahnya membuat website tidak pernah tahu pembayarannya sendiri. Setiap
+transaksi Arena mengirim header `X-Override-Notification` ke
+`ARENA_ORIGIN/api/webhooks/midtrans`, jadi notifikasinya sampai ke sini tanpa
+menyentuh dashboard. Karena itu `ARENA_ORIGIN` di produksi harus alamat publik
+HTTPS yang bisa dijangkau Midtrans.
 
 Jalur poin tidak butuh satu pun kunci Midtrans, jadi toko sudah bisa melayani
 peserta Arena sebelum akun merchant jadi.
+
+## Kunci Midtrans production saat deploy
+
+Toko memakai **akun merchant yang sama** dengan website utama. Tidak perlu akun
+baru dan tidak perlu mengubah apa pun di dashboard Midtrans. Dua hal yang
+membuat pemakaian bersama ini aman sudah ada di kode:
+
+- **Order ID berprefiks `ARENA-STORE-<uuid>`.** Website membuat `SK-<hex>-<base36>`,
+  sehingga kedua situs tidak mungkin menghasilkan order ID yang sama — Midtrans
+  mewajibkan order ID unik selamanya untuk satu merchant.
+- **Header `X-Override-Notification`** pada setiap transaksi Arena, menunjuk ke
+  `ARENA_ORIGIN/api/webhooks/midtrans`. Notifikasi pembayaran Arena datang ke
+  Arena; notifikasi website tetap ke URL di dashboard, yang **jangan diubah**.
+
+### Langkah konfigurasi
+
+Lakukan berurutan. Deploy toko tidak otomatis ikut deploy Arena biasa —
+tanpa `STORE=true` di langkah 4, semua permukaan toko tetap tertutup.
+
+**1. Pastikan pasangan kunci memang production.** Awalan kunci **tidak**
+menandakan lingkungan: kunci sandbox dan production sama-sama berbentuk
+`Mid-server-…` / `Mid-client-…`. Buktikan ke Midtrans, bukan ke tebakan. Panggilan
+ini hanya membaca status pesanan yang tidak ada, jadi tidak membuat transaksi:
+
+```bash
+read -rs MIDTRANS_SERVER_KEY   # tempel server key, tidak tampil di layar
+for host in https://api.midtrans.com https://api.sandbox.midtrans.com; do
+  printf '%s -> ' "$host"
+  curl -s -u "$MIDTRANS_SERVER_KEY:" "$host/v2/arena-key-check/status" | head -c 120; echo
+done
+```
+
+Kunci production menjawab `"status_code":"404"` (*Transaction doesn't exist*)
+di `api.midtrans.com` dan `401` (*Unknown Merchant*) di host sandbox. Kalau
+hasilnya terbalik, itu pasangan sandbox — **berhenti**, ambil pasangan
+production dari dashboard Midtrans (Settings → Access Keys, mode Production).
+
+> Catatan 17 September 2026: pasangan di `sekolah-karir-website/.env` lokal
+> diuji dengan cara ini dan terbukti **sandbox** (production menjawab 401,
+> sandbox menjawab 404, termasuk satu transaksi Snap sandbox yang berhasil
+> dibuat). Pasangan production kemungkinan hanya ada di environment variables
+> Vercel website. Ambil dari sana atau dari dashboard, lalu uji dulu.
+
+**2. Server key ke file env VPS (runtime, rahasia).** Di sk-vps, tambahkan ke
+file env Arena, bukan ke image:
+
+```
+MIDTRANS_SERVER_KEY=<server key production>
+MIDTRANS_ENVIRONMENT=production
+```
+
+Nama variabelnya `MIDTRANS_ENVIRONMENT`, **bukan** `MIDTRANS_ENV` seperti di
+website. Nilai selain `production` — termasuk kosong — berarti sandbox.
+
+**3. `ARENA_ORIGIN` harus HTTPS publik.** Header override memakai nilai ini
+sebagai alamat webhook. Alamat localhost atau http tidak bisa dijangkau
+Midtrans, dan pembayaran yang lunas tidak akan pernah menyerahkan produk.
+
+**4. Build dengan toko menyala.** Flag toko dan client key di-inline ke bundle
+browser saat build, jadi wajib lewat build arg — mengisinya di file env VPS
+tidak berpengaruh:
+
+```bash
+STORE=true MIDTRANS_CLIENT_KEY=<client key production> deploy/sk-vps/build-and-ship.sh
+```
+
+Client key memang publik (browser memakainya untuk membuka Snap), jadi aman
+sebagai build arg. Server key **tidak pernah** dikirim sebagai build arg.
+
+**5. Migrasi `0018` dijalankan sebelum image baru melayani trafik.** Tanpa
+schema `store`, setiap halaman toko gagal.
+
+**6. Uji satu pembelian nominal kecil sebelum mengumumkan.** Buat produk
+`ACTIVE` seharga Rp 1.000 di `/app/admin/store`, beli dengan akun sendiri, lalu
+pastikan: pesanan di konsol berubah `PENDING` → `FULFILLED`, baris
+`store.payment_events` tercatat, dan produk muncul di `/app/store`. Setelah itu
+kembalikan produk tes ke `ARCHIVED` dan refund dari dashboard Midtrans.
+
+Kalau pesanan tetap `PENDING` padahal Midtrans menyatakan lunas, notifikasinya
+tidak sampai: periksa `ARENA_ORIGIN` (langkah 3) dan log container untuk
+`[store] rejected Midtrans notification`, yang berarti server key di VPS berbeda
+dengan pasangan yang dipakai membuat transaksinya.
 
 ## Menjalankan dan menguji
 

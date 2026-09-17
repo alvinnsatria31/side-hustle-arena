@@ -42,17 +42,16 @@ export function getMidtransConfig(): MidtransConfig {
   if (!serverKey || !clientKey) {
     throw new ArenaDomainError("PAYMENT_METHOD_UNAVAILABLE", "Pembayaran Rupiah belum dikonfigurasi. Gunakan poin atau hubungi admin.");
   }
-  const environment = process.env.MIDTRANS_ENVIRONMENT === "production" ? "production" : "sandbox";
   /*
-   * A production server key on the sandbox host — or the reverse — fails in the
-   * least helpful way possible: Midtrans answers 401 with no hint that the two
-   * halves disagree. The key's own prefix says which world it belongs to, so
-   * the mismatch is caught here instead.
+   * The environment is read, never guessed from the key. Midtrans used to
+   * prefix sandbox keys with "SB-", but keys issued since no longer carry it —
+   * the Sekolah Karir merchant's sandbox pair is plain "Mid-server-…" — so a
+   * prefix check refuses a correct configuration. A wrong pairing still fails
+   * at the first Snap call with Midtrans' own 401 message, which is logged.
+   * Unset means sandbox: a missing value must fail a test payment, never charge
+   * real money against half-set keys.
    */
-  const keyLooksProduction = !serverKey.startsWith("SB-");
-  if (keyLooksProduction !== (environment === "production")) {
-    throw new ArenaDomainError("PAYMENT_METHOD_UNAVAILABLE", "MIDTRANS_SERVER_KEY dan MIDTRANS_ENVIRONMENT tidak cocok (sandbox vs production).");
-  }
+  const environment = process.env.MIDTRANS_ENVIRONMENT?.trim() === "production" ? "production" : "sandbox";
   return {
     serverKey,
     clientKey,

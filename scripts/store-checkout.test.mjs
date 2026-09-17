@@ -9,7 +9,7 @@ const SERVER_KEY = "SB-Mid-server-TESTKEY";
 
 function notification(overrides = {}) {
   const base = {
-    order_id: "SKA-11111111-2222-3333-4444-555555555555",
+    order_id: "ARENA-STORE-11111111-2222-3333-4444-555555555555",
     status_code: "200",
     gross_amount: "149000.00",
     transaction_status: "settlement",
@@ -120,9 +120,17 @@ test("only whole rupiah can be charged", () => {
 
 test("the provider order id is derived from the order, not invented", () => {
   const id = "11111111-2222-3333-4444-555555555555";
-  assert.equal(midtrans.buildProviderOrderId(id), `SKA-${id}`);
-  // Midtrans caps order_id at 50 characters.
-  assert.ok(midtrans.buildProviderOrderId(id).length <= 50);
+  assert.equal(midtrans.buildProviderOrderId(id), `ARENA-STORE-${id}`);
+});
+
+test("the provider order id fits Midtrans and can never collide with the main site", () => {
+  const id = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+  const orderId = midtrans.buildProviderOrderId(id);
+  // Snap: at most 50 characters of alphanumerics and . _ ~ -
+  assert.ok(orderId.length <= 50, `${orderId.length} characters`);
+  assert.match(orderId, /^[A-Za-z0-9._~-]+$/);
+  // The main site shares the merchant and mints SK-<hex>-<base36>.
+  assert.ok(!orderId.startsWith("SK-"));
 });
 
 // ----------------------------------------------------------- points ledger
