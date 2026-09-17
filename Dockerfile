@@ -33,15 +33,12 @@ ENV APP_ENV=test \
 ARG NEXT_PUBLIC_CV_SCANNER_ENABLED=""
 ENV NEXT_PUBLIC_CV_SCANNER_ENABLED=$NEXT_PUBLIC_CV_SCANNER_ENABLED
 
-# The digital shop is baked the same way, and for the same reason: the navbar
-# and the checkout panel are client code, so the flag and Midtrans' CLIENT key
-# must be inlined here. The client key is public by design — the browser hands
-# it to Snap — so it is a build arg, not a secret. MIDTRANS_SERVER_KEY is the
-# secret half and stays a runtime variable, never baked into an image.
+# The digital shop's switch is baked the same way, and for the same reason: the
+# navbar reads it in client code. Midtrans keys are NOT baked — both are runtime
+# variables in arena.env, so moving from sandbox to production is a restart,
+# not a rebuild.
 ARG NEXT_PUBLIC_STORE_ENABLED=""
 ENV NEXT_PUBLIC_STORE_ENABLED=$NEXT_PUBLIC_STORE_ENABLED
-ARG NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=""
-ENV NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=$NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

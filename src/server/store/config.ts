@@ -38,7 +38,13 @@ export interface MidtransConfig {
  */
 export function getMidtransConfig(): MidtransConfig {
   const serverKey = process.env.MIDTRANS_SERVER_KEY?.trim();
-  const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.trim();
+  /*
+   * Not NEXT_PUBLIC_. The browser does need the client key, but it receives it
+   * in the checkout response, the moment Snap is opened — so it can be read at
+   * runtime like the server key. A baked-in key would mean rotating a Midtrans
+   * key, or moving from sandbox to production, costs an image rebuild.
+   */
+  const clientKey = process.env.MIDTRANS_CLIENT_KEY?.trim();
   if (!serverKey || !clientKey) {
     throw new ArenaDomainError("PAYMENT_METHOD_UNAVAILABLE", "Pembayaran Rupiah belum dikonfigurasi. Gunakan poin atau hubungi admin.");
   }

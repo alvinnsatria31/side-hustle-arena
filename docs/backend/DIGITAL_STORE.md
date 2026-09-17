@@ -119,14 +119,18 @@ pembeli sekaligus. Konsol admin **tidak** ikut tertutup: mengisi etalase justru
 yang dikerjakan sebelum toko dibuka.
 
 **`NEXT_PUBLIC_*` di-inline saat build image, bukan dibaca saat runtime.** Di
-sk-vps itu berarti:
+sk-vps itu berarti saklar toko diset saat build:
 
 ```bash
-STORE=true MIDTRANS_CLIENT_KEY=Mid-client-xxx deploy/sk-vps/build-and-ship.sh
+CV_SCANNER=true STORE=true deploy/sk-vps/build-and-ship.sh
 ```
 
-`MIDTRANS_SERVER_KEY` adalah rahasia dan tetap variabel runtime di file env VPS —
-jangan pernah dibakar ke image. `MIDTRANS_ENVIRONMENT` harus cocok dengan asal
+(`CV_SCANNER=true` wajib ikut — produksi menyalakan CV Scanner, dan build tanpa
+flag itu diam-diam mematikannya.)
+
+Kedua kunci Midtrans **tidak** di-bake: `MIDTRANS_SERVER_KEY` dan
+`MIDTRANS_CLIENT_KEY` dibaca saat runtime dari file env VPS, jadi pindah dari
+sandbox ke production cukup ubah env lalu recreate container. `MIDTRANS_ENVIRONMENT` harus cocok dengan asal
 kuncinya: awalan kunci **tidak** menandakan lingkungan (kunci sandbox Sekolah
 Karir juga berbentuk `Mid-server-…`), dan pasangan yang salah hanya dijawab
 Midtrans dengan 401.
@@ -184,12 +188,20 @@ production dari dashboard Midtrans (Settings → Access Keys, mode Production).
 > dibuat). Pasangan production kemungkinan hanya ada di environment variables
 > Vercel website. Ambil dari sana atau dari dashboard, lalu uji dulu.
 
-**2. Server key ke file env VPS (runtime, rahasia).** Di sk-vps, tambahkan ke
-file env Arena, bukan ke image:
+**2. Kunci ke file env VPS (runtime).** Di sk-vps, tambahkan ke
+`/opt/sekolah-karir-automation/arena-stack/arena.env`, bukan ke image:
 
 ```
 MIDTRANS_SERVER_KEY=<server key production>
+MIDTRANS_CLIENT_KEY=<client key production>
 MIDTRANS_ENVIRONMENT=production
+```
+
+Lalu recreate container agar env dibaca ulang (restart saja tidak cukup):
+
+```bash
+cd /opt/sekolah-karir-automation/arena-stack
+sudo -n docker compose -f docker-compose.arena.yml up -d --no-deps --force-recreate --wait sk-arena
 ```
 
 Nama variabelnya `MIDTRANS_ENVIRONMENT`, **bukan** `MIDTRANS_ENV` seperti di
@@ -199,16 +211,14 @@ website. Nilai selain `production` — termasuk kosong — berarti sandbox.
 sebagai alamat webhook. Alamat localhost atau http tidak bisa dijangkau
 Midtrans, dan pembayaran yang lunas tidak akan pernah menyerahkan produk.
 
-**4. Build dengan toko menyala.** Flag toko dan client key di-inline ke bundle
-browser saat build, jadi wajib lewat build arg — mengisinya di file env VPS
-tidak berpengaruh:
+**4. Build dengan toko menyala** (hanya kalau image yang jalan belum membawa
+`STORE=true`). Saklar toko di-inline ke bundle browser saat build, jadi wajib
+lewat build arg — mengisinya di file env VPS tidak berpengaruh. Kunci Midtrans
+tidak pernah dikirim sebagai build arg.
 
 ```bash
-STORE=true MIDTRANS_CLIENT_KEY=<client key production> deploy/sk-vps/build-and-ship.sh
+CV_SCANNER=true STORE=true deploy/sk-vps/build-and-ship.sh
 ```
-
-Client key memang publik (browser memakainya untuk membuka Snap), jadi aman
-sebagai build arg. Server key **tidak pernah** dikirim sebagai build arg.
 
 **5. Migrasi `0018` dijalankan sebelum image baru melayani trafik.** Tanpa
 schema `store`, setiap halaman toko gagal.
