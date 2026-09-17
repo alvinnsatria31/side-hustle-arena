@@ -11,6 +11,7 @@ import { useIsAdmin, useParticipant } from '@/features/arena/participant';
 import { getNotifications } from '@/lib/arena-client';
 import { cn } from '@/lib/cn';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { isStoreEnabled } from '@/lib/store-flags';
 
 const APP_LINKS_ALL = [
   { label: 'Home', href: '/app' },
@@ -18,10 +19,13 @@ const APP_LINKS_ALL = [
   { label: 'Arena', href: '/app/arena' },
   { label: 'Career Report', href: '/app/career-report' },
   { label: 'Jobs', href: '/app/jobs' },
+  { label: 'Produk Saya', href: '/app/store' },
 ];
 
-/** The CV Scanner stays out of navigation until its backend is switched on. */
-const APP_LINKS = APP_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
+/** Features whose backends are not switched on stay out of navigation. */
+const APP_LINKS = APP_LINKS_ALL.filter((item) =>
+  (!item.href.includes('/cv-scanner') || isCvScannerEnabled()) &&
+  (item.href !== '/app/store' || isStoreEnabled()));
 
 const APP_BASE = '/app';
 

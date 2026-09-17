@@ -33,6 +33,16 @@ ENV APP_ENV=test \
 ARG NEXT_PUBLIC_CV_SCANNER_ENABLED=""
 ENV NEXT_PUBLIC_CV_SCANNER_ENABLED=$NEXT_PUBLIC_CV_SCANNER_ENABLED
 
+# The digital shop is baked the same way, and for the same reason: the navbar
+# and the checkout panel are client code, so the flag and Midtrans' CLIENT key
+# must be inlined here. The client key is public by design — the browser hands
+# it to Snap — so it is a build arg, not a secret. MIDTRANS_SERVER_KEY is the
+# secret half and stays a runtime variable, never baked into an image.
+ARG NEXT_PUBLIC_STORE_ENABLED=""
+ENV NEXT_PUBLIC_STORE_ENABLED=$NEXT_PUBLIC_STORE_ENABLED
+ARG NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=""
+ENV NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=$NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

@@ -1,4 +1,4 @@
-import { arena, audit, automation, identity, notifications, rewards } from "./schemas";
+import { arena, audit, automation, identity, notifications, rewards, store } from "./schemas";
 
 export const userStatus = identity.enum("user_status", ["ACTIVE", "SUSPENDED"]);
 
@@ -43,7 +43,13 @@ export const jobOpeningStatus = arena.enum("job_opening_status", ["OPEN", "EXPIR
 export const jobSkillKind = arena.enum("job_skill_kind", ["REQUIRED", "PREFERRED"]);
 export const jobSyncStatus = arena.enum("job_sync_status", ["RUNNING", "SUCCESS", "PARTIAL", "FAILED"]);
 
-export const pointLedgerEntryType = rewards.enum("point_ledger_entry_type", ["WEEKLY_RANK", "REWARD_REDEMPTION", "ADMIN_ADJUSTMENT", "ADMIN_REVERSAL"]);
+/*
+ * STORE_PURCHASE and STORE_REFUND are the shop's side of the SAME wallet the
+ * reward ladder spends from. A second points balance would be a reconciliation
+ * bug waiting to happen, so a shop purchase is an ordinary debit here and is
+ * classified as spending by `summarizePoints`.
+ */
+export const pointLedgerEntryType = rewards.enum("point_ledger_entry_type", ["WEEKLY_RANK", "REWARD_REDEMPTION", "ADMIN_ADJUSTMENT", "ADMIN_REVERSAL", "STORE_PURCHASE", "STORE_REFUND"]);
 export const rewardType = rewards.enum("reward_type", ["DIGITAL", "DISCOUNT", "EVENT", "MASTERCLASS", "SERVICE", "MONETARY"]);
 export const inventoryMode = rewards.enum("inventory_mode", ["UNLIMITED", "LIMITED"]);
 export const redemptionStatus = rewards.enum("redemption_status", ["PENDING", "PROCESSING", "FULFILLED", "FAILED", "ADMIN_REVERSED"]);
@@ -55,3 +61,22 @@ export const deliveryStatus = notifications.enum("delivery_status", ["PENDING", 
 export const automationRunType = automation.enum("automation_run_type", ["PROJECT_GENERATION", "PROJECT_PREVIEW", "PROJECT_PUBLICATION", "ACCESS_CHECK", "AI_REVIEW", "WEEK_CLOSE", "WEEK_FINALIZATION", "LEADERBOARD_GENERATION", "POINT_DISTRIBUTION", "NOTIFICATION_BROADCAST"]);
 export const automationRunStatus = automation.enum("automation_run_status", ["PENDING", "RUNNING", "SUCCESS", "PARTIAL", "FAILED", "CANCELLED"]);
 export const auditActorType = audit.enum("audit_actor_type", ["USER", "ADMIN", "AUTOMATION", "SYSTEM"]);
+
+/*
+ * Digital shop.
+ *
+ * DOWNLOAD is a thing handed over — a file in our storage or a page elsewhere.
+ * ACCESS is a key: the purchase unlocks a feature that lives inside this
+ * platform, which is how an application is sold here rather than as a tenant to
+ * provision or a zip to deploy.
+ */
+export const storeProductKind = store.enum("store_product_kind", ["DOWNLOAD", "ACCESS"]);
+/**
+ * COMING_SOON is a first-class state, not a disabled ACTIVE: a product whose
+ * content does not exist yet still belongs on the shelf, with its buy button
+ * dead. It is what keeps the shop from ever selling something undeliverable.
+ */
+export const storeProductStatus = store.enum("store_product_status", ["DRAFT", "COMING_SOON", "ACTIVE", "ARCHIVED"]);
+export const storeDeliveryKind = store.enum("store_delivery_kind", ["LINK", "FILE"]);
+export const storePaymentMethod = store.enum("store_payment_method", ["IDR", "POINTS"]);
+export const storeOrderStatus = store.enum("store_order_status", ["PENDING", "PAID", "FULFILLED", "FAILED", "EXPIRED", "REFUNDED"]);

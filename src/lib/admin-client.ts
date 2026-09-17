@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { z } from 'zod';
 import { ArenaApiError, type ArenaErrorCode } from './arena-client';
 import type { getOpsOverview } from '@/server/admin/overview';
 import type { EmailBucket, EmailOutboxRow, EmailOutboxSummary } from '@/server/notifications/outbox-admin';
@@ -19,6 +20,9 @@ import type { getJobSourceStatus, syncJobSource } from '@/server/career/jobs/syn
 import type { previewProject } from '@/server/generation/service';
 import type { VoucherDelivery } from '@/server/rewards/voucher-push';
 import type { listAdminCareerReports, previewAdminCareerReport } from '@/server/admin/career-report';
+import type { listAdminProducts } from '@/server/store/admin-service';
+import type { listAllOrders } from '@/server/store/checkout-service';
+import type { storeProductSchema } from '@/server/store/schemas';
 
 /** Every `Date` becomes an ISO string over the wire; pages format them themselves. */
 type Serialized<T> = T extends Date ? string
@@ -406,3 +410,53 @@ export const getAdminAudit = (params?: { q?: string; actorType?: string; entityT
   adminRequest<{ entries: AdminAuditEntry[]; nextBefore: string | null; entityTypes?: string[] }>(
     `/api/internal/admin/audit${qs({ ...params })}`,
   );
+
+// ------------------------------------------------------------- digital shop
+
+export type AdminStoreProduct = Serialized<Awaited<ReturnType<typeof listAdminProducts>>[number]>;
+export type AdminStoreOrder = Awaited<ReturnType<typeof listAllOrders>>[number];
+/** What the console posts back. Mirrors `storeProductSchema` on the server. */
+export type AdminStoreProductInput = z.input<typeof storeProductSchema>;
+
+export const listAdminStoreProducts = () =>
+  adminRequest<{ products: AdminStoreProduct[] }>('/api/internal/store/products').then((r) => r.products);
+
+export const createAdminStoreProduct = (product: AdminStoreProductInput) =>
+  adminRequest<{ product: AdminStoreProduct }>('/api/internal/store/products', {
+    method: 'POST',
+    body: JSON.stringify(product),
+  }).then((r) => r.product);
+
+export const saveAdminStoreProduct = (productId: string, product: AdminStoreProductInput) =>
+  adminRequest<{ product: AdminStoreProduct }>(`/api/internal/store/products/${productId}`, {
+    method: 'PUT',
+    body: JSON.stringify(product),
+  }).then((r) => r.product);
+
+export const listAdminStoreOrders = (params?: { status?: string; limit?: number }) =>
+  adminRequest<{ orders: AdminStoreOrder[] }>(`/api/internal/store/orders${qs({ ...params })}`).then((r) => r.orders);
+
+export const actOnAdminStoreOrder = (orderId: string, action: 'fulfill' | 'refund' | 'cancel', reason: string) =>
+  adminRequest(`/api/internal/store/orders/${orderId}/${action}`, { method: 'POST', body: JSON.stringify({ reason }) });
+
+/**
+ * Put a product file in storage.
+ *
+ * Two steps on purpose: the server mints the object key and a one-off signed
+ * PUT, and the browser sends the bytes straight to the bucket. The file never
+ * passes through the application, which is what keeps a 40MB template from
+ * having to fit inside a request body.
+ */
+export async function uploadAdminStoreFile(file: File): Promise<{ storageKey: string; filename: string }> {
+  const { upload } = await adminRequest<{ upload: { uploadUrl: string; storageKey: string } }>(
+    '/api/internal/store/upload-url',
+    { method: 'POST', body: JSON.stringify({ mimeType: file.type || 'application/octet-stream' }) },
+  );
+  const response = await fetch(upload.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  });
+  if (!response.ok) throw new ArenaApiError('INTERNAL_ERROR', 'Unggah berkas ke storage gagal.', response.status);
+  return { storageKey: upload.storageKey, filename: file.name };
+}

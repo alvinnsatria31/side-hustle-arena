@@ -4,6 +4,9 @@ import { getDb } from "@/server/db/client";
 import { pointAccounts, pointLedger } from "@/server/db/schema";
 
 export type RewardDb = ReturnType<typeof getDb>;
+
+/** Ledger entries that move points out of a wallet, plus the refunds that undo them. */
+const spendingTypes = new Set(["REWARD_REDEMPTION", "STORE_PURCHASE", "STORE_REFUND"]);
 type LedgerEntry = Pick<typeof pointLedger.$inferSelect, "amount" | "entryType" | "referenceType">;
 
 export function summarizePoints(entries: LedgerEntry[]) {
@@ -12,7 +15,12 @@ export function summarizePoints(entries: LedgerEntry[]) {
   let spent = 0;
   for (const entry of entries) {
     balance += entry.amount;
-    if (entry.entryType === "REWARD_REDEMPTION" ||
+    // Spending and its reversals both belong on the spent side. A shop purchase
+    // is spending like a reward claim is, and a refund of either lowers what
+    // was spent rather than counting as points the participant earned — the
+    // wrong branch would let anyone inflate their lifetime total by buying and
+    // asking for their points back.
+    if (spendingTypes.has(entry.entryType) ||
       (entry.entryType === "ADMIN_REVERSAL" && entry.referenceType === "redemption")) {
       spent -= entry.amount;
     } else {

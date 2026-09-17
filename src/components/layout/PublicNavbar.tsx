@@ -10,16 +10,24 @@ import { ButtonLink } from '@/components/primitives/Button';
 import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
 import { cn } from '@/lib/cn';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
+import { isStoreEnabled } from '@/lib/store-flags';
 
 const NAV_LINKS_ALL = [
   { label: 'CV Scanner', href: '/cv-scanner' },
   { label: 'Side Hustle Arena', href: '/arena' },
   { label: 'Showcase', href: '/arena/showcase' },
   { label: 'Jobs', href: '/app/jobs' },
+  { label: 'Produk', href: '/store' },
 ];
 
-/** The CV Scanner stays out of navigation until its backend is switched on. */
-const NAV_LINKS = NAV_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
+/**
+ * Two features stay out of navigation until their backends are switched on. A
+ * link to a route that 404s is worse than no link: it reads as a broken site
+ * rather than as a feature that has not launched.
+ */
+const NAV_LINKS = NAV_LINKS_ALL.filter((item) =>
+  (!item.href.includes('/cv-scanner') || isCvScannerEnabled()) &&
+  (item.href !== '/store' || isStoreEnabled()));
 
 /**
  * Floating glass navbar. More transparent at top; slightly smaller and

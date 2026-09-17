@@ -8,7 +8,7 @@ export const STORAGE_PRESIGNED_PUT_TTL_SECONDS = 600;
 export const R2_PRESIGNED_PUT_TTL_SECONDS = STORAGE_PRESIGNED_PUT_TTL_SECONDS;
 
 export async function createPresignedUpload(input: { storageKey: string; mimeType: string }) {
-  if (!/^arena\/(development|production)\/[a-f0-9-]{36}$/.test(input.storageKey)) {
+  if (!/^(arena|store)\/(development|production)\/[a-f0-9-]{36}$/.test(input.storageKey)) {
     throw new Error("Only staging keys may receive upload URLs.");
   }
   const config = getStorageConfig();

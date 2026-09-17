@@ -10,6 +10,8 @@ set -euo pipefail
 # Usage:
 #   deploy/sk-vps/build-and-ship.sh                 # build + ship
 #   CV_SCANNER=true deploy/sk-vps/build-and-ship.sh # bake CV Scanner on
+#   STORE=true MIDTRANS_CLIENT_KEY=Mid-client-xxx deploy/sk-vps/build-and-ship.sh
+#                                                   # bake the digital shop on
 #   BUILD_ONLY=1 deploy/sk-vps/build-and-ship.sh    # build, don't ship
 #
 # Requires: docker with buildx, and the `sk-vps` ssh alias (see AGENTS.md).
@@ -18,12 +20,19 @@ set -euo pipefail
 IMAGE="sk-arena:local"
 SSH_ALIAS="${SK_VPS_SSH:-sk-vps}"
 CV_SCANNER="${CV_SCANNER:-}"
+# The shop's flag and Midtrans CLIENT key are client-side, so they are baked in
+# rather than read from the VPS env file. The SERVER key is a runtime secret and
+# deliberately absent here.
+STORE="${STORE:-}"
+MIDTRANS_CLIENT_KEY="${MIDTRANS_CLIENT_KEY:-}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-echo "==> Building ${IMAGE} (linux/amd64, CV_SCANNER='${CV_SCANNER}') ..."
+echo "==> Building ${IMAGE} (linux/amd64, CV_SCANNER='${CV_SCANNER}', STORE='${STORE}') ..."
 docker buildx build \
   --platform linux/amd64 \
   --build-arg NEXT_PUBLIC_CV_SCANNER_ENABLED="${CV_SCANNER}" \
+  --build-arg NEXT_PUBLIC_STORE_ENABLED="${STORE}" \
+  --build-arg NEXT_PUBLIC_MIDTRANS_CLIENT_KEY="${MIDTRANS_CLIENT_KEY}" \
   --tag "${IMAGE}" \
   --load \
   "${REPO_ROOT}"

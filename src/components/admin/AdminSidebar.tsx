@@ -17,6 +17,7 @@ import {
   ScanLine,
   Briefcase,
   ShieldAlert,
+  ShoppingBag,
   SquareArrowOutUpRight,
   Trophy,
   Users,
@@ -73,6 +74,7 @@ const GROUPS: Array<{ label: string | null; entries: Entry[] }> = [
       // Named for the product, not for the page's contents: an operator looks
       // for "Jobs", never for "Sumber Lowongan".
       item('Jobs', '/app/admin/careers', Briefcase, 'careers'),
+      item('Toko Digital', '/app/admin/store', ShoppingBag, 'store'),
       {
         kind: 'nest',
         nest: {

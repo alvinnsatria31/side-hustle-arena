@@ -5,11 +5,13 @@ import { getCurrentUser } from "@/server/auth/session";
 import { hasAllowedMutationOrigin } from "@/server/auth/origin";
 
 // `careers` covers the Jobs pipeline: source health, manual sync, enable and
-// disable. A subject listed in ARENA_ADMIN_SUBJECTS receives every scope, so
+// disable. `store` covers the digital shop: products, uploads, orders and
+// refunds — kept apart from `rewards` because one hands out prizes and the
+// other moves customers' money. A subject listed in ARENA_ADMIN_SUBJECTS receives every scope, so
 // adding one here does not orphan an existing admin; a subject granted scopes
 // individually through ARENA_ADMIN_ROLES (or the bearer path's
 // INTERNAL_ADMIN_SCOPES) needs "careers" added explicitly.
-export const arenaAdminScopes = ["overview", "reviews", "weeks", "projects", "rewards", "users", "storage", "notifications", "careers"] as const;
+export const arenaAdminScopes = ["overview", "reviews", "weeks", "projects", "rewards", "users", "storage", "notifications", "careers", "store"] as const;
 export type ArenaAdminScope = (typeof arenaAdminScopes)[number];
 
 function deny(): never {

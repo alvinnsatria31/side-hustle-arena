@@ -6,6 +6,7 @@ import { reviewJobs, reviewOverrides, reviewScores, reviews, skillEvidence } fro
 import { weeklyRankings } from "./rankings";
 import { pointAccounts, pointLedger, redemptions, catalog, inventoryPeriods } from "./rewards";
 import { events, deliveries } from "./notifications";
+import { entitlements, orders, paymentEvents, products } from "./store";
 import { users } from "./identity";
 
 export const userRelations = relations(users, ({ many, one }) => ({
@@ -15,6 +16,8 @@ export const userRelations = relations(users, ({ many, one }) => ({
   pointAccount: one(pointAccounts),
   pointLedgerEntries: many(pointLedger),
   redemptions: many(redemptions),
+  storeOrders: many(orders),
+  entitlements: many(entitlements),
 }));
 
 export const weekRelations = relations(weeks, ({ many, one }) => ({
@@ -72,4 +75,22 @@ export const rewardRelations = relations(catalog, ({ many }) => ({
 
 export const notificationEventRelations = relations(events, ({ many }) => ({
   deliveries: many(deliveries),
+}));
+
+export const storeProductRelations = relations(products, ({ many }) => ({
+  orders: many(orders),
+  entitlements: many(entitlements),
+}));
+
+export const storeOrderRelations = relations(orders, ({ many, one }) => ({
+  user: one(users, { fields: [orders.userId], references: [users.id] }),
+  product: one(products, { fields: [orders.productId], references: [products.id] }),
+  entitlement: one(entitlements),
+  paymentEvents: many(paymentEvents),
+}));
+
+export const storeEntitlementRelations = relations(entitlements, ({ one }) => ({
+  user: one(users, { fields: [entitlements.userId], references: [users.id] }),
+  product: one(products, { fields: [entitlements.productId], references: [products.id] }),
+  order: one(orders, { fields: [entitlements.orderId], references: [orders.id] }),
 }));

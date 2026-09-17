@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
+import { expireStaleOrders } from "@/server/store/checkout-service";
 import { weeks } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { closeWeekForFinalization, finalizeWeek } from "@/server/finalization/service";
@@ -381,6 +382,19 @@ export async function runJobsSync(now = new Date(), deps = { sync: syncDueJobSou
   };
 }
 
+/**
+ * Write off shop orders nobody paid for.
+ *
+ * Midtrans does send an `expire` notification, but a pending order also blocks
+ * the buyer's next attempt on `store_orders_pending_unique` — so a notification
+ * that never arrives would lock somebody out of a product indefinitely. This is
+ * the floor under that, not the primary mechanism.
+ */
+export async function runStoreExpiry(now = new Date()): Promise<JobResult> {
+  const { expired } = await expireStaleOrders(now);
+  return { job: "store-expiry", done: true, detail: { expired } };
+}
+
 export const JOBS = {
   "week-close": runWeekClose,
   "week-finalize": runWeekFinalize,
@@ -392,6 +406,7 @@ export const JOBS = {
   "project-generate": runProjectGenerate,
   "reviews-run": runReviewsRun,
   "jobs-sync": runJobsSync,
+  "store-expiry": runStoreExpiry,
 } satisfies Record<string, (now?: Date) => Promise<JobResult>>;
 
 export type JobName = keyof typeof JOBS;

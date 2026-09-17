@@ -13,4 +13,5 @@ export * from "./relations";
 export * from "./rewards";
 export * from "./reviews";
 export * from "./schemas";
+export * from "./store";
 export * from "./submissions";

@@ -15,7 +15,7 @@ const sql = findSqlFiles(migrationRoot)
   .map((file) => readFileSync(file, "utf8"))
   .join("\n");
 
-for (const schema of ["identity", "arena", "rewards", "notifications", "automation", "audit"]) {
+for (const schema of ["identity", "arena", "rewards", "notifications", "automation", "audit", "store"]) {
   assert.match(sql, new RegExp(`CREATE SCHEMA \\\"${schema}\\\"`));
 }
 
@@ -40,6 +40,13 @@ for (const fragment of [
   '"redemptions_idempotency_key_unique" UNIQUE("idempotency_key")',
   '"runs_idempotency_key_unique" UNIQUE("idempotency_key")',
   '"events_dedupe_key_unique" UNIQUE("dedupe_key")',
+  // The shop's three guarantees: one payment in flight per product per person,
+  // one live grant per product per person, and one application per payment
+  // notification however many times Midtrans sends it.
+  '"store_orders_provider_order_id_unique" UNIQUE("provider_order_id")',
+  '"store_payment_events_event_key_unique" UNIQUE("event_key")',
+  'CREATE UNIQUE INDEX "store_orders_pending_unique"',
+  'CREATE UNIQUE INDEX "store_entitlements_live_unique"',
   '"attempt_count" integer DEFAULT 0 NOT NULL',
   '"lease_token" uuid',
   '"message_snapshot" jsonb',

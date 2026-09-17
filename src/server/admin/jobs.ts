@@ -45,6 +45,8 @@ export const adminJobs = {
     detail: "Hapus upload intent kedaluwarsa yang tidak dirujuk submission." },
   "jobs-sync": { scope: "careers", label: "Tarik lowongan",
     detail: "Ambil lowongan terbaru dari setiap sumber aktif yang sudah jatuh tempo. Aman diulang." },
+  "store-expiry": { scope: "store", label: "Tutup pesanan kedaluwarsa",
+    detail: "Tandai pesanan toko yang batas bayarnya sudah lewat sebagai kedaluwarsa, supaya pembeli bisa mencoba lagi. Aman diulang." },
 } satisfies Record<JobName, { scope: ArenaAdminScope; label: string; detail: string }>;
 
 export type AdminJobName = JobName;
