@@ -8,26 +8,15 @@ import { Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
+import { isNavActive, publicNavLinks } from '@/components/layout/nav-links';
 import { cn } from '@/lib/cn';
-/**
- * Five entries, centred, in the order a first-time visitor needs them:
- * what this is, how it is judged, what is open now, who has won, what it pays.
- *
- * Judging sits second on purpose. It is the objection that stops people
- * entering a competition, so it gets a nav slot rather than only a section
- * someone has to scroll far enough to find.
- */
-const NAV_LINKS = [
-  { label: 'Cara kerja', href: '/arena' },
-  { label: 'Penilaian', href: '/#nilai' },
-  { label: 'Proyek', href: '/arena/projects' },
-  { label: 'Sorotan', href: '/arena/showcase' },
-  { label: 'Hadiah', href: '/#hadiah' },
-];
 
 /**
  * Floating glass navbar. More transparent at top; slightly smaller and
  * more opaque on scroll (approved navbar motion).
+ *
+ * The links sit in the middle column of a three-column grid rather than beside
+ * the wordmark, so the bar stays balanced as labels are added or renamed.
  *
  * `user` comes from the layout, which reads the shared Sekolah Karir session on
  * the server. It matters that this is resolved before paint rather than fetched
@@ -39,6 +28,7 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const reduce = useReducedMotion();
+  const links = publicNavLinks();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -51,31 +41,29 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
     setMenuOpen(false);
   }, [pathname]);
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6">
       <motion.nav
         layout
         transition={{ duration: reduce ? 0 : 0.3, ease: 'easeOut' }}
         className={cn(
-          'glass-nav mx-auto flex max-w-6xl items-center gap-6 rounded-[var(--radius-sk-xl)] transition-all duration-300 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-8',
+          'glass-nav mx-auto flex max-w-6xl items-center gap-6 rounded-[var(--radius-sk-xl)] transition-all duration-300',
+          'lg:grid lg:grid-cols-[auto_1fr_auto] lg:gap-8',
           scrolled ? 'bg-white/90 px-3.5 py-2 shadow-sk-glass' : 'px-4 py-2.5 lg:px-6 lg:py-3',
         )}
         aria-label="Navigasi utama"
       >
         <BrandLogo />
 
-        {/* Centre column: the links sit in the middle of the bar, not beside
-            the wordmark, so the bar stays balanced as labels change length. */}
-        <ul className="hidden items-center justify-center gap-7 text-[13px] font-medium text-sk-body lg:flex">
-          {NAV_LINKS.map((link) => (
+        <ul className="hidden items-center justify-center gap-6 text-[13px] font-medium text-sk-body lg:flex xl:gap-7">
+          {links.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
+                aria-current={isNavActive(link.href, pathname) ? 'page' : undefined}
                 className={cn(
                   'whitespace-nowrap transition-colors hover:text-sk-navy',
-                  isActive(link.href) && 'font-semibold text-sk-navy',
+                  isNavActive(link.href, pathname) && 'font-semibold text-sk-navy',
                 )}
               >
                 {link.label}
@@ -84,7 +72,7 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
           ))}
         </ul>
 
-        <div className="ml-auto hidden items-center justify-end gap-3 lg:flex">
+        <div className="ml-auto hidden items-center justify-end gap-3 lg:ml-0 lg:flex">
           {user ? (
             <>
               <ButtonLink href="/app" size="sm" className="rounded-full">
@@ -94,7 +82,10 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
             </>
           ) : (
             <>
-              <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
+              <Link
+                href="/login"
+                className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue"
+              >
                 Masuk
               </Link>
               <ButtonLink href="/arena/projects" size="sm" className="rounded-full">
@@ -105,7 +96,7 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
         </div>
 
         <button
-          className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg text-sk-navy lg:hidden"
+          className="ml-auto flex h-11 w-11 items-center justify-center rounded-[var(--radius-sk-md)] text-sk-navy transition-colors hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2 lg:hidden"
           aria-expanded={menuOpen}
           aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'}
           onClick={() => setMenuOpen((v) => !v)}
@@ -118,36 +109,47 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="glass-nav mx-auto mt-2 flex max-w-6xl flex-col gap-1 rounded-[var(--radius-sk-xl)] p-3 lg:hidden"
+          transition={{ duration: reduce ? 0 : 0.25, ease: 'easeOut' }}
+          /* Solid, not glass. This sheet covers the hero, and `.glass-nav`'s
+             72% white lets the headline behind it show through the links —
+             legible enough to look intentional, and not legible enough to
+             read. A panel laid over content has to be opaque. */
+          className="mx-auto mt-2 flex max-w-6xl flex-col gap-1 rounded-[var(--radius-sk-xl)] border border-sk-border bg-white p-3 shadow-sk-lg lg:hidden"
         >
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                'rounded-lg px-3 py-2.5 text-[13.5px] font-medium text-sk-body transition-colors hover:bg-white hover:text-sk-navy',
-                isActive(link.href) && 'font-semibold text-sk-navy',
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            const Icon = link.icon;
+            const active = isNavActive(link.href, pathname);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-[44px] items-center gap-3 rounded-[var(--radius-sk-md)] px-3 text-[14px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy',
+                  active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
+                )}
+              >
+                <Icon size={17} strokeWidth={2.1} aria-hidden className="flex-none" />
+                {link.label}
+              </Link>
+            );
+          })}
+
           <div className="mt-2 flex items-center gap-2 border-t border-sk-border pt-3">
             {user ? (
               <>
-                <ButtonLink href="/app" size="sm" className="flex-1">
+                <ButtonLink href="/app" size="sm" className="flex-1 rounded-full">
                   Buka Arena
                 </ButtonLink>
                 <PublicUserMenu user={user} />
               </>
             ) : (
               <>
-                <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1">
+                <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1 rounded-full">
                   Masuk
                 </ButtonLink>
-                <ButtonLink href="/arena" size="sm" className="flex-1">
-                  Jelajahi Arena
+                <ButtonLink href="/arena/projects" size="sm" className="flex-1 rounded-full">
+                  Ikut sprint
                 </ButtonLink>
               </>
             )}
