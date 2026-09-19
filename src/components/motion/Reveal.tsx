@@ -3,12 +3,19 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 
+/** Cubic-bezier control points, as Motion accepts them. */
+type Ease = string | [number, number, number, number];
+
 interface RevealProps {
   children: ReactNode;
   className?: string;
   delay?: number;
   y?: number;
   once?: boolean;
+  /** Seconds. Defaults to the approved 0.5s site token. */
+  duration?: number;
+  /** Defaults to the approved 'easeOut' site token. */
+  ease?: Ease;
 }
 
 /**
@@ -57,7 +64,15 @@ function settleTransition(reduce: boolean, transition: Record<string, unknown>) 
 }
 
 /** Viewport-triggered entrance: opacity 0→1, y 12→0, 500ms ease-out. */
-export function Reveal({ children, className, delay = 0, y = 12, once = true }: RevealProps) {
+export function Reveal({
+  children,
+  className,
+  delay = 0,
+  y = 12,
+  once = true,
+  duration = 0.5,
+  ease = 'easeOut',
+}: RevealProps) {
   const reduce = useSettledReducedMotion();
   return (
     <motion.div
@@ -65,7 +80,7 @@ export function Reveal({ children, className, delay = 0, y = 12, once = true }: 
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once, margin: '-48px', amount: reduce ? 0 : 'some' }}
-      transition={settleTransition(reduce, { duration: 0.5, ease: 'easeOut', delay })}
+      transition={settleTransition(reduce, { duration, ease, delay })}
     >
       {children}
     </motion.div>
@@ -73,14 +88,21 @@ export function Reveal({ children, className, delay = 0, y = 12, once = true }: 
 }
 
 /** Mount-time entrance (hero content, page headers). */
-export function Entrance({ children, className, delay = 0, y = 12 }: RevealProps) {
+export function Entrance({
+  children,
+  className,
+  delay = 0,
+  y = 12,
+  duration = 0.5,
+  ease = 'easeOut',
+}: RevealProps) {
   const reduce = useSettledReducedMotion();
   return (
     <motion.div
       className={className}
       initial={{ opacity: 0, y }}
       animate={{ opacity: 1, y: 0 }}
-      transition={settleTransition(reduce, { duration: 0.5, ease: 'easeOut', delay })}
+      transition={settleTransition(reduce, { duration, ease, delay })}
     >
       {children}
     </motion.div>

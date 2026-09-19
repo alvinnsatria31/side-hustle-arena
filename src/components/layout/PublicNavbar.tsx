@@ -9,9 +9,20 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
 import { cn } from '@/lib/cn';
+/**
+ * Five entries, centred, in the order a first-time visitor needs them:
+ * what this is, how it is judged, what is open now, who has won, what it pays.
+ *
+ * Judging sits second on purpose. It is the objection that stops people
+ * entering a competition, so it gets a nav slot rather than only a section
+ * someone has to scroll far enough to find.
+ */
 const NAV_LINKS = [
-  { label: 'Side Hustle Arena', href: '/arena' },
+  { label: 'Cara kerja', href: '/arena' },
+  { label: 'Penilaian', href: '/#nilai' },
+  { label: 'Proyek', href: '/arena/projects' },
   { label: 'Sorotan', href: '/arena/showcase' },
+  { label: 'Hadiah', href: '/#hadiah' },
 ];
 
 /**
@@ -48,20 +59,22 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
         layout
         transition={{ duration: reduce ? 0 : 0.3, ease: 'easeOut' }}
         className={cn(
-          'glass-nav mx-auto flex max-w-6xl items-center gap-6 rounded-[var(--radius-sk-xl)] transition-all duration-300',
-          scrolled ? 'bg-white/90 px-3.5 py-2 shadow-sk-glass' : 'px-4 py-2.5',
+          'glass-nav mx-auto flex max-w-6xl items-center gap-6 rounded-[var(--radius-sk-xl)] transition-all duration-300 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-8',
+          scrolled ? 'bg-white/90 px-3.5 py-2 shadow-sk-glass' : 'px-4 py-2.5 lg:px-6 lg:py-3',
         )}
         aria-label="Navigasi utama"
       >
         <BrandLogo />
 
-        <ul className="hidden items-center gap-6 text-[13px] font-medium text-sk-body lg:flex">
+        {/* Centre column: the links sit in the middle of the bar, not beside
+            the wordmark, so the bar stays balanced as labels change length. */}
+        <ul className="hidden items-center justify-center gap-7 text-[13px] font-medium text-sk-body lg:flex">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
                 href={link.href}
                 className={cn(
-                  'transition-colors hover:text-sk-navy',
+                  'whitespace-nowrap transition-colors hover:text-sk-navy',
                   isActive(link.href) && 'font-semibold text-sk-navy',
                 )}
               >
@@ -71,10 +84,10 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
           ))}
         </ul>
 
-        <div className="ml-auto hidden items-center gap-3 lg:flex">
+        <div className="ml-auto hidden items-center justify-end gap-3 lg:flex">
           {user ? (
             <>
-              <ButtonLink href="/app" size="sm">
+              <ButtonLink href="/app" size="sm" className="rounded-full">
                 Buka Arena
               </ButtonLink>
               <PublicUserMenu user={user} />
@@ -84,8 +97,8 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
               <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
                 Masuk
               </Link>
-              <ButtonLink href="/arena" size="sm">
-                Jelajahi Arena
+              <ButtonLink href="/arena/projects" size="sm" className="rounded-full">
+                Ikut sprint ini
               </ButtonLink>
             </>
           )}
