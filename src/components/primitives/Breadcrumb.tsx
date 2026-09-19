@@ -16,7 +16,7 @@ export function Breadcrumb({ items, className }: { items: Crumb[]; className?: s
           <li key={item.label} className="flex items-center gap-2">
             {i > 0 && <ChevronRight size={11} aria-hidden className="opacity-60" />}
             {item.href ? (
-              <Link href={item.href} className="transition-colors hover:text-sk-blue">
+              <Link href={item.href} className="inline-flex min-h-[32px] items-center transition-colors hover:text-sk-blue focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2">
                 {item.label}
               </Link>
             ) : (

@@ -80,7 +80,7 @@ export function PublicUserMenu({ user }: { user: PublicNavUser }) {
           <Link
             href="/app/profile"
             role="menuitem"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
+            className="flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
           >
             <UserRound size={15} aria-hidden /> Profil
           </Link>
@@ -88,7 +88,7 @@ export function PublicUserMenu({ user }: { user: PublicNavUser }) {
             <button
               type="submit"
               role="menuitem"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-sk-error transition-colors hover:bg-sk-error-wash"
+              className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] font-medium text-sk-error transition-colors hover:bg-sk-error-wash"
             >
               <LogOut size={15} aria-hidden /> Keluar
             </button>

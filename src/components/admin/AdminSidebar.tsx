@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { LogoutForm } from '@/components/auth/LogoutForm';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
   CalendarClock,
+  ChevronDown,
   ClipboardCheck,
   FileText,
   FolderKanban,
@@ -154,6 +156,15 @@ export function AdminSidebar({
   badges?: Record<string, NavBadge>;
 }) {
   const pathname = usePathname();
+  // The rail is a column beside the canvas on desktop and a disclosure above it
+  // on phones. Left always-open there it became a screenful of links that every
+  // page begins with, and an operator scrolled past the whole console to reach
+  // the console.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   const allowed = (entry: NavItem) => entry.scope === null || scopes.includes(entry.scope);
 
   // Scope filtering runs before anything is numbered. A static "1 · Siapkan"
@@ -181,8 +192,9 @@ export function AdminSidebar({
           href={href}
           aria-current={active ? 'page' : undefined}
           className={cn(
-            'flex items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-[13px] font-medium transition-colors',
-            active ? 'bg-sk-blue-tint font-bold text-sk-blue' : 'text-sk-body hover:bg-sk-bg hover:text-sk-navy',
+            'flex min-h-[44px] items-center gap-2.5 rounded-[var(--radius-sk-md)] px-2.5 text-[13px] font-medium transition-colors md:min-h-0 md:py-2',
+            'focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2',
+            active ? 'bg-sk-blue-tint font-bold text-sk-blue-700' : 'text-sk-body hover:bg-sk-bg hover:text-sk-navy',
           )}
         >
           <Icon size={16} aria-hidden />
@@ -203,9 +215,27 @@ export function AdminSidebar({
         <span className="rounded-full bg-sk-blue-tint px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-sk-blue">
           Admin
         </span>
+
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls="admin-rail"
+          className="ml-auto flex h-11 items-center gap-1.5 rounded-[var(--radius-sk-md)] px-3 text-[12.5px] font-semibold text-sk-body transition-colors hover:bg-sk-bg focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2 md:hidden"
+        >
+          Menu
+          <ChevronDown
+            size={15}
+            aria-hidden
+            className={cn('transition-transform duration-200', open && 'rotate-180')}
+          />
+        </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav
+        id="admin-rail"
+        className={cn('flex-1 overflow-y-auto px-3 py-4 md:block', open ? 'block' : 'hidden')}
+      >
         {visible.map((group) => (
           <div key={group.label ?? 'root'} className="mb-5 last:mb-0">
             {group.label && (
@@ -239,13 +269,15 @@ export function AdminSidebar({
         ))}
       </nav>
 
-      <div className="border-t border-sk-border px-3 py-3">
+      {/* Follows the rail: on a phone the identity and the way out belong with
+          the menu they close, not stranded under every page. */}
+      <div className={cn('border-t border-sk-border px-3 py-3 md:block', open ? 'block' : 'hidden')}>
         <p className="truncate px-2.5 pb-2 font-mono text-[10.5px] text-sk-muted" title={subject}>
           {subject}
         </p>
         <Link
           href="/app"
-          className="flex items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy"
+          className="flex min-h-[44px] items-center gap-2.5 rounded-[var(--radius-sk-md)] px-2.5 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2 md:min-h-0 md:py-2"
         >
           <SquareArrowOutUpRight size={16} aria-hidden />
           Kembali ke Arena
@@ -253,7 +285,7 @@ export function AdminSidebar({
         <LogoutForm>
           <button
             type="submit"
-            className="flex w-full items-center gap-2.5 rounded-[var(--radius-sk)] px-2.5 py-2 text-left text-[13px] font-medium text-sk-error transition-colors hover:bg-sk-error-wash"
+            className="flex min-h-[44px] w-full items-center gap-2.5 rounded-[var(--radius-sk-md)] px-2.5 text-left text-[13px] font-medium text-sk-error transition-colors hover:bg-sk-error-wash focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2 md:min-h-0 md:py-2"
           >
             <LogOut size={16} aria-hidden />
             Keluar
