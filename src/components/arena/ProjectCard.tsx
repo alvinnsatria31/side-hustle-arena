@@ -6,7 +6,8 @@ import { ArrowRight, Timer } from 'lucide-react';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Badge } from '@/components/primitives/Badge';
 import { SkillChip } from '@/components/primitives/SkillChip';
-import { ProjectCover, coverCtaLabel } from './ProjectCover';
+import { ProjectCover } from './ProjectCover';
+import { difficultyLabel } from './ProjectBadges';
 import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
 
@@ -50,11 +51,11 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
 
       <div className="flex items-center gap-1.5">
         <span className="inline-flex items-center rounded-full bg-sk-track px-2.5 py-1 font-mono text-[11px] font-semibold uppercase leading-none text-sk-muted">
-          {project.difficulty}
+          {difficultyLabel(project.difficulty)}
         </span>
         {project.points != null && (
           <span className="inline-flex items-center rounded-full bg-sk-blue-tint px-2.5 py-1 font-mono text-[11px] font-semibold uppercase leading-none text-sk-blue">
-            {project.points} pts Rubric
+            Rubrik {project.points} poin
           </span>
         )}
         <span className="ml-auto inline-flex items-center gap-1 font-mono text-[11px] font-semibold uppercase text-sk-muted">
@@ -91,13 +92,13 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
         {project.participants != null ? (
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-sk-blue" />
-            {project.participants} Peserta Aktif
+            {project.participants} peserta
           </span>
         ) : (
           <span />
         )}
         <span>
-          Deadline: <span className="font-semibold text-sk-navy">{project.deadlineLabel}</span>
+          Batas: <span className="font-semibold text-sk-navy">{project.deadlineLabel}</span>
         </span>
       </div>
 
@@ -106,13 +107,13 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
           href={to}
           className="inline-flex h-9 flex-1 items-center justify-center rounded-[var(--radius-sk-md)] bg-sk-track px-3 text-[12.5px] font-semibold text-sk-navy transition-colors hover:bg-sk-border"
         >
-          Preview Rubrik
+          Lihat rubrik
         </Link>
         <Link
           href={to}
           className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-[var(--radius-sk-md)] bg-sk-blue px-3 text-[12.5px] font-bold text-white shadow-sk-btn transition-all hover:-translate-y-px hover:bg-sk-blue-700"
         >
-          {coverCtaLabel(project.category)}
+          Lihat proyek
           <ArrowRight size={14} aria-hidden />
         </Link>
       </div>

@@ -22,11 +22,11 @@ export function ParticipantNav() {
   const pathname = usePathname();
   return <nav aria-label="Navigasi peserta" className="mb-7 flex flex-wrap gap-x-5 gap-y-3 border-b border-sk-border pb-4 text-sm">
     {[
-      { href: '/app', label: 'Dashboard', Icon: LayoutGrid },
+      { href: '/app', label: 'Beranda', Icon: LayoutGrid },
       { href: '/app/arena', label: 'Arena', Icon: Trophy },
-      { href: '/app/arena/leaderboard', label: 'Leaderboard', Icon: Trophy },
-      { href: '/app/notifications', label: 'Inbox', Icon: Bell },
-      { href: '/app/profile', label: 'Profile', Icon: UserRound },
+      { href: '/app/arena/leaderboard', label: 'Peringkat', Icon: Trophy },
+      { href: '/app/notifications', label: 'Pesan', Icon: Bell },
+      { href: '/app/profile', label: 'Profil', Icon: UserRound },
     ].map(({ href, label, Icon }) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined} className={`inline-flex items-center gap-2 py-1 font-semibold ${pathname === href ? 'text-sk-blue' : 'text-sk-muted hover:text-sk-blue'}`}><Icon size={15} aria-hidden />{label}</Link>)}
   </nav>;
 }
@@ -60,19 +60,23 @@ export function ParticipantStats({ data }: { data: ParticipantOverview }) {
     {[
       { label: 'Poin tersedia', value: data.points.balance, color: 'text-sk-blue' },
       { label: 'Total poin diperoleh', value: data.points.lifetimeEarned, color: 'text-sk-navy' },
-      { label: 'Project selesai', value: data.completedProjects, color: 'text-sk-success' },
-      { label: 'Skill terbukti', value: data.provenSkills, color: 'text-sk-navy' },
+      { label: 'Proyek selesai', value: data.completedProjects, color: 'text-sk-success' },
+      { label: 'Kemampuan yang terbukti', value: data.provenSkills, color: 'text-sk-navy' },
     ].map(({ label, value, color }) => <div key={label}><dt className="text-xs text-sk-muted">{label}</dt><dd className={`mt-2 text-2xl font-extrabold ${color}`}>{value.toLocaleString('id-ID')}</dd></div>)}
   </dl>;
 }
 
-const stepLabels: Record<string, string> = { BRIEF: 'Brief', PLAN: 'Plan', WORK: 'Work', REVIEW: 'Review', SUBMIT: 'Submit' };
+const stepLabels: Record<string, string> = { BRIEF: 'Brief', PLAN: 'Rencana', WORK: 'Pengerjaan', REVIEW: 'Pemeriksaan', SUBMIT: 'Pengiriman' };
+const weekStatusLabels: Record<string, string> = {
+  SCHEDULED: 'Dijadwalkan', PREVIEW: 'Segera dibuka', OPEN: 'Sedang dibuka',
+  CLOSED: 'Ditutup', FINALIZING: 'Menunggu hasil akhir', FINALIZED: 'Selesai',
+};
 
 export function EnrollmentCard({ enrollment }: { enrollment: ParticipantEnrollment }) {
   const slug = encodeURIComponent(enrollment.project.slug);
   const submitted = Boolean(enrollment.submission?.latestVersionId);
   const voided = enrollment.status === 'VOIDED' || enrollment.submission?.status === 'VOIDED';
-  const status = voided ? 'Dibatalkan' : enrollment.ranking ? 'Result tersedia' : !enrollment.sealed ? 'Tidak masuk ranking' : submitted ? 'Menunggu finalisasi' : 'Belum submit';
+  const status = voided ? 'Dibatalkan' : enrollment.ranking ? 'Hasil tersedia' : !enrollment.sealed ? 'Tidak masuk peringkat' : submitted ? 'Menunggu hasil akhir' : 'Belum dikirim';
   const step = enrollment.workspace?.currentStep ?? 'BRIEF';
   return <article className="rounded-lg border border-sk-border bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -80,19 +84,19 @@ export function EnrollmentCard({ enrollment }: { enrollment: ParticipantEnrollme
       <Badge variant={enrollment.ranking ? 'mint' : submitted ? 'amber' : 'slate'}>{status}</Badge>
     </div>
     <h2 className="mt-3 text-xl font-bold text-sk-navy">{enrollment.project.title}</h2>
-    <div className="mt-3 flex items-start gap-2 text-xs text-sk-muted"><CalendarClock size={15} className="shrink-0" aria-hidden /><span>Deadline {participantDate(enrollment.week.submissionDeadlineAt)} WIB</span></div>
-    {enrollment.ranking ? <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-sk-success"><span>Rank #{enrollment.ranking.rank}</span><span>Skor {enrollment.ranking.finalScore}/100</span><span>+{enrollment.ranking.pointsAwarded} poin</span></div> : !submitted && !voided && enrollment.sealed ? <p className="mt-4 text-sm text-sk-body">Tahap tersimpan: <strong>{stepLabels[step] ?? step}</strong></p> : null}
+    <div className="mt-3 flex items-start gap-2 text-xs text-sk-muted"><CalendarClock size={15} className="shrink-0" aria-hidden /><span>Batas pengumpulan {participantDate(enrollment.week.submissionDeadlineAt)} WIB</span></div>
+    {enrollment.ranking ? <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-sk-success"><span>Peringkat #{enrollment.ranking.rank}</span><span>Skor {enrollment.ranking.finalScore}/100</span><span>+{enrollment.ranking.pointsAwarded} poin</span></div> : !submitted && !voided && enrollment.sealed ? <p className="mt-4 text-sm text-sk-body">Tahap tersimpan: <strong>{stepLabels[step] ?? step}</strong></p> : null}
     <div className="mt-5 flex flex-wrap gap-3">
-      {!enrollment.sealed ? <ButtonLink size="sm" href={`/app/arena/result/${slug}`}>Lihat Result</ButtonLink> : submitted ? <ButtonLink size="sm" href={`/app/arena/submission/${slug}`}>Lihat Submission</ButtonLink> : !voided ? <ButtonLink size="sm" href={`/app/arena/workspace/${slug}`}>Buka Workspace</ButtonLink> : null}
-      <ButtonLink size="sm" variant="ghost" href={`/app/arena/projects/${slug}`}>Lihat Brief</ButtonLink>
+      {!enrollment.sealed ? <ButtonLink size="sm" href={`/app/arena/result/${slug}`}>Lihat hasil</ButtonLink> : submitted ? <ButtonLink size="sm" href={`/app/arena/submission/${slug}`}>Lihat kiriman</ButtonLink> : !voided ? <ButtonLink size="sm" href={`/app/arena/workspace/${slug}`}>Lanjutkan proyek</ButtonLink> : null}
+      <ButtonLink size="sm" variant="ghost" href={`/app/arena/projects/${slug}`}>Lihat brief</ButtonLink>
     </div>
   </article>;
 }
 
 export function EnrollmentHistory({ history }: { history: ParticipantOverview['history'] }) {
   return <section className="mt-8">
-    <h2 className="mb-4 text-lg font-bold text-sk-navy">Riwayat project</h2>
-    {history.length ? <div className="grid gap-4 md:grid-cols-2">{history.map((enrollment) => <EnrollmentCard key={enrollment.id} enrollment={enrollment} />)}</div> : <p className="py-5 text-sm text-sk-muted">Belum ada riwayat project.</p>}
+    <h2 className="mb-4 text-lg font-bold text-sk-navy">Riwayat proyek</h2>
+    {history.length ? <div className="grid gap-4 md:grid-cols-2">{history.map((enrollment) => <EnrollmentCard key={enrollment.id} enrollment={enrollment} />)}</div> : <p className="py-5 text-sm text-sk-muted">Kamu belum mengerjakan proyek.</p>}
   </section>;
 }
 
@@ -106,11 +110,11 @@ function ArenaRewardLadder({ balance }: { balance: number }) {
   const ladder = rewards.data?.ladder;
   return <section aria-labelledby="arena-rewards-title" className="mb-8">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h2 id="arena-rewards-title" className="flex items-center gap-2 text-lg font-bold text-sk-navy"><Gift size={20} aria-hidden />Hadiah &amp; milestone</h2>
+      <h2 id="arena-rewards-title" className="flex items-center gap-2 text-lg font-bold text-sk-navy"><Gift size={20} aria-hidden />Hadiah dan progresmu</h2>
       <ButtonLink href="/app/profile#rewards" size="sm" variant="ghost">Tukar poin</ButtonLink>
     </div>
     {rewards.error
-      ? <p className="text-sm text-sk-muted">Milestone belum bisa dimuat. Coba perbarui halaman.</p>
+      ? <p className="text-sm text-sk-muted">Daftar hadiah belum bisa dimuat. Coba perbarui halaman.</p>
       : !ladder
         ? null
         : ladder.steps.length === 0
@@ -130,16 +134,16 @@ export default function ParticipantDashboard({ arena = false }: { arena?: boolea
   return <ParticipantShell title={arena ? 'Side Hustle Arena' : `Halo, ${user.displayName ?? 'Peserta'}`} action={<RefreshButton refresh={resource.refresh} loading={resource.loading} />}>
     <ResourceState loading={resource.loading} error={resource.error} retry={resource.refresh} />
     {data && !resource.loading && <>
-      {data.currentWeek && <div className="mb-4 flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-sk-body">{data.currentWeek.title}</span><Badge variant={data.currentWeek.canSelect ? 'mint' : 'slate'}>{data.currentWeek.status}</Badge></div>}
+      {data.currentWeek && <div className="mb-4 flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-sk-body">{data.currentWeek.title}</span><Badge variant={data.currentWeek.canSelect ? 'mint' : 'slate'}>{weekStatusLabels[data.currentWeek.status] ?? data.currentWeek.status}</Badge></div>}
       {active ? <EnrollmentCard enrollment={active} /> : <section className="border-y border-sk-border py-7">
-        <h2 className="mb-4 text-lg font-bold text-sk-navy">{data.currentWeek?.canSelect ? 'Belum ada project dipilih minggu ini' : data.currentWeek ? 'Pendaftaran project belum tersedia' : 'Belum ada minggu Arena tersedia'}</h2>
-        <ButtonLink href="/app/arena/projects" iconLeft={<LayoutGrid size={15} aria-hidden />}>Lihat Project</ButtonLink>
+        <h2 className="mb-4 text-lg font-bold text-sk-navy">{data.currentWeek?.canSelect ? 'Kamu belum memilih proyek minggu ini' : data.currentWeek ? 'Pendaftaran proyek belum dibuka' : 'Belum ada proyek Arena yang tersedia'}</h2>
+        <ButtonLink href="/app/arena/projects" iconLeft={<LayoutGrid size={15} aria-hidden />}>Lihat proyek</ButtonLink>
       </section>}
       <ParticipantStats data={data} />
       {arena && <ArenaRewardLadder balance={data.points.balance} />}
-      <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua Project</ButtonLink><ButtonLink href="/app/arena/projects?view=saved" variant="ghost" iconLeft={<Bookmark size={15} aria-hidden />}>Tersimpan</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Leaderboard</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Reward</ButtonLink></div>
+      <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua proyek</ButtonLink><ButtonLink href="/app/arena/projects?view=saved" variant="ghost" iconLeft={<Bookmark size={15} aria-hidden />}>Tersimpan</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Peringkat</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Hadiah</ButtonLink></div>
       <EnrollmentHistory history={data.history.filter((row) => row.id !== active?.id)} />
-      <p className="mt-8 text-sm text-sk-muted">Jika mengalami kendala, hubungi WhatsApp CS: <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-sk-blue hover:underline">+62 851-1730-4579</a></p>
+      <p className="mt-8 text-sm text-sk-muted">Butuh bantuan? Hubungi kami lewat WhatsApp: <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-sk-blue hover:underline">+62 851-1730-4579</a></p>
     </>}
   </ParticipantShell>;
 }

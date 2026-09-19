@@ -6,6 +6,7 @@ import { ResourceList } from '@/components/arena/KanbanPreview';
 import { Card } from '@/components/primitives/Card';
 import { CtaActions, DetailTabs } from '@/components/arena/ProjectDetail';
 import { ProjectCover } from '@/components/arena/ProjectCover';
+import { difficultyLabel } from '@/components/arena/ProjectBadges';
 import { getPublicProjectDetail } from '@/lib/arena-view';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const project = await getPublicProjectDetail(slug);
-  return { title: project ? project.title : 'Project tidak ditemukan' };
+  return { title: project ? project.title : 'Proyek tidak ditemukan' };
 }
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -26,7 +27,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <Breadcrumb
         items={[
           { label: 'Arena', href: '/arena' },
-          { label: 'Project Minggu Ini', href: '/arena/projects' },
+          { label: 'Proyek Minggu Ini', href: '/arena/projects' },
           { label: project.title },
         ]}
       />
@@ -40,15 +41,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           />
           <div className="relative z-[1]">
             <span className="eyebrow eyebrow-dark">
-              {project.category} · Week {project.week}
+              {project.category} · Minggu {project.week}
             </span>
             <h1 className="mb-5 mt-3 max-w-[680px] text-[32px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[46px]">
               {project.title}
             </h1>
             <div className="mb-7 flex flex-wrap gap-2">
-              <Badge variant="dark">{project.difficulty}</Badge>
+              <Badge variant="dark">{difficultyLabel(project.difficulty)}</Badge>
               <Badge variant="dark">Estimasi {project.estimatedTime}</Badge>
-              <Badge variant="dark">Deadline · {project.deadlineLabel}</Badge>
+              <Badge variant="dark">Batas pengumpulan · {project.deadlineLabel}</Badge>
             </div>
             <CtaActions slug={project.slug} />
           </div>
@@ -68,14 +69,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       {/* Side info card for mobile (desktop shows inside tabs layout) */}
       <Card className="mt-6 p-6 lg:hidden">
         <h4 className="mb-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">
-          Project Info
+          Tentang proyek
         </h4>
         <dl className="text-[13px]">
           {[
-            ['Category', project.category],
-            ['Difficulty', project.difficulty],
-            ['Estimated Time', project.estimatedTime],
-            ['Deadline', project.deadlineLabel],
+            ['Bidang', project.category],
+            ['Tingkat', difficultyLabel(project.difficulty)],
+            ['Estimasi waktu', project.estimatedTime],
+            ['Batas pengumpulan', project.deadlineLabel],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between border-b border-dashed border-sk-border py-2.5 last:border-0">
               <dt className="text-sk-muted">{k}</dt>
@@ -83,10 +84,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             </div>
           ))}
         </dl>
-        <h4 className="mb-3 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Resources</h4>
+        <h4 className="mb-3 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Bahan pendukung</h4>
         <ResourceList resources={project.resources} />
         <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.1em] text-sk-faint">
-          Week {project.week} · project drop setiap Senin
+          Minggu {project.week} · proyek baru biasanya hadir setiap Senin
         </p>
       </Card>
     </div>

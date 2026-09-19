@@ -44,51 +44,51 @@ import {
   type WorkspacePatch,
   type WorkspaceStep as ServerStep,
 } from '@/lib/arena-client';
-import { deadlineLabel, deadlinePhrase, deadlineSentence } from '@/lib/deadline';
+import { deadlineLabel, deadlineSentence } from '@/lib/deadline';
 import { capacityFor, minimumFor, unmetRequirements } from '@/lib/submission-requirements';
 import type { WorkspaceStep } from '@/types/project';
 
 const STEPS: WorkspaceStep[] = ['brief', 'plan', 'work', 'review', 'submit'];
 
 const REVIEW_ITEMS = [
-  { id: 'deliverables', label: 'Deliverables lengkap', mandatory: true },
-  { id: 'accessible', label: 'Output dapat diakses', mandatory: true },
-  { id: 'requirements', label: 'Requirement terpenuhi', mandatory: true },
-  { id: 'naming', label: 'Naming / formatting rapi', mandatory: false },
-  { id: 'insight', label: 'Insight mudah dipahami', mandatory: true },
-  { id: 'final-check', label: 'Final quality check selesai', mandatory: false },
+  { id: 'deliverables', label: 'Semua hasil kerja sudah lengkap', savedLabel: 'Deliverables lengkap', mandatory: true },
+  { id: 'accessible', label: 'Berkas dan tautan bisa diakses', savedLabel: 'Output dapat diakses', mandatory: true },
+  { id: 'requirements', label: 'Semua ketentuan sudah terpenuhi', savedLabel: 'Requirement terpenuhi', mandatory: true },
+  { id: 'naming', label: 'Nama berkas dan format sudah rapi', savedLabel: 'Naming / formatting rapi', mandatory: false },
+  { id: 'insight', label: 'Temuan utama mudah dipahami', savedLabel: 'Insight mudah dipahami', mandatory: true },
+  { id: 'final-check', label: 'Sudah diperiksa sekali lagi', savedLabel: 'Final quality check selesai', mandatory: false },
 ];
 
 const SUBMIT_CHECKLIST = [
-  { id: 'link-ok', label: 'Link dapat diakses' },
-  { id: 'deliverables-ok', label: 'Deliverables lengkap' },
-  { id: 'permission-ok', label: 'Permission sudah benar' },
+  { id: 'link-ok', label: 'Tautan bisa dibuka' },
+  { id: 'deliverables-ok', label: 'Hasil kerja sudah lengkap' },
+  { id: 'permission-ok', label: 'Izin akses sudah benar' },
 ];
 
 const DEFAULT_TASKS = [
-  'Understand dataset / brief',
-  'Identify key metrics',
-  'Create main deliverable structure',
-  'Validate insights & quality',
-  'Finalize presentation',
+  'Pahami data dan brief',
+  'Tentukan ukuran keberhasilan',
+  'Susun hasil kerja utama',
+  'Periksa temuan dan kualitas',
+  'Rapikan hasil akhir',
 ];
 
 const ALLOWED_URL_HOSTS = ['drive.google.com', 'docs.google.com', 'notion.so', 'notion.site', 'github.com', 'figma.com', 'canva.com'];
 
 function validateUrl(raw: string): string | null {
   const value = raw.trim();
-  if (!value) return 'URL wajib diisi — reviewer butuh akses ke hasil kerjamu.';
+  if (!value) return 'Masukkan tautan agar penilai bisa membuka hasil kerjamu.';
   let parsed: URL;
   try {
     parsed = new URL(value.startsWith('http') ? value : `https://${value}`);
   } catch {
     return 'Format URL tidak valid. Contoh: https://drive.google.com/file/…';
   }
-  if (parsed.protocol !== 'https:') return 'URL harus menggunakan HTTPS agar reviewer bisa membukanya.';
+  if (parsed.protocol !== 'https:') return 'Tautan harus menggunakan HTTPS agar bisa dibuka dengan aman.';
   const host = parsed.hostname.replace(/^www\./, '');
   const genericOk = /\.(com|io|dev|app|id|net|org|co)$/.test(host) && host.includes('.');
   if (!ALLOWED_URL_HOSTS.some((h) => host === h || host.endsWith(`.${h}`)) && !genericOk) {
-    return 'Gunakan Google Drive, Docs, Notion, GitHub, Figma, Canva, atau link HTTPS publik lain.';
+    return 'Gunakan tautan HTTPS publik dari Google Drive, Docs, Notion, GitHub, Figma, Canva, atau layanan lain.';
   }
   return null;
 }
@@ -118,42 +118,44 @@ function friendlyError(err: unknown, deadlineIso?: string | null): string {
   if (err instanceof ArenaApiError) {
     switch (err.code) {
       case 'UNAUTHORIZED':
-        return 'Sesi berakhir. Login ulang lalu coba lagi.';
+        return 'Sesi kamu berakhir. Masuk kembali lalu coba lagi.';
       case 'WEEK_CLOSED':
         // Closed by status, which an admin can do before the deadline — naming
         // the deadline here would read as a contradiction.
-        return 'Week ini sudah ditutup, jadi perubahan tidak bisa disimpan lagi.';
+        return 'Minggu Arena ini sudah ditutup. Perubahan tidak bisa disimpan lagi.';
       case 'WEEK_NOT_OPEN':
       case 'SUBMISSION_DEADLINE_PASSED':
       case 'SELECTION_DEADLINE_PASSED':
         // The project's own deadline. Ad-hoc weeks do not end on a Friday.
-        return `Week sudah tutup (${deadlinePhrase(deadlineIso, 'pada deadline minggu ini').replace(/^sampai /, '')}). Perubahan tidak bisa disimpan.`;
+        return deadlineIso
+          ? `Batas pengumpulan ${deadlineSentence(deadlineIso)} sudah lewat. Perubahan tidak bisa disimpan.`
+          : 'Batas pengumpulan sudah lewat. Perubahan tidak bisa disimpan.';
       case 'FEATURE_CLOSED':
-        return err.message || 'Fitur lagi ditutup sementara. Coba lagi nanti.';
+        return err.message || 'Fitur sedang ditutup sementara. Coba lagi nanti.';
       case 'REVIEW_ATTEMPT_LIMIT_REACHED':
-        return 'Jatah 3x review minggu ini habis.';
+        return 'Jatah tiga kali penilaian minggu ini sudah habis.';
       case 'SUBMISSION_REQUIREMENTS_INCOMPLETE':
-        return 'Requirement belum lengkap — tambah link/file sesuai ketentuan project.';
+        return 'Masih ada ketentuan yang belum terpenuhi. Tambahkan berkas atau tautan yang diminta.';
       case 'FILE_LIMIT_EXCEEDED':
-        return `Maksimal ${MAX_FILES} file per submission.`;
+        return `Maksimal ${MAX_FILES} berkas untuk setiap kiriman.`;
       case 'LINK_LIMIT_EXCEEDED':
-        return `Maksimal ${MAX_LINKS} link per submission.`;
+        return `Maksimal ${MAX_LINKS} tautan untuk setiap kiriman.`;
       case 'FILE_TYPE_NOT_ALLOWED':
         return 'Tipe file tidak didukung. Pakai PDF, DOCX, PPTX, CSV, XLSX, PNG, JPG, atau WEBP.';
       case 'FILE_TOO_LARGE':
-        return 'File melebihi 20 MB.';
+        return 'Berkas melebihi batas 20 MB.';
       case 'UPLOAD_INTENT_NOT_FOUND':
       case 'UPLOAD_INTENT_EXPIRED':
-        return 'Sesi upload kedaluwarsa. Coba upload ulang file-nya.';
+        return 'Sesi unggah berakhir. Coba unggah kembali berkasnya.';
       case 'UPLOAD_VALIDATION_FAILED':
-        return 'File gagal diverifikasi server. Coba upload ulang.';
+        return 'Berkas belum berhasil diperiksa. Coba unggah kembali.';
       case 'STORAGE_NOT_CONFIGURED':
-        return 'Penyimpanan lagi bermasalah. Coba lagi nanti.';
+        return 'Penyimpanan sedang bermasalah. Coba lagi nanti.';
       default:
-        return `Gagal menyimpan: ${err.message}`;
+        return `Belum berhasil disimpan: ${err.message}`;
     }
   }
-  return 'Gagal menyimpan. Cek koneksi lalu coba lagi.';
+  return 'Belum berhasil disimpan. Cek koneksi lalu coba lagi.';
 }
 
 interface LiveProject {
@@ -342,7 +344,7 @@ export default function WorkspacePage() {
         setNotes(ws?.notes ?? sub.notes ?? '');
         const serverChecks = new Map((ws?.reviewChecklist ?? []).map((c) => [c.label, c.done]));
         const nextChecks: Record<string, boolean> = {};
-        for (const item of REVIEW_ITEMS) nextChecks[item.id] = serverChecks.get(item.label) ?? false;
+        for (const item of REVIEW_ITEMS) nextChecks[item.id] = serverChecks.get(item.savedLabel) ?? false;
         setChecks(nextChecks);
         // Draft attachments come from the server — refresh-safe, device-safe.
         setLinks(
@@ -414,7 +416,7 @@ export default function WorkspacePage() {
     const next = { ...checks, [id]: !(checks[id] ?? false) };
     setChecks(next);
     void savePatch({
-      reviewChecklist: REVIEW_ITEMS.map((item) => ({ label: item.label, done: next[item.id] ?? false })),
+      reviewChecklist: REVIEW_ITEMS.map((item) => ({ label: item.savedLabel, done: next[item.id] ?? false })),
     });
   };
 
@@ -527,7 +529,7 @@ export default function WorkspacePage() {
         break;
       }
       if (slotsUsed >= MAX_FILES) {
-        showToast(`Maksimal ${MAX_FILES} file per submission.`);
+        showToast(`Maksimal ${MAX_FILES} berkas untuk setiap kiriman.`);
         break;
       }
       slotsUsed += 1;
@@ -587,7 +589,7 @@ export default function WorkspacePage() {
       return 'invalid';
     }
     if (links.length >= MAX_LINKS) {
-      showToast(`Maksimal ${MAX_LINKS} link per submission.`);
+      showToast(`Maksimal ${MAX_LINKS} tautan untuk setiap kiriman.`);
       return 'invalid';
     }
     try {
@@ -607,10 +609,10 @@ export default function WorkspacePage() {
   const addLink = async (requirement: ProjectRequirement) => {
     const result = await saveLinkFor(requirement);
     if (result === null) {
-      setUrlErrors((prev) => ({ ...prev, [requirement.id]: 'URL wajib diisi — reviewer butuh akses ke hasil kerjamu.' }));
+      setUrlErrors((prev) => ({ ...prev, [requirement.id]: 'Masukkan tautan agar penilai bisa membuka hasil kerjamu.' }));
       return;
     }
-    if (result !== 'invalid') showToast('Link ditambahkan ke draft.');
+    if (result !== 'invalid') showToast('Tautan ditambahkan ke draf.');
   };
 
   /**
@@ -626,7 +628,7 @@ export default function WorkspacePage() {
   const submitProject = async () => {
     if (!project || !enrollmentId) return;
     if (busyUploads) {
-      showToast('Tunggu semua file selesai diupload dulu.');
+      showToast('Tunggu sampai semua berkas selesai diunggah.');
       return;
     }
     setPhase('submitting');
@@ -646,7 +648,7 @@ export default function WorkspacePage() {
     const nextLinks = [...links, ...saved];
     if (nextLinks.length === 0 && files.length === 0) {
       setPhase('idle');
-      showToast('Tambahkan minimal satu file atau link dulu.');
+      showToast('Tambahkan setidaknya satu berkas atau tautan.');
       return;
     }
     const missing = stillMissing(nextLinks, files);
@@ -660,8 +662,8 @@ export default function WorkspacePage() {
       const result = await submitEnrollment(enrollmentId);
       showToast(
         result.version.accessStatus === 'ACCESSIBLE'
-          ? `Submission #${result.version.reviewAttemptNumber ?? ''} diterima — hasil disegel ${deadlinePhrase(project.deadlineIso, 'sampai finalisasi minggu ini')}.`
-          : 'Ada lampiran yang tidak bisa dibuka reviewer — jatah review kamu aman. Benerin izin aksesnya lalu kirim ulang.',
+          ? `Kiriman #${result.version.reviewAttemptNumber ?? ''} diterima. Hasil penilaian akan dibuka setelah minggu ini selesai dinilai.`
+          : 'Ada lampiran yang tidak bisa dibuka penilai. Jatah penilaianmu tidak berkurang. Perbaiki izin aksesnya lalu kirim ulang.',
       );
       router.push(`/app/arena/submission/${project.slug}`);
     } catch (err) {
@@ -682,9 +684,9 @@ export default function WorkspacePage() {
   if (boot === 'missing-project' || (boot === 'ready' && !project)) {
     return (
       <ErrorState
-        title="Project tidak ditemukan."
-        description="Project yang kamu cari tidak tersedia atau sudah berakhir. Lihat project minggu ini untuk mulai."
-        primaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+        title="Proyek tidak ditemukan."
+        description="Proyek ini tidak tersedia atau sudah berakhir. Cari proyek lain yang sedang dibuka."
+        primaryAction={{ label: 'Lihat proyek minggu ini', href: '/app/arena/projects' }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
       />
     );
@@ -694,8 +696,8 @@ export default function WorkspacePage() {
     return (
       <ErrorState
         title="Sesi berakhir."
-        description="Login ulang untuk membuka workspace project kamu."
-        primaryAction={{ label: 'Login', href: '/login' }}
+        description="Masuk kembali untuk melanjutkan proyekmu."
+        primaryAction={{ label: 'Masuk kembali', href: '/login' }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
       />
     );
@@ -704,7 +706,7 @@ export default function WorkspacePage() {
   if (boot === 'error') {
     return (
       <ErrorState
-        title="Workspace gagal dimuat."
+        title="Ruang kerja belum bisa dibuka."
         description={bootError ?? 'Coba muat ulang halaman ini.'}
         primaryAction={{ label: 'Muat Ulang', href: `/app/arena/workspace/${params.projectId}` }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
@@ -715,15 +717,15 @@ export default function WorkspacePage() {
   if (boot === 'no-enrollment' || !enrollmentId || !project) {
     return (
       <ErrorState
-        title="Kamu belum mengambil project ini."
-        description="Pilih project ini dulu di halaman detail, lalu workspace-nya akan terbuka di sini."
+        title="Kamu belum memilih proyek ini."
+        description="Pilih proyeknya terlebih dulu agar kamu bisa mulai mengerjakan."
         primaryAction={{
-          label: 'Pilih Project Ini',
+          label: 'Pilih proyek ini',
           onClick: () => {
             void enrollHere();
           },
         }}
-        secondaryAction={{ label: 'Lihat Project Lain', href: '/app/arena/projects' }}
+        secondaryAction={{ label: 'Lihat proyek lain', href: '/app/arena/projects' }}
       />
     );
   }
@@ -732,28 +734,28 @@ export default function WorkspacePage() {
 
   const briefBody = (
     <div>
-      <span className="eyebrow">Step 1 · Brief</span>
+      <span className="eyebrow">Langkah 1 · Brief</span>
       <h2 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[30px]">
         Baca brief dengan teliti.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Sebelum mulai kerja, pastikan kamu paham konteks bisnis, role kamu, dan apa yang harus di-deliver di akhir minggu.
+        Kenali latar kasusnya, peranmu, dan hasil yang perlu dikumpulkan sebelum mulai mengerjakan.
       </p>
 
-      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Case Background</h4>
+      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Latar kasus</h4>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.caseBackground}</p>
 
-      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Role</h4>
+      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Peranmu</h4>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.role}</p>
 
-      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Objective</h4>
+      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Tujuan</h4>
       <ul className="list-disc space-y-1 pl-[18px] text-[14px] leading-[1.7] text-sk-text">
         {project.objective.map((o) => (
           <li key={o}>{o}</li>
         ))}
       </ul>
 
-      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Deliverables</h4>
+      <h4 className="mb-2 mt-5 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Hasil yang diminta</h4>
       <ul className="list-disc space-y-1 pl-[18px] text-[14px] leading-[1.7] text-sk-text">
         {project.deliverables.map((d) => (
           <li key={d.id}>
@@ -764,38 +766,38 @@ export default function WorkspacePage() {
       </ul>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button onClick={() => goStep('plan')}>Saya Paham, Mulai Rencanakan</Button>
+        <Button onClick={() => goStep('plan')}>Lanjut ke rencana kerja</Button>
       </div>
     </div>
   );
 
   const planBody = (
     <div>
-      <span className="eyebrow">Step 2 · Plan Your Work</span>
+      <span className="eyebrow">Langkah 2 · Rencana kerja</span>
       <h2 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[30px]">
         Rencanakan kerjamu.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Plan yang jelas membuat eksekusi lebih fokus. Isi singkat saja — tersimpan di server, bisa dilanjut dari mana saja.
+        Tulis garis besar langkahmu. Rencana ini tersimpan dan bisa kamu lanjutkan di perangkat lain.
       </p>
 
       <label className="block">
-        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">My Approach</span>
+        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Cara kerjamu</span>
         <Textarea
           rows={3}
           value={approach}
           onChange={(e) => setApproach(e.target.value)}
-          placeholder="Bagaimana kamu akan menyelesaikan project ini? (2–4 kalimat)"
+          placeholder="Bagaimana kamu akan menyelesaikan proyek ini? (2–4 kalimat)"
         />
       </label>
 
       <label className="mt-4 block">
-        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Tools I Will Use</span>
+        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Alat yang akan dipakai</span>
         <Input value={tools} onChange={(e) => setTools(e.target.value)} placeholder="Contoh: Excel, Google Sheets, Looker Studio" />
       </label>
 
       <div className="mt-5">
-        <span className="mb-2 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Mini Task Breakdown</span>
+        <span className="mb-2 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Daftar tugas</span>
         <div className="rounded-[var(--radius-sk-lg)] border border-sk-border bg-white p-2">
           {tasks.map((task) => (
             <div key={task.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-sk-bg">
@@ -815,11 +817,11 @@ export default function WorkspacePage() {
                 value={task.label}
                 onChange={(e) => setTasks((t) => t.map((x) => (x.id === task.id ? { ...x, label: e.target.value } : x)))}
                 className={`w-full bg-transparent text-[13.5px] focus:outline-none ${task.done ? 'text-sk-muted line-through' : 'text-sk-navy'}`}
-                aria-label={`Task: ${task.label}`}
+                aria-label={`Tugas: ${task.label}`}
               />
               <button
                 type="button"
-                aria-label={`Hapus task ${task.label}`}
+                aria-label={`Hapus tugas ${task.label}`}
                 onClick={() => setTasks((t) => t.filter((x) => x.id !== task.id))}
                 className="shrink-0 rounded-md p-1.5 text-sk-faint opacity-0 transition-opacity hover:bg-sk-error-wash hover:text-sk-error group-hover:opacity-100"
               >
@@ -839,8 +841,8 @@ export default function WorkspacePage() {
                   setNewTask('');
                 }
               }}
-              placeholder="Tambah task baru, tekan Enter"
-              aria-label="Tambah task baru"
+              placeholder="Tambah tugas, lalu tekan Enter"
+              aria-label="Tambah tugas baru"
               className="w-full bg-transparent text-[13.5px] text-sk-navy placeholder:text-sk-faint focus:outline-none"
             />
           </div>
@@ -861,12 +863,12 @@ export default function WorkspacePage() {
                   .slice(0, 50),
                 taskBreakdown: tasks.map((t) => ({ title: t.label, done: t.done })),
               },
-              'Plan tersimpan di server. Selamat mengerjakan!',
+              'Rencana tersimpan. Kamu bisa mulai mengerjakan.',
             );
             setStep('work');
           }}
         >
-          Simpan Plan & Mulai Kerja
+          Simpan rencana dan mulai
         </Button>
       </div>
     </div>
@@ -877,13 +879,12 @@ export default function WorkspacePage() {
 
   const workBody = (
     <div>
-      <span className="eyebrow">Step 3 · Do The Work</span>
+      <span className="eyebrow">Langkah 3 · Kerjakan</span>
       <h2 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[30px]">
-        Saatnya eksekusi.
+        Saatnya mulai mengerjakan.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Kamu mengerjakan di tool masing-masing (Excel, Figma, Docs — sesuai project). Halaman ini membantu kamu tetap on-track
-        sampai deadline.
+        Kerjakan proyek di alat yang sesuai, seperti Excel, Figma, atau Docs. Pakai halaman ini untuk mencatat progresmu.
       </p>
 
       <div className="mb-5 flex items-center gap-3.5 rounded-[var(--radius-sk-lg)] border border-sk-border bg-sk-bg p-4">
@@ -896,13 +897,13 @@ export default function WorkspacePage() {
           />
         </div>
         <span className="font-mono text-[11px] font-bold tracking-[0.08em] text-sk-blue">
-          {doneTasks}/{tasks.length} TASK · {workProgress}%
+          {doneTasks}/{tasks.length} TUGAS · {workProgress}%
         </span>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
-          <h4 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Task Kamu</h4>
+          <h4 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Tugasmu</h4>
           <ul className="flex flex-col gap-1.5">
             {tasks.map((t) => (
               <li key={t.id} className={`flex items-start gap-2 text-[13.5px] ${t.done ? 'text-sk-muted line-through' : 'text-sk-text'}`}>
@@ -913,7 +914,7 @@ export default function WorkspacePage() {
           </ul>
         </div>
         <div>
-          <h4 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Deliverables Target</h4>
+          <h4 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Hasil yang diminta</h4>
           <ul className="flex flex-col gap-1.5">
             {project.deliverables.map((d) => (
               <li key={d.id} className="flex items-start gap-2 text-[13.5px] leading-snug text-sk-text">
@@ -941,14 +942,14 @@ export default function WorkspacePage() {
       </label>
 
       <div className="mt-7 flex flex-wrap gap-2.5">
-        <Button onClick={() => goStep('review')}>Lanjut ke Review Checklist</Button>
+        <Button onClick={() => goStep('review')}>Periksa hasil kerja</Button>
         <Button
           variant="ghost"
           onClick={() => {
             void savePatch({ notes }, 'Catatan tersimpan.');
           }}
         >
-          Simpan Catatan
+          Simpan catatan
         </Button>
       </div>
     </div>
@@ -956,12 +957,12 @@ export default function WorkspacePage() {
 
   const reviewBody = (
     <div>
-      <span className="eyebrow">Step 4 · Review Checklist</span>
+      <span className="eyebrow">Langkah 4 · Periksa hasil</span>
       <h2 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[30px]">
         Periksa sebelum kirim.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Reviewer menilai apa yang terlihat. Pastikan semua item wajib tercentang sebelum lanjut ke submit.
+        Penilai hanya bisa melihat yang kamu kirim. Pastikan semua hal wajib sudah siap sebelum melanjutkan.
       </p>
 
       <div className="rounded-[var(--radius-sk-lg)] border border-sk-border bg-white px-3 py-2">
@@ -991,7 +992,7 @@ export default function WorkspacePage() {
 
       <div className="mt-7 flex flex-wrap items-center gap-2.5">
         <Button disabled={!allMandatory} onClick={() => goStep('submit')}>
-          Lanjut ke Submit
+          Lanjut ke pengiriman
         </Button>
         {!allMandatory && (
           <span className="inline-flex items-center gap-1.5 text-[12px] text-sk-warning-ink">
@@ -1004,13 +1005,13 @@ export default function WorkspacePage() {
 
   const submitBody = (
     <div>
-      <span className="eyebrow">Step 5 · Submit</span>
+      <span className="eyebrow">Langkah 5 · Kirim hasil</span>
       <h2 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[30px]">
-        Submit project kamu.
+        Kirim hasil kerjamu.
       </h2>
       <p className="mb-6 max-w-[640px] text-[14px] leading-[1.6] text-sk-muted">
-        Lampirkan file dan/atau link publik berisi deliverables-mu. Reviewer akan membukanya langsung. Maksimal 3x
-        review valid per minggu — kegagalan teknis tidak memakan jatah.
+        Lampirkan berkas atau tautan yang bisa dibuka penilai. Kamu punya maksimal tiga kesempatan penilaian per minggu;
+        kendala akses teknis tidak mengurangi jatahmu.
       </p>
 
       {/*
@@ -1038,11 +1039,11 @@ export default function WorkspacePage() {
             <div key={requirement.id}>
               <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">
-                  {requirement.label} · {used} / {cap} {requirement.type === 'FILE' ? 'file' : 'link'}
+                  {requirement.label} · {used} / {cap} {requirement.type === 'FILE' ? 'berkas' : 'tautan'}
                 </span>
                 {requirement.required && (
                   <span className={`rounded px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] ${met ? 'bg-sk-success-tint text-sk-success' : 'bg-sk-warning-wash text-sk-warning-ink'}`}>
-                    {met ? 'Terpenuhi' : `Wajib · min ${minimum}`}
+                    {met ? 'Terpenuhi' : `Wajib · minimal ${minimum}`}
                   </span>
                 )}
               </div>
@@ -1065,13 +1066,13 @@ export default function WorkspacePage() {
                       setDragOver(null);
                       if (e.dataTransfer.files.length > 0) queueFiles(e.dataTransfer.files, requirement);
                     }}
-                    aria-label={`Upload file untuk ${requirement.label}: klik untuk pilih atau seret file ke sini`}
+                    aria-label={`Unggah berkas untuk ${requirement.label}: klik untuk memilih atau seret berkas ke sini`}
                     className={`flex w-full flex-col items-center gap-2 rounded-[var(--radius-sk-lg)] border border-dashed px-4 py-7 text-center transition-colors ${
                       dragOver === requirement.id ? 'border-sk-blue bg-sk-blue-wash' : 'border-sk-blue-tint-border bg-sk-blue-wash/50 hover:border-sk-blue'
                     }`}
                   >
                     <UploadCloud size={22} aria-hidden className="text-sk-blue" />
-                    <span className="text-[13.5px] font-bold text-sk-navy">Seret file ke sini atau klik untuk pilih</span>
+                    <span className="text-[13.5px] font-bold text-sk-navy">Seret berkas ke sini atau klik untuk memilih</span>
                     <span className="text-[12px] text-sk-muted">
                       {requirement.allowedMimeTypes?.length
                         ? `${requirement.allowedMimeTypes.map(shortMimeLabel).join(', ')} · maks 20 MB/file`
@@ -1087,7 +1088,7 @@ export default function WorkspacePage() {
                     accept={requirement.allowedMimeTypes?.length ? requirement.allowedMimeTypes.join(',') : FILE_PICKER_ACCEPT}
                     className="hidden"
                     aria-hidden={false}
-                    aria-label={`Pilih file untuk ${requirement.label}`}
+                    aria-label={`Pilih berkas untuk ${requirement.label}`}
                     onChange={(e) => {
                       if (e.target.files && e.target.files.length > 0) queueFiles(e.target.files, requirement);
                       e.target.value = '';
@@ -1104,15 +1105,15 @@ export default function WorkspacePage() {
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-semibold text-sk-navy">{f.originalFilename ?? 'File'}</span>
                             <span className="block font-mono text-[11px] text-sk-muted">
-                              {f.fileSizeBytes != null ? formatBytes(f.fileSizeBytes) : ''} · Uploaded
+                              {f.fileSizeBytes != null ? formatBytes(f.fileSizeBytes) : ''} · Terunggah
                             </span>
                           </span>
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sk-success text-white" aria-label="Terupload">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sk-success text-white" aria-label="Terunggah">
                             <Check size={11} strokeWidth={3.5} aria-hidden />
                           </span>
                           <button
                             type="button"
-                            aria-label={`Hapus ${f.originalFilename ?? 'file'} dari draft`}
+                            aria-label={`Hapus ${f.originalFilename ?? 'berkas'} dari draf`}
                             onClick={() => {
                               void removeDraftItem(f.id);
                             }}
@@ -1133,13 +1134,13 @@ export default function WorkspacePage() {
                             <span className="block font-mono text-[11px] text-sk-muted">
                               {formatBytes(u.size)} ·{' '}
                               {u.status === 'failed' ? (
-                                <span className="text-sk-error">{u.error ?? 'Upload gagal.'}</span>
+                                <span className="text-sk-error">{u.error ?? 'Gagal mengunggah.'}</span>
                               ) : u.status === 'verifying' ? (
                                 'Memverifikasi…'
                               ) : u.progress != null ? (
-                                `Mengupload ${Math.round(u.progress * 100)}%`
+                                `Mengunggah ${Math.round(u.progress * 100)}%`
                               ) : (
-                                'Mengupload…'
+                                'Mengunggah…'
                               )}
                             </span>
                             {u.status !== 'failed' && (
@@ -1216,7 +1217,7 @@ export default function WorkspacePage() {
                       }}
                       invalid={Boolean(inputError)}
                       placeholder="https://lookerstudio.google.com/reporting/…"
-                      aria-label={`Tambah link untuk ${requirement.label}`}
+                      aria-label={`Tambah tautan untuk ${requirement.label}`}
                       className="flex-1"
                     />
                     <Button
@@ -1226,7 +1227,7 @@ export default function WorkspacePage() {
                       }}
                       className="shrink-0"
                     >
-                      + Tambah Link
+                      + Tambah tautan
                     </Button>
                   </div>
                   {inputError && (
@@ -1239,7 +1240,7 @@ export default function WorkspacePage() {
 
               {requirement.type === 'TEXT' && (
                 <p className="rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border px-3.5 py-3 text-[12.5px] leading-relaxed text-sk-muted">
-                  Deliverable ini dijawab lewat kolom Short Explanation di bawah.
+                  Jelaskan hasil ini di kolom “Penjelasan singkat” di bawah.
                 </p>
               )}
             </div>
@@ -1248,7 +1249,7 @@ export default function WorkspacePage() {
 
         {project.requirements.length === 0 && (
           <p className="rounded-[var(--radius-sk-lg)] border border-dashed border-sk-warning-border bg-sk-warning-wash px-3.5 py-3 text-[12.5px] leading-relaxed text-sk-warning-ink">
-            Project ini belum punya deliverable yang bisa dikirim. Hubungi admin Arena sebelum deadline.
+            Proyek ini belum memiliki hasil kerja yang bisa dikirim. Hubungi admin Arena sebelum batas pengumpulan.
           </p>
         )}
       </div>
@@ -1262,17 +1263,17 @@ export default function WorkspacePage() {
       </span>
 
       <label className="mt-5 block">
-        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Short Explanation</span>
+        <span className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-muted">Penjelasan singkat</span>
         <Textarea
           rows={3}
           value={explanation}
           onChange={(e) => setExplanation(e.target.value)}
-          placeholder="Ringkas apa yang kamu buat dan insight utamanya…"
+          placeholder="Ceritakan apa yang kamu buat dan temuan utamanya…"
         />
       </label>
 
       <div className="mt-5 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-blue-tint-border bg-sk-blue-wash p-4">
-        <div className="mb-2.5 font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-blue">Final Checklist</div>
+        <div className="mb-2.5 font-mono text-[10.5px] uppercase tracking-[0.12em] text-sk-blue">Periksa sebelum kirim</div>
         <div className="flex flex-col">
           {SUBMIT_CHECKLIST.map((item) => (
             <ChecklistRow
@@ -1294,13 +1295,13 @@ export default function WorkspacePage() {
           }}
           className="min-w-[220px]"
         >
-          {phase === 'submitting' ? 'Mengirim submission…' : 'Submit Project'}
+          {phase === 'submitting' ? 'Mengirim hasil…' : 'Kirim hasil proyek'}
         </Button>
         {phase === 'submitting' && (
-          <span className="inline-flex items-center text-[12.5px] text-sk-muted">Memvalidasi link & deliverables…</span>
+          <span className="inline-flex items-center text-[12.5px] text-sk-muted">Memeriksa tautan dan berkas…</span>
         )}
         {busyUploads && phase !== 'submitting' && (
-          <span className="inline-flex items-center text-[12.5px] text-sk-muted">Tunggu file selesai diupload dulu…</span>
+          <span className="inline-flex items-center text-[12.5px] text-sk-muted">Tunggu sampai berkas selesai diunggah…</span>
         )}
       </div>
     </div>
@@ -1312,15 +1313,15 @@ export default function WorkspacePage() {
   const deadline = project.deadlineIso ? deadlineLabel(project.deadlineIso) : '';
   const statusLabel =
     enrollmentStatus === 'ACTIVE'
-      ? 'IN PROGRESS'
+      ? 'SEDANG DIKERJAKAN'
       : enrollmentStatus === 'SUBMITTED'
-        ? 'MENUNGGU REVIEW'
+        ? 'MENUNGGU PENILAIAN'
         : enrollmentStatus === 'UNDER_REVIEW'
-          ? 'SEDANG DIREVIEW'
+          ? 'SEDANG DINILAI'
           : enrollmentStatus === 'REVIEW_READY'
-            ? 'FEEDBACK SIAP'
+            ? 'HASIL SIAP'
             : enrollmentStatus === 'COMPLETED'
-              ? 'COMPLETED'
+              ? 'SELESAI'
               : enrollmentStatus.replace(/_/g, ' ');
 
   return (
@@ -1330,7 +1331,7 @@ export default function WorkspacePage() {
         <Badge variant="slate">{project.category.toUpperCase()}</Badge>
         <span className="text-[15px] font-bold text-sk-navy sm:text-[17px]">{project.title}</span>
         <div className="ml-auto flex flex-wrap items-center gap-3">
-          <span className="hidden font-mono text-[11.5px] text-sk-muted sm:inline">DEADLINE · {deadline.toUpperCase()}</span>
+          <span className="hidden font-mono text-[11.5px] text-sk-muted sm:inline">BATAS PENGUMPULAN · {deadline.toUpperCase()}</span>
           <div className="h-1.5 w-28 overflow-hidden rounded-full bg-sk-track">
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-sk-blue to-sk-mint"
@@ -1368,7 +1369,7 @@ export default function WorkspacePage() {
         {/* Side meta panel */}
         <div className="flex flex-col gap-4">
           <Card className="p-4.5 p-5">
-            <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Deadline</h5>
+            <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Batas pengumpulan</h5>
             <div className="flex items-center gap-2 text-[20px] font-extrabold tracking-[-0.02em] text-sk-navy">
               <CalendarClock size={17} className="text-sk-warning" aria-hidden />
               {deadline}
@@ -1382,7 +1383,7 @@ export default function WorkspacePage() {
 
           <Card className="p-5">
             <h5 className="mb-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">
-              Skills You&apos;ll Prove
+              Kemampuan yang kamu tunjukkan
             </h5>
             <div className="flex flex-wrap gap-1.5">
               {project.skills.map((s) => (
@@ -1394,24 +1395,24 @@ export default function WorkspacePage() {
           </Card>
 
           <Card className="p-5">
-            <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Resources</h5>
+            <h5 className="mb-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Bahan pendukung</h5>
             <ResourceList
               resources={project.resources.map((r) => ({ id: r.id, title: r.label, kind: r.kind.toLowerCase(), url: r.url }))}
             />
           </Card>
 
           <Card className="p-5">
-            <h5 className="mb-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Project Status</h5>
+            <h5 className="mb-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Status proyek</h5>
             <Badge variant="slate">{statusLabel}</Badge>
             <div className="mt-3 flex items-center gap-1.5 text-[11.5px] text-sk-muted">
               <FileText size={12} aria-hidden />
-              Step {stepIndex + 1} dari 5 · {WORKSPACE_STEP_LABELS[step]}
+              Langkah {stepIndex + 1} dari 5 · {WORKSPACE_STEP_LABELS[step]}
             </div>
           </Card>
 
           <div className="flex items-center gap-2 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border px-4 py-3 text-[11.5px] leading-relaxed text-sk-muted">
             <Link2 size={13} aria-hidden className="shrink-0" />
-            Progress tersimpan di server — lanjut dari perangkat mana pun.
+            Progresmu tersimpan. Kamu bisa lanjut dari perangkat lain.
           </div>
         </div>
       </div>

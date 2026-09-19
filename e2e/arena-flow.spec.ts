@@ -31,10 +31,10 @@ const CORS_REASON =
   `methods GET/PUT/HEAD and header content-type on the bucket, then rerun.`;
 
 const MANDATORY_REVIEW_ITEMS = [
-  "Deliverables lengkap",
-  "Output dapat diakses",
-  "Requirement terpenuhi",
-  "Insight mudah dipahami",
+  "Semua hasil kerja sudah lengkap",
+  "Berkas dan tautan bisa diakses",
+  "Semua ketentuan sudah terpenuhi",
+  "Temuan utama mudah dipahami",
 ];
 
 /** Enrol through the API (fast path); the UI enrol case is covered separately. */
@@ -69,15 +69,15 @@ async function reachSubmitStep(page: Page) {
   // against the loading state and every advance is skipped.
   await page
     .getByRole("button", {
-      name: /Saya Paham|Simpan Plan|Lanjut ke Review|Lanjut ke Submit|Submit Project/,
+      name: /Lanjut ke rencana kerja|Simpan rencana dan mulai|Periksa hasil kerja|Lanjut ke pengiriman|Kirim hasil proyek/,
     })
     .first()
     .waitFor({ timeout: 90_000 });
 
   const advances = [
-    { click: "Saya Paham, Mulai Rencanakan", reveals: "Simpan Plan & Mulai Kerja" },
-    { click: "Simpan Plan & Mulai Kerja", reveals: "Lanjut ke Review Checklist" },
-    { click: "Lanjut ke Review Checklist", reveals: "Lanjut ke Submit" },
+    { click: "Lanjut ke rencana kerja", reveals: "Simpan rencana dan mulai" },
+    { click: "Simpan rencana dan mulai", reveals: "Periksa hasil kerja" },
+    { click: "Periksa hasil kerja", reveals: "Lanjut ke pengiriman" },
   ];
 
   for (const advance of advances) {
@@ -87,7 +87,7 @@ async function reachSubmitStep(page: Page) {
     await page.getByRole("button", { name: advance.reveals }).waitFor({ timeout: 90_000 });
   }
 
-  const toSubmit = page.getByRole("button", { name: "Lanjut ke Submit" });
+  const toSubmit = page.getByRole("button", { name: "Lanjut ke pengiriman" });
   if (await isVisible(toSubmit)) {
     for (const label of MANDATORY_REVIEW_ITEMS) {
       const box = page.getByRole("checkbox", { name: label }).first();
@@ -96,7 +96,7 @@ async function reachSubmitStep(page: Page) {
     await toSubmit.click();
   }
 
-  await expect(page.getByLabel("Pilih file deliverables")).toBeAttached({ timeout: 90_000 });
+  await expect(page.getByLabel("Pilih berkas untuk Deliverable files")).toBeAttached({ timeout: 90_000 });
 }
 
 test.describe.serial("Arena end-to-end", () => {
@@ -108,7 +108,7 @@ test.describe.serial("Arena end-to-end", () => {
   test("the project detail renders for a signed-in user", async ({ page }) => {
     await page.goto(`/app/arena/projects/${PROJECT_SLUG}`);
     await expect(page.getByRole("heading", { name: PROJECT_TITLE })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pilih Project Ini" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pilih proyek ini" })).toBeVisible();
   });
 
   // Regression guard: enrolment used to be gated on `state.user` from the
@@ -117,7 +117,7 @@ test.describe.serial("Arena end-to-end", () => {
   // decides now — an anonymous visitor still gets the modal, from the 401.
   test("enrolling from the project detail UI", async ({ page }) => {
     await page.goto(`/app/arena/projects/${PROJECT_SLUG}`);
-    await page.getByRole("button", { name: "Pilih Project Ini" }).click();
+    await page.getByRole("button", { name: "Pilih proyek ini" }).click();
     // Enrolling loads the workspace, which a dev server compiles on first visit.
     await expect(page).toHaveURL(new RegExp(WORKSPACE), { timeout: 90_000 });
   });
@@ -126,15 +126,15 @@ test.describe.serial("Arena end-to-end", () => {
     await page.goto("/app/arena");
     await enrolViaApi(page, await getProjectId(db));
     await reachSubmitStep(page);
-    await expect(page.getByText("Deliverables · 0 / 5 file")).toBeVisible();
-    await expect(page.getByText("Links · 0 / 5")).toBeVisible();
+    await expect(page.getByText("Deliverable files · 0 / 5 berkas")).toBeVisible();
+    await expect(page.getByText("Work links · 0 / 5 tautan")).toBeVisible();
   });
 
   // Type and size are refused in the browser before any storage call, so this
   // holds regardless of the bucket's CORS state.
   test("unsupported and oversized files are refused before any upload starts", async ({ page, artifact }) => {
     await reachSubmitStep(page);
-    const picker = page.getByLabel("Pilih file deliverables");
+    const picker = page.getByLabel("Pilih berkas untuk Deliverable files");
 
     await picker.setInputFiles(artifact("catatan.txt"));
     await expect(page.getByText(/tipe file tidak didukung/i)).toBeVisible();
@@ -144,38 +144,38 @@ test.describe.serial("Arena end-to-end", () => {
     await expect(page.getByText(/melebihi 20 MB/i)).toBeVisible();
     await expect(page.getByText("kegedean.pdf")).toHaveCount(0);
 
-    await expect(page.getByText("Deliverables · 0 / 5 file")).toBeVisible();
+    await expect(page.getByText("Deliverable files · 0 / 5 berkas")).toBeVisible();
   });
 
   test("uploading a file keeps it in the draft across a reload", async ({ page, artifact }) => {
     test.skip(!corsReady, CORS_REASON);
     await reachSubmitStep(page);
-    await page.getByLabel("Pilih file deliverables").setInputFiles(artifact("deliverable.pdf"));
+    await page.getByLabel("Pilih berkas untuk Deliverable files").setInputFiles(artifact("deliverable.pdf"));
 
     await expect(page.getByText("deliverable.pdf")).toBeVisible();
-    await expect(page.getByText("· Uploaded")).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText("Deliverables · 1 / 5 file")).toBeVisible();
+    await expect(page.getByText("· Terunggah")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Deliverable files · 1 / 5 berkas")).toBeVisible();
 
     // The draft lives on the server, so a reload must show the same file.
     await reachSubmitStep(page);
     await expect(page.getByText("deliverable.pdf")).toBeVisible();
-    await expect(page.getByText("Deliverables · 1 / 5 file")).toBeVisible();
+    await expect(page.getByText("Deliverable files · 1 / 5 berkas")).toBeVisible();
   });
 
   test("a link can be added to the draft", async ({ page }) => {
     await reachSubmitStep(page);
-    await page.getByLabel("Tambah submission link").fill("https://example.com/");
-    await page.getByRole("button", { name: "Tambah" }).click();
+    await page.getByLabel("Tambah tautan untuk Work links").fill("https://example.com/");
+    await page.getByRole("button", { name: "Tambah tautan" }).click();
     await expect(page.getByText("https://example.com/")).toBeVisible();
-    await expect(page.getByText("Links · 1 / 5")).toBeVisible();
+    await expect(page.getByText("Work links · 1 / 5 tautan")).toBeVisible();
   });
 
   test("submitting seals attempt 1 and the submission page lists the draft", async ({ page }) => {
     await reachSubmitStep(page);
-    for (const label of ["Link dapat diakses", "Deliverables lengkap", "Permission sudah benar"]) {
+    for (const label of ["Tautan bisa dibuka", "Hasil kerja sudah lengkap", "Izin akses sudah benar"]) {
       await page.getByRole("checkbox", { name: label }).last().click();
     }
-    await page.getByRole("button", { name: "Submit Project" }).click();
+    await page.getByRole("button", { name: "Kirim hasil proyek" }).click();
 
     await expect(page).toHaveURL(new RegExp(SUBMISSION), { timeout: 60_000 });
     await expect(page.getByText("https://example.com/")).toBeVisible();
@@ -191,21 +191,21 @@ test.describe.serial("Arena end-to-end", () => {
     expect(Number(state.finalScore)).toBeGreaterThan(0);
 
     await page.goto(`/app/arena/result/${PROJECT_SLUG}`);
-    await expect(page.getByRole("heading", { name: "Feedback belum bisa dibuka." })).toBeVisible();
-    await expect(page.getByText("Jatah review kepakai 1/3")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Hasil penilaian belum dibuka." })).toBeVisible();
+    await expect(page.getByText("Jatah penilaian terpakai 1/3")).toBeVisible();
   });
 
   test("the sealed result unseals after local finalization", async ({ page, db }) => {
     await finalizeSubmittedFixture(db, { finalize: true });
 
     await page.goto(`/app/arena/result/${PROJECT_SLUG}`);
-    await expect(page.getByRole("heading", { name: "Great work." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ini hasil kerjamu." })).toBeVisible();
     await expect(page.getByText("Peringkat #1").first()).toBeVisible();
     await expect(page.getByText("+300")).toBeVisible();
 
     await page.goto(SUBMISSION);
-    await expect(page.getByText("FINAL", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Lihat Result" })).toBeVisible();
+    await expect(page.getByText("HASIL AKHIR", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Lihat hasil" })).toBeVisible();
   });
 
   test("the leaderboard reflects the finalized submission", async ({ page }) => {
@@ -222,8 +222,8 @@ test.describe.serial("Arena end-to-end", () => {
     await ensureMilestoneReward(db);
 
     await page.goto("/app/profile#rewards");
-    await page.getByRole("button", { name: "Klaim reward" }).click();
-    await expect(page.getByText("Reward berhasil diklaim.", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Klaim hadiah" }).click();
+    await expect(page.getByText("Hadiah berhasil diklaim.", { exact: true })).toBeVisible();
     await expect(page.getByText("Sudah diklaim")).toBeVisible();
     await expect(page.getByText("Menunggu")).toBeVisible();
   });
@@ -231,7 +231,7 @@ test.describe.serial("Arena end-to-end", () => {
   test("the submitted file downloads through a signed grant", async ({ page }) => {
     test.skip(!corsReady, CORS_REASON);
     await page.goto(SUBMISSION);
-    const button = page.getByRole("button", { name: /Download deliverable\.pdf/i });
+    const button = page.getByRole("button", { name: /Unduh deliverable\.pdf/i });
     await expect(button).toBeVisible();
 
     const [download] = await Promise.all([

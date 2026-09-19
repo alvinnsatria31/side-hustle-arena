@@ -21,11 +21,11 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Sekolah Karir — Career Ecosystem',
+    default: 'Side Hustle Arena · Sekolah Karir',
     template: '%s · Sekolah Karir',
   },
   description:
-    'Scan CV, temukan skill gap, kerjakan project dunia nyata, bangun bukti skill, dan temukan peluang kerja yang lebih relevan.',
+    'Kerjakan proyek mingguan, dapatkan penilaian, dan tunjukkan bukti kemampuanmu di Side Hustle Arena.',
 };
 
 export const viewport: Viewport = {

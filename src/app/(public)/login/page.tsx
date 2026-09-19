@@ -59,10 +59,10 @@ export default async function LoginPage({
         </Link>
         <span className="eyebrow">Masuk</span>
         <h1 className="mb-1.5 mt-2 text-[24px] font-extrabold tracking-[-0.02em] text-sk-navy">
-          Lanjutkan perjalanan karirmu.
+          Lanjutkan dari tempat terakhir.
         </h1>
         <p className="mb-6 text-[13.5px] leading-relaxed text-sk-muted">
-          Masuk dengan akun Sekolah Karir untuk menyimpan progress, bukti skill, dan Career Report kamu.
+          Masuk dengan akun Sekolah Karir untuk menyimpan progres proyek dan melihat hasil kerjamu.
         </p>
         {failed ? (
           <p
@@ -74,7 +74,7 @@ export default async function LoginPage({
         ) : null}
         <SignInButton continueTo={returnTo} />
         <p className="mt-6 rounded-xl border border-dashed border-sk-blue-tint-border bg-sk-blue-wash px-4 py-3 text-[12px] leading-relaxed text-sk-body">
-          Arena tidak menyimpan password. Jendela kecil akan terbuka untuk verifikasi Sekolah Karir, lalu kamu langsung masuk tanpa meninggalkan halaman ini.
+          Proses masuk dilakukan lewat Sekolah Karir di jendela terpisah. Setelah selesai, kamu kembali ke sini.
         </p>
       </Entrance>
     </div>

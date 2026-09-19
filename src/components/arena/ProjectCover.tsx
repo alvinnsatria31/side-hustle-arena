@@ -149,24 +149,6 @@ interface ProjectCoverProps {
   className?: string;
 }
 
-/** Primary card CTA label follows the division's output type (never hardcoded to one label). */
-export function coverCtaLabel(category: string): string {
-  switch (coverKindFor(category)) {
-    case 'product':
-      return 'Template PRD';
-    case 'design':
-      return 'Figma Kit';
-    case 'ml':
-      return 'Brief & Dataset';
-    case 'growth':
-      return 'Brief & Template';
-    case 'systems':
-      return 'Token Sheet';
-    default:
-      return 'Buka Brief';
-  }
-}
-
 /**
  * Card header visual: AI-generated cover when the automation produced one,
  * otherwise a per-division data-viz fallback block (pure CSS/SVG, no fetch).

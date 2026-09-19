@@ -18,12 +18,12 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         </div>
         <h1 className="mb-2 text-[19px] font-extrabold tracking-[-0.01em] text-sk-navy">Ada yang tidak beres.</h1>
         <p className="mb-6 text-[13px] leading-relaxed text-sk-muted">
-          Terjadi kendala saat menampilkan halaman ini. Coba muat ulang — datamu tetap tersimpan di browser.
+          Halaman ini belum bisa ditampilkan. Coba lagi, atau kembali ke beranda jika masalahnya berlanjut.
         </p>
         <div className="flex justify-center gap-2.5">
-          <Button onClick={reset}>Coba Lagi</Button>
+          <Button onClick={reset}>Coba lagi</Button>
           <Button variant="ghost" onClick={() => (window.location.href = '/')}>
-            Kembali ke Beranda
+            Kembali ke beranda
           </Button>
         </div>
       </div>

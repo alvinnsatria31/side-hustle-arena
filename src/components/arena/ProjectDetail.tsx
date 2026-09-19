@@ -13,6 +13,7 @@ import { ArenaApiError, getCurrentEnrollment, getVisibleProject, selectProject }
 import { useToast } from '@/features/ui/toast';
 import { useSavedProjects } from '@/lib/saved-projects';
 import type { ArenaProject } from '@/types/project';
+import { difficultyLabel } from './ProjectBadges';
 
 /* ---------------- CTA actions (hero) ---------------- */
 
@@ -44,7 +45,7 @@ export function CtaActions({ slug }: { slug: string }) {
   const toggleSave = () => {
     const nowSaved = toggle(slug);
     if (nowSaved === null) return;
-    showToast(nowSaved ? 'Disimpan. Buka lagi lewat filter "Tersimpan" di daftar project.' : 'Dihapus dari daftar simpanan.');
+    showToast(nowSaved ? 'Proyek disimpan. Kamu bisa membukanya lagi lewat filter “Tersimpan”.' : 'Proyek dihapus dari simpanan.');
   };
 
   const [choosing, setChoosing] = useState(false);
@@ -71,23 +72,23 @@ export function CtaActions({ slug }: { slug: string }) {
       const message =
         err instanceof ArenaApiError
           ? err.code === 'ALREADY_ENROLLED_THIS_WEEK'
-            ? 'Kamu sudah ambil project lain minggu ini (1 project/minggu).'
+            ? 'Kamu sudah memilih proyek lain minggu ini. Setiap peserta hanya bisa memilih satu proyek per minggu.'
             : err.code === 'WEEK_NOT_OPEN' || err.code === 'WEEK_CLOSED'
               // No day is named here on purpose: this component only knows a
               // slug, and an ad-hoc week's selection does not close on a Friday.
               // The deadline is stated accurately on the brief above it.
-              ? 'Pendaftaran project ini sudah tutup — cek tanggal deadline di brief.'
+              ? 'Pendaftaran proyek ini sudah ditutup. Cek batas waktunya di halaman detail.'
               : err.code === 'FEATURE_CLOSED'
-                ? err.message || 'Pendaftaran lagi ditutup sementara. Coba lagi nanti.'
-                : `Gagal enroll: ${err.message}`
-          : 'Gagal enroll. Cek koneksi lalu coba lagi.';
+                ? err.message || 'Pendaftaran sedang ditutup sementara. Coba lagi nanti.'
+                : `Belum berhasil mendaftar: ${err.message}`
+          : 'Belum berhasil mendaftar. Cek koneksi lalu coba lagi.';
       showToast(message);
     } finally {
       setChoosing(false);
     }
   };
 
-  const primaryLabel = enrolledHere ? 'Lanjutkan Project' : 'Pilih Project Ini';
+  const primaryLabel = enrolledHere ? 'Lanjutkan proyek' : 'Pilih proyek ini';
 
   return (
     <>
@@ -129,17 +130,17 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   const infoRows: Array<{ k: string; v: string; accent?: boolean }> = [
-    { k: 'Category', v: project.category },
-    { k: 'Difficulty', v: project.difficulty },
-    { k: 'Estimated Time', v: project.estimatedTime },
-    { k: 'Deadline', v: project.deadlineLabel },
-    ...(project.points != null ? [{ k: 'Points', v: `+${project.points}`, accent: true }] : []),
+    { k: 'Bidang', v: project.category },
+    { k: 'Tingkat', v: difficultyLabel(project.difficulty) },
+    { k: 'Estimasi waktu', v: project.estimatedTime },
+    { k: 'Batas pengumpulan', v: project.deadlineLabel },
+    ...(project.points != null ? [{ k: 'Poin', v: `+${project.points}`, accent: true }] : []),
   ];
 
   const side = (
     <div className="hidden lg:block">
       <Card className="sticky top-24 p-6">
-        <h4 className="mb-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Project Info</h4>
+        <h4 className="mb-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Tentang proyek</h4>
         <dl className="text-[13px]">
           {infoRows.map((row, i) => (
             <div key={row.k} className={`flex justify-between border-b border-dashed border-sk-border py-2.5 ${i === infoRows.length - 1 ? 'border-0' : ''}`}>
@@ -149,7 +150,7 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
           ))}
         </dl>
 
-        <h4 className="mb-3 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Rubric</h4>
+        <h4 className="mb-3 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Rubrik penilaian</h4>
         <ul className="flex flex-col gap-1.5">
           {project.rubric.map((r) => (
             <li key={r.id} className="text-[12.5px] text-sk-body">
@@ -158,7 +159,7 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
           ))}
         </ul>
 
-        <h4 className="mb-2.5 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Resources</h4>
+        <h4 className="mb-2.5 mt-6 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">Bahan pendukung</h4>
         <ResourceList resources={project.resources} />
       </Card>
     </div>
@@ -166,27 +167,27 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
 
   const overview = (
     <div>
-      <SectionHeading>Case Background</SectionHeading>
+      <SectionHeading>Latar kasus</SectionHeading>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.caseBackground}</p>
 
-      <SectionHeading>Your Role</SectionHeading>
+      <SectionHeading>Peranmu</SectionHeading>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.role}</p>
 
-      <SectionHeading>Objective</SectionHeading>
+      <SectionHeading>Tujuan</SectionHeading>
       <ul className="list-disc pl-[18px] text-[14px] leading-[1.7] text-sk-text">
         {project.objective.map((o) => (
           <li key={o}>{o}</li>
         ))}
       </ul>
 
-      <SectionHeading>Deliverables</SectionHeading>
+      <SectionHeading>Hasil yang diminta</SectionHeading>
       <ul className="list-disc pl-[18px] text-[14px] leading-[1.7] text-sk-text">
         {project.deliverables.map((d) => (
           <li key={d.id}>{d.title}</li>
         ))}
       </ul>
 
-      <SectionHeading>Skills You&apos;ll Prove</SectionHeading>
+      <SectionHeading>Kemampuan yang kamu tunjukkan</SectionHeading>
       <div className="flex flex-wrap gap-1.5">
         {project.skills.map((s) => (
           <Badge key={s}>{s}</Badge>
@@ -197,7 +198,7 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
 
   const brief = (
     <div>
-      <SectionHeading>Mission</SectionHeading>
+      <SectionHeading>Misi</SectionHeading>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.mission}</p>
 
       <SectionHeading>Konteks Bisnis</SectionHeading>
@@ -206,16 +207,15 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
       <SectionHeading>Peran Kamu</SectionHeading>
       <p className="text-[14px] leading-[1.65] text-sk-text">{project.role}</p>
 
-      <SectionHeading>Yang Dinilai Reviewer</SectionHeading>
+      <SectionHeading>Yang akan dinilai</SectionHeading>
       <p className="text-[14px] leading-[1.65] text-sk-text">
-        Reviewer menilai pakai rubrik di tab Rubric — bukan kesukaan pribadi. Baca dulu sebelum mulai bekerja agar setiap
-        keputusan kamu selaras dengan kriteria penilaian.
+        Hasil kerjamu dinilai berdasarkan rubrik di tab “Penilaian”. Baca kriterianya sebelum mulai agar kamu tahu
+        apa yang perlu ditunjukkan.
       </p>
 
       <div className="mt-6 flex items-start gap-3 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-blue-tint-border bg-sk-blue-wash p-4 text-[13px] leading-relaxed text-sk-body">
         <ListChecks size={17} className="mt-0.5 shrink-0 text-sk-blue" aria-hidden />
-        Tips: tulis plan kerjamu di step berikutnya (Plan Your Work) sebelum eksekusi — submission dengan plan jelas
-        biasanya lebih terstruktur.
+        Tulis rencana kerjamu sebelum mulai. Ini akan membantu kamu menyusun hasil yang lebih terarah.
       </div>
     </div>
   );
@@ -234,8 +234,8 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
               <p className="mt-2 text-[12.5px] leading-relaxed text-sk-body">
                 <span className="font-semibold text-sk-navy">Kriteria lolos: </span>
                 {d.title.toLowerCase().includes('link')
-                  ? 'Link bisa dibuka reviewer tanpa minta akses, isi terlihat utuh.'
-                  : 'Lengkap, rapi, dan langsung menjawab objective project ini.'}
+                  ? 'Tautan bisa dibuka penilai tanpa meminta izin akses, dan isinya terlihat lengkap.'
+                  : 'Hasilnya lengkap, rapi, dan menjawab tujuan proyek ini.'}
               </p>
             </div>
           </div>
@@ -247,7 +247,7 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
   const resources = (
     <div className="flex flex-col gap-3.5">
       <p className="text-[13.5px] leading-relaxed text-sk-muted">
-        Semua yang kamu butuhkan untuk mulai. Kamu boleh menambah sumber lain — sebutkan di submission kalau dipakai.
+        Bahan untuk membantumu mulai. Kamu boleh memakai sumber lain; sebutkan saat mengirim hasil jika kamu menggunakannya.
       </p>
       {project.resources.map((r) => (
         <Card key={r.id} className="flex items-center gap-4 p-5">
@@ -261,13 +261,13 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
             </div>
           </div>
           <span className="ml-auto hidden shrink-0 items-center gap-1.5 text-[12px] font-semibold text-sk-blue sm:flex">
-            <ReceiptText size={13} aria-hidden /> Tersedia di workspace
+            <ReceiptText size={13} aria-hidden /> Tersedia di ruang kerja
           </span>
         </Card>
       ))}
       <div className="flex items-center gap-3 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border bg-white p-4 text-[12.5px] text-sk-body">
         <Users size={16} className="shrink-0 text-sk-muted" aria-hidden />
-        Diskusi & tanya jawab project berlangsung di komunitas Arena setiap Rabu malam.
+        Kamu bisa berdiskusi dan bertanya tentang proyek di komunitas Arena setiap Rabu malam.
       </div>
     </div>
   );
@@ -275,13 +275,13 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
   const rubric = (
     <div className="flex flex-col gap-3.5">
       <p className="text-[13.5px] leading-relaxed text-sk-muted">
-        Total 100 poin. Skor 86+ masuk kandidat Weekly Spotlight.
+        Total penilaian 100 poin. Skor 86 ke atas berpeluang tampil di Sorotan Mingguan.
       </p>
       {project.rubric.map((r) => (
         <Card key={r.id} className="p-5">
           <div className="mb-1.5 flex items-center justify-between gap-3">
             <h4 className="text-[15px] font-bold text-sk-navy">{r.label}</h4>
-            <Badge variant="blue">{r.weight} pts</Badge>
+            <Badge variant="blue">{r.weight} poin</Badge>
           </div>
           <p className="text-[13px] leading-relaxed text-sk-muted">{r.description}</p>
         </Card>
@@ -290,11 +290,11 @@ export function DetailTabs({ project }: { project: ArenaProject }) {
   );
 
   const tabItems = [
-    { id: 'overview', label: 'Overview', content: overview },
+    { id: 'overview', label: 'Ringkasan', content: overview },
     { id: 'brief', label: 'Brief', content: brief },
-    { id: 'deliverables', label: 'Deliverables', content: deliverables },
-    { id: 'resources', label: 'Resources', content: resources },
-    { id: 'rubric', label: 'Rubric', content: rubric },
+    { id: 'deliverables', label: 'Hasil kerja', content: deliverables },
+    { id: 'resources', label: 'Bahan', content: resources },
+    { id: 'rubric', label: 'Penilaian', content: rubric },
   ];
 
   return (

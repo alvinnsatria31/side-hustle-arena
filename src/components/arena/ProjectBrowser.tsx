@@ -8,6 +8,7 @@ import { FilterChip } from '@/components/primitives/FilterChip';
 import { SearchInput } from '@/components/primitives/SearchInput';
 import { EmptyState } from '@/components/states/EmptyState';
 import { ProjectCard } from '@/components/arena/ProjectCard';
+import { difficultyLabel } from '@/components/arena/ProjectBadges';
 import { useSavedProjects } from '@/lib/saved-projects';
 import type { ArenaProject } from '@/types/project';
 import { cn } from '@/lib/cn';
@@ -140,12 +141,12 @@ export function ProjectBrowser({
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder="Cari project atau skill (contoh: SQL, dashboard, landing page)"
-          label="Cari project"
+          placeholder="Cari proyek atau kemampuan (misalnya SQL, dashboard, desain)"
+          label="Cari proyek"
         />
         <div className="flex gap-2.5">
-          {panelButton('difficulty', 'Difficulty', Boolean(difficulty))}
-          {panelButton('skill', 'Skill', Boolean(skill))}
+          {panelButton('difficulty', 'Tingkat', Boolean(difficulty))}
+          {panelButton('skill', 'Kemampuan', Boolean(skill))}
           {panelButton('time', 'Waktu', Boolean(timeBucket))}
         </div>
       </div>
@@ -165,7 +166,7 @@ export function ProjectBrowser({
               {openPanel === 'difficulty' && (
                 <div className="flex flex-wrap gap-2">
                   {DIFFICULTIES.map((d) => (
-                    <FilterChip key={d} label={d} active={difficulty === d} onClick={() => setDifficulty(difficulty === d ? null : d)} />
+                    <FilterChip key={d} label={difficultyLabel(d)} active={difficulty === d} onClick={() => setDifficulty(difficulty === d ? null : d)} />
                   ))}
                 </div>
               )}
@@ -210,7 +211,7 @@ export function ProjectBrowser({
 
       {savedOnly && savedElsewhere > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-sk-lg)] border border-dashed border-sk-border bg-white px-4 py-3 text-[12.5px] text-sk-muted">
-          <span>{savedElsewhere} project tersimpan sudah tidak dibuka di katalog ini.</span>
+          <span>{savedElsewhere} proyek yang kamu simpan sudah tidak tersedia minggu ini.</span>
           <Button variant="text" size="sm" onClick={() => prune(catalogSlugs)}>Hapus dari simpanan</Button>
         </div>
       )}
@@ -218,11 +219,11 @@ export function ProjectBrowser({
       {/* Results */}
       <div className="mb-4 flex items-center justify-between" aria-live="polite">
         <p className="font-mono text-[11.5px] tracking-[0.05em] text-sk-muted">
-          {filtered.length} PROJECT {savedOnly ? 'TERSIMPAN' : 'DITEMUKAN'}
+          {filtered.length} PROYEK {savedOnly ? 'TERSIMPAN' : 'DITEMUKAN'}
         </p>
         {hasActiveFilters && (
           <Button variant="text" size="sm" iconLeft={<X size={13} aria-hidden />} onClick={resetAll}>
-            Reset filter
+            Hapus filter
           </Button>
         )}
       </div>
@@ -230,15 +231,15 @@ export function ProjectBrowser({
       {filtered.length === 0 ? (
         savedOnly && savedHere.length === 0 ? (
           <EmptyState
-            title="Belum ada project tersimpan."
-            description="Buka detail project lalu tekan “Simpan untuk nanti”. Project yang kamu simpan muncul di sini — tersimpan di browser ini, belum ikut ke perangkat lain."
-            primaryAction={{ label: 'Lihat semua project', onClick: () => setSavedOnly(false) }}
+            title="Belum ada proyek tersimpan."
+            description="Buka detail proyek lalu pilih “Simpan untuk nanti”. Simpananmu hanya ada di browser ini dan belum tersinkron ke perangkat lain."
+            primaryAction={{ label: 'Lihat semua proyek', onClick: () => setSavedOnly(false) }}
           />
         ) : (
           <EmptyState
-            title="Tidak ada project yang cocok."
-            description="Coba longgarkan filter atau cari dengan kata kunci lain — project baru datang setiap Senin."
-            primaryAction={{ label: 'Reset Semua Filter', onClick: resetAll }}
+            title="Belum ada proyek yang cocok."
+            description="Coba ubah filter atau kata kunci pencarianmu."
+            primaryAction={{ label: 'Hapus semua filter', onClick: resetAll }}
           />
         )
       ) : (

@@ -19,7 +19,7 @@ function weekLabel(opensAt: Date) {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const entry = await getSpotlightEntry(slug);
-  return { title: entry ? `${entry.projectTitle} — Weekly Spotlight` : 'Showcase tidak ditemukan' };
+  return { title: entry ? `${entry.projectTitle} — Sorotan Mingguan` : 'Sorotan tidak ditemukan' };
 }
 
 export default async function ShowcaseDetailPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -44,7 +44,7 @@ export default async function ShowcaseDetailPage({ params }: { params: Promise<{
       <Breadcrumb
         items={[
           { label: 'Arena', href: '/arena' },
-          { label: 'Weekly Spotlight', href: '/arena/showcase' },
+          { label: 'Sorotan Mingguan', href: '/arena/showcase' },
           { label: entry.projectTitle },
         ]}
       />
@@ -76,7 +76,7 @@ export default async function ShowcaseDetailPage({ params }: { params: Promise<{
               </div>
             </div>
             <div className="shrink-0 rounded-[var(--radius-sk-2xl)] border border-white/15 bg-white/10 p-6 text-center backdrop-blur-md">
-              <div className="font-mono text-[10px] tracking-[0.15em] text-white/65">FINAL SCORE</div>
+              <div className="font-mono text-[10px] tracking-[0.15em] text-white/65">SKOR AKHIR</div>
               <div className="my-1.5 text-[56px] font-extrabold leading-none tracking-[-0.04em]">
                 <CountUp to={entry.finalScore} />
               </div>
@@ -142,7 +142,7 @@ export default async function ShowcaseDetailPage({ params }: { params: Promise<{
           {entry.skillsProven.length > 0 && (
             <Reveal delay={0.15}>
               <Card className="p-6">
-                <PanelHeading pin="b">Skill yang Terbukti</PanelHeading>
+                <PanelHeading pin="b">Kemampuan yang terbukti</PanelHeading>
                 <div className="flex flex-wrap gap-1.5">
                   {entry.skillsProven.map((skill) => (
                     <SkillChip key={skill}>{skill}</SkillChip>
@@ -180,7 +180,7 @@ export default async function ShowcaseDetailPage({ params }: { params: Promise<{
 
           <Reveal delay={0.25}>
             <ButtonLink href="/arena/projects" size="lg" fullWidth>
-              Lihat Project Minggu Ini
+              Lihat Proyek Minggu Ini
             </ButtonLink>
           </Reveal>
         </div>

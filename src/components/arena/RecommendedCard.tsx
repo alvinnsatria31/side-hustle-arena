@@ -30,8 +30,8 @@ interface RecommendedCardProps {
 export function RecommendedCard({
   project,
   reason = 'Direkomendasikan berdasarkan hasil CV Scanner kamu.',
-  eyebrow = 'Langkah Terbaik Selanjutnya',
-  ctaLabel = 'Lihat Project di Arena',
+  eyebrow = 'Langkah berikutnya',
+  ctaLabel = 'Lihat proyek di Arena',
   href,
   hrefPrefix = '/arena/projects',
   onCtaClick,
@@ -44,7 +44,7 @@ export function RecommendedCard({
 
   return (
     <motion.section
-      aria-label={`Project direkomendasikan: ${project.title}`}
+      aria-label={`Proyek yang direkomendasikan: ${project.title}`}
       initial={reduce ? false : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut', delay }}
@@ -93,7 +93,7 @@ export function RecommendedCard({
           <Badge variant="dark">{project.category}</Badge>
           <DifficultyBadge level={project.difficulty} dark />
           <TimeBadge time={project.estimatedTime} dark />
-          <Badge variant="dark">+{project.points} pts</Badge>
+          <Badge variant="dark">+{project.points} poin</Badge>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {project.skills.map((skill) => (

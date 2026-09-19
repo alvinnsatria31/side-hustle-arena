@@ -26,10 +26,10 @@ export default async function ArenaLandingPage() {
     .then((items) => items.map((item) => ({ slug: item.slug, title: item.title, pointsRequired: item.pointsCost, rewardType: item.rewardType })))
     .catch(() => []);
   const stats = [
-    { key: 'projects', label: 'Project Minggu Ini', value: home ? String(home.projectCount) : '—' },
-    { key: 'deadline', label: 'Deadline', value: home ? home.deadline : 'Belum dijadwalkan', small: true },
+    { key: 'projects', label: 'Proyek Minggu Ini', value: home ? String(home.projectCount) : '—' },
+    { key: 'deadline', label: 'Batas Pengumpulan', value: home ? home.deadline : 'Belum dijadwalkan', small: true },
     { key: 'divisions', label: 'Divisi Aktif', value: home ? String(home.divisionCount) : '—' },
-    { key: 'drop', label: 'Project Drop', value: 'Setiap Senin', small: true },
+    { key: 'drop', label: 'Proyek Baru', value: 'Setiap Senin', small: true },
   ];
   return (
     <div className="relative overflow-hidden bg-sk-bg">
@@ -47,19 +47,18 @@ export default async function ArenaLandingPage() {
                 Jangan cuma bilang bisa.
               </Entrance>
               <Entrance delay={0.2} className="block">
-                <em className="not-italic text-sk-blue">Buktikan lewat project.</em>
+                <em className="not-italic text-sk-blue">Tunjukkan lewat karya.</em>
               </Entrance>
             </h1>
             <Entrance delay={0.32}>
               <p className="mb-6 max-w-[460px] text-[14.5px] leading-relaxed text-sk-muted">
-                Ambil satu project dunia nyata setiap minggu, kerjakan seperti kamu bekerja di industri, dapat feedback, dan
-                kumpulkan bukti untuk portfolio.
+                Pilih proyek yang mirip tantangan kerja nyata. Kerjakan, dapatkan masukan, lalu simpan hasilnya untuk portofoliomu.
               </p>
             </Entrance>
             <Entrance delay={0.42}>
               <div className="mb-7 flex flex-wrap gap-3">
                 <ButtonLink href="/arena/projects" size="md">
-                  Lihat Project Minggu Ini
+                  Lihat Proyek Minggu Ini
                 </ButtonLink>
                 <ButtonLink href="#cara-kerja" variant="ghost" size="md">
                   Cara Kerjanya
@@ -86,7 +85,7 @@ export default async function ArenaLandingPage() {
             />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">
-                Lihat project terbaik minggu lalu — Weekly Spotlight
+                Lihat karya berperingkat di Sorotan Mingguan
               </Link>
             </div>
           </Reveal>
@@ -95,12 +94,12 @@ export default async function ArenaLandingPage() {
         {/* How it works */}
         <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32">
           <Reveal className="mb-8 max-w-xl">
-            <Badge variant="slate">{home ? `WEEK ${home.weekNo}` : 'SEGERA'}</Badge>
+            <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
             <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
-              Lima langkah, satu minggu.
+              Dari pilih proyek sampai lihat hasilnya.
             </h2>
             <p className="mt-2 text-[14px] leading-relaxed text-sk-muted">
-              Bukan kelas, bukan tutorial. Kamu mengerjakan project sungguhan dan mendapat feedback yang terukur.
+              Pilih tantangannya, kerjakan sesuai brief, lalu lihat penilaian berdasarkan rubrik yang jelas.
             </p>
           </Reveal>
           <HowItWorks />
@@ -112,11 +111,11 @@ export default async function ArenaLandingPage() {
             <Reveal className="mb-8 max-w-2xl">
               <Badge variant="slate">HADIAH</Badge>
               <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
-                Kumpulkan poin, buka {rewardSteps.length} hadiah.
+                Kumpulkan poin, tukar dengan hadiah.
               </h2>
               <p className="mt-2 text-[14px] leading-relaxed text-sk-muted">
-                Setiap project yang selesai dinilai memberi poin sebesar skornya (0–100), plus bonus 200/100/50 untuk
-                peringkat 1–3 minggu itu. Poin tidak hangus, dan setiap milestone bisa ditukar dengan hadiahnya.
+                Proyek yang dinilai memberimu poin sesuai skor (0–100). Tiga peringkat teratas juga mendapat bonus
+                200, 100, atau 50 poin. Poinmu tidak hangus dan bisa dipakai untuk menukar hadiah.
               </p>
             </Reveal>
             <Reveal y={16}>
@@ -134,13 +133,13 @@ export default async function ArenaLandingPage() {
             />
             <div className="relative flex flex-wrap items-center justify-between gap-6">
               <div className="max-w-lg">
-                <span className="eyebrow eyebrow-dark">Siap Membuktikan?</span>
+                <span className="eyebrow eyebrow-dark">Siap Mulai?</span>
                 <h3 className="mt-2 text-[22px] font-extrabold tracking-[-0.02em] md:text-[26px]">
-                  Satu project minggu ini bisa jadi bukti pertamamu.
+                  Mulai dari satu proyek. Tunjukkan apa yang bisa kamu kerjakan.
                 </h3>
               </div>
               <ButtonLink href="/arena/projects" variant="white" size="lg">
-                Pilih Project
+                Pilih Proyek
               </ButtonLink>
             </div>
           </div>

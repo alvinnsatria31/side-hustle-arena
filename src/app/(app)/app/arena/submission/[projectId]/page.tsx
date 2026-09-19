@@ -25,15 +25,15 @@ import {
 function statusLabel(status: string): string {
   switch (status) {
     case 'SUBMITTED':
-      return 'MENUNGGU REVIEW';
+      return 'MENUNGGU PENILAIAN';
     case 'UNDER_REVIEW':
-      return 'SEDANG DIREVIEW';
+      return 'SEDANG DINILAI';
     case 'REVIEWED_HIDDEN':
-      return 'DISEGEL SAMPAI FINALISASI';
+      return 'HASIL BELUM DIBUKA';
     case 'FINALIZED':
-      return 'FINAL';
+      return 'HASIL AKHIR';
     case 'DRAFT':
-      return 'DRAFT';
+      return 'DRAF';
     case 'VOIDED':
       return 'DIBATALKAN';
     default:
@@ -109,10 +109,10 @@ export default function SubmissionPage() {
   if (boot === 'empty') {
     return (
       <ErrorState
-        title="Belum ada submission."
-        description="Kamu belum menyelesaikan submission untuk project ini. Selesaikan workspace dulu, lalu submission kamu akan tampil di sini."
-        primaryAction={{ label: 'Buka Workspace', href: '/app/arena' }}
-        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+        title="Belum ada hasil yang dikirim."
+        description="Selesaikan proyekmu di ruang kerja, lalu kirim hasilnya dari sana."
+        primaryAction={{ label: 'Buka ruang kerja', href: '/app/arena' }}
+        secondaryAction={{ label: 'Lihat proyek minggu ini', href: '/app/arena/projects' }}
       />
     );
   }
@@ -120,10 +120,10 @@ export default function SubmissionPage() {
   if (boot === 'missing') {
     return (
       <ErrorState
-        title="Project tidak ditemukan."
-        description="Project yang kamu cari tidak tersedia atau sudah berakhir."
+        title="Proyek tidak ditemukan."
+        description="Proyek ini tidak tersedia atau sudah berakhir."
         primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
-        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+        secondaryAction={{ label: 'Lihat proyek minggu ini', href: '/app/arena/projects' }}
       />
     );
   }
@@ -132,8 +132,8 @@ export default function SubmissionPage() {
     return (
       <ErrorState
         title="Sesi berakhir."
-        description="Login ulang untuk melihat submission kamu."
-        primaryAction={{ label: 'Login', href: '/login' }}
+        description="Masuk kembali untuk melihat hasil yang kamu kirim."
+        primaryAction={{ label: 'Masuk kembali', href: '/login' }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
       />
     );
@@ -142,7 +142,7 @@ export default function SubmissionPage() {
   if (boot === 'error' || !submission) {
     return (
       <ErrorState
-        title="Submission gagal dimuat."
+        title="Kiriman belum bisa dimuat."
         description={bootError ?? 'Coba muat ulang halaman ini.'}
         primaryAction={{ label: 'Muat Ulang', href: `/app/arena/submission/${params.projectId}` }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
@@ -173,7 +173,7 @@ export default function SubmissionPage() {
   const recapItems = version?.items ?? submission.items;
   const links = recapItems.filter((item) => item.itemType === 'LINK' && item.externalUrl);
   const files = recapItems.filter((item) => item.itemType === 'FILE');
-  const sealedNote = `Hasil review disegel ${deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')} — bukan hitungan detik.`;
+  const sealedNote = 'Hasil penilaian akan dibuka setelah penilaian akhir selesai.';
   const workspaceHref = `/app/arena/workspace/${projectSlug || params.projectId}`;
 
   const downloadFile = async (itemId: string, fallbackName: string) => {
@@ -191,7 +191,7 @@ export default function SubmissionPage() {
       anchor.click();
       anchor.remove();
     } catch (err) {
-      setDownloadError(err instanceof ArenaApiError ? err.message : 'Download gagal. Coba lagi.');
+      setDownloadError(err instanceof ArenaApiError ? err.message : 'Berkas belum berhasil diunduh. Coba lagi.');
     } finally {
       setDownloadingId(null);
     }
@@ -201,9 +201,9 @@ export default function SubmissionPage() {
     <div>
       <Breadcrumb
         items={[
-          { label: 'App', href: '/app' },
+          { label: 'Beranda', href: '/app' },
           { label: 'Arena', href: '/app/arena' },
-          { label: 'Submission' },
+          { label: 'Kiriman' },
         ]}
       />
 
@@ -215,29 +215,29 @@ export default function SubmissionPage() {
               <div className="mb-5 flex h-[64px] w-[64px] items-center justify-center rounded-[var(--radius-sk-xl)] bg-sk-warning-wash text-sk-warning-ink">
                 <AlertTriangle size={30} strokeWidth={2.4} aria-hidden />
               </div>
-              <span className="eyebrow">Belum masuk review</span>
+              <span className="eyebrow">Belum masuk penilaian</span>
               <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
-                Tautan tidak dapat diakses reviewer.
+                Tautan belum bisa dibuka penilai.
               </h1>
               <div
                 role="alert"
                 className="mb-6 max-w-[620px] rounded-[var(--radius-sk-lg)] border border-sk-warning-border bg-sk-warning-wash px-4 py-3.5 text-[13.5px] leading-relaxed text-sk-warning-ink"
               >
-                Submission kamu <b>belum masuk antrean review</b> karena ada lampiran yang tidak bisa dibuka reviewer —
-                biasanya link yang izin aksesnya masih private. <b>Jatah attempt kamu tidak berkurang.</b> Perbaiki izin
-                akses tautan (set ke “siapa saja yang memiliki link”) lalu kirim ulang{' '}
-                {deadlinePhrase(deadlineIso, 'sebelum deadline minggu ini').replace(/^sampai /, 'sebelum ')}.
+                Kirimanmu <b>belum masuk antrean penilaian</b> karena ada lampiran yang tidak bisa dibuka penilai.
+                Biasanya, tautannya masih dibatasi. <b>Jatah penilaianmu tidak berkurang.</b> Ubah izin akses menjadi
+                “siapa saja yang memiliki tautan”, lalu kirim ulang{' '}
+                {deadlinePhrase(deadlineIso, 'sebelum batas pengumpulan minggu ini').replace(/^sampai /, 'sebelum ')}.
               </div>
 
               <div className="mb-7 flex flex-wrap gap-2">
                 <Badge variant="slate">TIDAK DAPAT DIAKSES</Badge>
-                <Badge variant="slate">Attempt {submission.reviewAttemptsUsed} terpakai</Badge>
+                <Badge variant="slate">{submission.reviewAttemptsUsed} kesempatan terpakai</Badge>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <ButtonLink href={workspaceHref}>Perbaiki & Kirim Ulang</ButtonLink>
+                <ButtonLink href={workspaceHref}>Perbaiki dan kirim ulang</ButtonLink>
                 <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
-                  Lihat Brief Project
+                  Lihat brief proyek
                 </ButtonLink>
               </div>
             </>
@@ -246,32 +246,32 @@ export default function SubmissionPage() {
               <div className="mb-5 flex h-[64px] w-[64px] items-center justify-center rounded-[var(--radius-sk-xl)] bg-sk-success-tint text-sk-success">
                 <Check size={30} strokeWidth={2.6} aria-hidden />
               </div>
-              <span className="eyebrow">Submitted</span>
+              <span className="eyebrow">Sudah dikirim</span>
               <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
-                Project berhasil dikirim.
+                Hasil kerjamu sudah dikirim.
               </h1>
               <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
                 {finalized
-                  ? 'Review selesai dan week sudah difinalisasi — feedback kamu tersedia.'
-                  : `Submission kamu sedang dalam proses review. Hasilnya disegel ${deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')}. Kamu bisa menutup halaman ini — status tersimpan di server.`}
+                  ? 'Penilaian sudah selesai. Kamu bisa melihat hasil dan masukannya sekarang.'
+                  : 'Kirimanmu sedang diproses. Hasilnya akan dibuka setelah penilaian akhir selesai. Kamu bisa menutup halaman ini; statusnya tetap tersimpan.'}
               </p>
 
               <div className="mb-7 flex flex-wrap gap-2">
                 <Badge variant="slate">{statusLabel(submission.status)}</Badge>
-                <Badge variant="slate">Attempt {submission.reviewAttemptsUsed}</Badge>
+                <Badge variant="slate">{submission.reviewAttemptsUsed} kesempatan terpakai</Badge>
                 {version && <Badge variant="slate">Versi {version.versionNumber}</Badge>}
               </div>
 
               <div className="flex flex-wrap gap-3">
                 {finalized ? (
-                  <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat Result</ButtonLink>
+                  <ButtonLink href={`/app/arena/result/${params.projectId}`}>Lihat hasil</ButtonLink>
                 ) : (
                   <ButtonLink href="/app/arena" variant="ghost">
                     Kembali ke Arena
                   </ButtonLink>
                 )}
                 <ButtonLink href={`/app/arena/projects/${params.projectId}`} variant="ghost">
-                  Lihat Brief Project
+                  Lihat brief proyek
                 </ButtonLink>
               </div>
             </>
@@ -282,17 +282,17 @@ export default function SubmissionPage() {
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_320px]">
           <Card className="p-6 sm:p-7">
             <h2 className="mb-4 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">
-              Detail Submission
+              Detail kiriman
             </h2>
             <dl className="flex flex-col gap-4">
               <div>
-                <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Project</dt>
+                <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Proyek</dt>
                 <dd className="text-[13.5px] text-sk-muted">{projectTitle}</dd>
               </div>
               {files.length > 0 && (
                 <div>
                   <dt className="mb-1.5 text-[12px] font-semibold text-sk-navy">
-                    Files ({files.length})
+                    Berkas ({files.length})
                   </dt>
                   <dd className="flex flex-col gap-2">
                     {files.map((item) => (
@@ -313,14 +313,14 @@ export default function SubmissionPage() {
                         <button
                           type="button"
                           disabled={downloadingId === item.id}
-                          aria-label={`Download ${item.originalFilename ?? 'file'}`}
+                          aria-label={`Unduh ${item.originalFilename ?? 'berkas'}`}
                           onClick={() => {
                             void downloadFile(item.id, item.originalFilename ?? 'download');
                           }}
                           className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-bold text-sk-blue transition-colors hover:bg-sk-blue-tint disabled:opacity-60"
                         >
                           <Download size={13} aria-hidden />
-                          {downloadingId === item.id ? '…' : 'Download'}
+                          {downloadingId === item.id ? '…' : 'Unduh'}
                         </button>
                       </span>
                     ))}
@@ -335,7 +335,7 @@ export default function SubmissionPage() {
               {links.map((item) => (
                 <div key={item.id}>
                   <dt className="mb-1 text-[12px] font-semibold text-sk-navy">
-                    Submission Link{item.label ? ` · ${item.label}` : ''}
+                    Tautan kiriman{item.label ? ` · ${item.label}` : ''}
                   </dt>
                   <dd>
                     <span className="inline-flex max-w-full items-center gap-2 rounded-lg border border-sk-border bg-sk-bg px-3.5 py-2.5 font-mono text-[12.5px] text-sk-navy">
@@ -356,7 +356,7 @@ export default function SubmissionPage() {
               )}
               {(version?.explanation ?? submission.explanation) && (
                 <div>
-                  <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Short Explanation</dt>
+                  <dt className="mb-1 text-[12px] font-semibold text-sk-navy">Penjelasan singkat</dt>
                   <dd className="text-[13.5px] leading-relaxed text-sk-muted">{version?.explanation ?? submission.explanation}</dd>
                 </div>
               )}
@@ -366,7 +366,7 @@ export default function SubmissionPage() {
           {/* Review progress */}
           <Card className="p-6">
             <h2 className="mb-4 font-mono text-[10.5px] font-semibold uppercase tracking-[0.15em] text-sk-muted">
-              Proses Review
+              Proses penilaian
             </h2>
             <ol className="flex flex-col gap-4">
               {[
@@ -374,9 +374,9 @@ export default function SubmissionPage() {
                 // reviewer cannot open is not accepted, and marking this step
                 // done for it was the whole misinformation: everything below it
                 // then read as a queue the participant was waiting in.
-                { label: accessFailed ? 'Submission ditolak: lampiran tidak dapat diakses' : 'Submission diterima', done: queued, failed: accessFailed },
-                { label: 'Reviewer memeriksa deliverables', done: queued && (submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT' || version?.reviewStatus === 'COMPLETED'), failed: false },
-                { label: 'Feedback tersedia', done: finalized, failed: false },
+                { label: accessFailed ? 'Kiriman belum diterima: lampiran tidak dapat diakses' : 'Kiriman diterima', done: queued, failed: accessFailed },
+                { label: 'Penilai memeriksa hasil kerja', done: queued && (submission.status !== 'SUBMITTED' && submission.status !== 'DRAFT' || version?.reviewStatus === 'COMPLETED'), failed: false },
+                { label: 'Hasil dan masukan tersedia', done: finalized, failed: false },
               ].map((s) => (
                 <li key={s.label} className="flex items-center gap-3">
                   <span
@@ -401,7 +401,7 @@ export default function SubmissionPage() {
             </ol>
             {accessFailed ? (
               <ButtonLink href={workspaceHref} size="sm" className="mt-5" fullWidth>
-                Perbaiki di Workspace
+                Perbaiki di ruang kerja
               </ButtonLink>
             ) : (
               !finalized && (

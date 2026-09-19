@@ -102,7 +102,7 @@ export default function ParticipantInbox() {
     } finally { busy.current = false; setPending(false); }
   }
 
-  return <ParticipantShell title="Inbox" action={<RefreshButton refresh={refresh} loading={loading} />}>
+  return <ParticipantShell title="Pesan" action={<RefreshButton refresh={refresh} loading={loading} />}>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
       <div className="flex flex-wrap items-center gap-5"><span className="text-sm font-semibold text-sk-navy">{unread !== null ? `${unread} belum dibaca` : ''}</span><label className="flex items-center gap-2 text-sm text-sk-body"><input type="checkbox" className="h-4 w-4 accent-sk-blue" checked={unreadOnly} onChange={(event) => { setError(null); setUnreadOnly(event.target.checked); }} />Belum dibaca</label></div>
       <Button size="sm" variant="ghost" iconLeft={<CheckCheck size={16} aria-hidden />} disabled={pending || loading || !unread} onClick={() => void markRead()}>Tandai semua dibaca</Button>
@@ -115,7 +115,7 @@ export default function ParticipantInbox() {
         return <li key={item.id} className={`py-5 ${!item.readAt ? 'border-l-2 border-l-sk-blue pl-4' : 'pl-4.5'}`}>
           <article><div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className={`text-base text-sk-navy ${!item.readAt ? 'font-bold' : 'font-semibold'}`}>{item.title}</h2><time dateTime={item.createdAt} className="mt-1 block text-xs text-sk-muted">{participantDate(item.createdAt)} WIB</time></div>{!item.readAt && <Button size="sm" variant="ghost" title="Tandai dibaca" aria-label={`Tandai dibaca: ${item.title}`} disabled={pending} onClick={() => void markRead([item.id])} iconLeft={<Check size={16} aria-hidden />} />}</div>
             {item.body && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-sk-body">{item.body}</p>}
-            {href && <Link href={href} className="mt-3 inline-block text-sm font-semibold text-sk-blue hover:underline">{item.type === 'RESULT_READY' ? 'Lihat Result' : item.type === 'REWARD_FULFILLED' || item.type === 'REWARD_REDEEMED' ? 'Lihat Reward' : 'Buka detail'}</Link>}
+            {href && <Link href={href} className="mt-3 inline-block text-sm font-semibold text-sk-blue hover:underline">{item.type === 'RESULT_READY' ? 'Lihat hasil' : item.type === 'REWARD_FULFILLED' || item.type === 'REWARD_REDEEMED' ? 'Lihat hadiah' : 'Buka detail'}</Link>}
           </article>
         </li>;
       })}</ul>}

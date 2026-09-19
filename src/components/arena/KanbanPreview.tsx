@@ -26,7 +26,7 @@ export function ResourceList({
   if (resources.length === 0) {
     return (
       <p className={dark ? 'text-[13px] text-white/60' : 'text-[12.5px] text-sk-muted'}>
-        Belum ada bahan tambahan untuk project ini — semua yang dibutuhkan ada di brief.
+        Belum ada bahan tambahan untuk proyek ini. Semua yang kamu butuhkan ada di brief.
       </p>
     );
   }
@@ -74,7 +74,7 @@ export function KanbanPreview({
   total?: number;
 } = {}) {
   const weekly = (projects ?? mockProjects.filter((p) => p.isThisWeek)).slice(0, 4);
-  const label = weekLabel ?? `WEEK ${ARENA_WEEK} · SEP 2`;
+  const label = weekLabel ?? `MINGGU ${ARENA_WEEK} · SEP 2`;
   const count = total ?? weekly.length * 3;
   return (
     <div className="rounded-[var(--radius-sk-2xl)] bg-white p-5 shadow-[0_30px_60px_-30px_rgba(7,21,45,0.3)]">
@@ -82,11 +82,11 @@ export function KanbanPreview({
         <span className="font-mono text-[11px] tracking-[0.1em] text-sk-muted">
           {label}
         </span>
-        <Badge>Fresh Drop</Badge>
+        <Badge>Baru tersedia</Badge>
       </div>
       <div className="mb-[18px] border-b border-dashed border-sk-border pb-5 pt-2 text-center">
         <div className="text-[52px] font-extrabold leading-none tracking-[-0.03em] text-sk-blue">{count}</div>
-        <div className="mt-1.5 font-mono text-[10.5px] tracking-[0.14em] text-sk-muted">PROJECT MINGGU INI</div>
+        <div className="mt-1.5 font-mono text-[10.5px] tracking-[0.14em] text-sk-muted">PROYEK MINGGU INI</div>
       </div>
       <ul className="flex flex-col gap-2.5">
         {weekly.map((p, i) => (

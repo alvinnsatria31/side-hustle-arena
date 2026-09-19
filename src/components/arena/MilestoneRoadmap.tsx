@@ -70,7 +70,7 @@ export function MilestoneRoadmap({ steps, points, className }: {
             <span>
               <strong className="text-sk-navy">{formatPoints(progress.points)} poin</strong> dari {formatPoints(progress.main.pointsRequired)} poin hadiah utama
             </span>
-            <span>{progress.reachedCount}/{progress.total} milestone terbuka</span>
+            <span>{progress.reachedCount}/{progress.total} hadiah terbuka</span>
           </div>
           <ProgressBar value={progress.main.percent} className="h-2" />
         </div>
@@ -105,7 +105,7 @@ export function MilestoneRoadmap({ steps, points, className }: {
                 >
                   {reached && step.state === 'taken' ? <Check size={18} strokeWidth={2.6} /> : <Icon size={18} />}
                 </span>
-                <span className="font-mono text-[10.5px] tracking-[0.08em] text-sk-muted">MILESTONE {index + 1}</span>
+                <span className="font-mono text-[10.5px] tracking-[0.08em] text-sk-muted">HADIAH {index + 1}</span>
               </div>
               <p className="text-[15px] font-extrabold text-sk-navy">{formatPoints(step.pointsRequired)} poin</p>
               <p className="text-[13px] leading-snug text-sk-body">{step.title}</p>
@@ -153,7 +153,7 @@ export function RewardProgress({ lifetimePoints, balance, steps, className }: {
           <p className="text-[13px] leading-relaxed text-sk-body">
             {progress.next
               ? <>Kurang <strong className="text-sk-navy">{formatPoints(progress.next.remaining)} poin</strong> lagi untuk membuka <strong className="text-sk-navy">{progress.next.title}</strong> ({formatPoints(progress.next.pointsRequired)} poin).</>
-              : <>Semua milestone sudah terbuka. Tukarkan poinmu di bawah.</>}
+              : <>Semua hadiah sudah terbuka. Tukarkan poinmu di bawah.</>}
           </p>
           {progress.next && (
             <div className="mt-2 flex items-center gap-3">

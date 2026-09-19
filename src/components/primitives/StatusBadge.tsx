@@ -2,12 +2,12 @@ import { Badge } from './Badge';
 import type { ProjectStatus, WorkspaceStep } from '@/types/project';
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; variant: 'blue' | 'mint' | 'amber' | 'slate' | 'recommended' }> = {
-  none: { label: 'BELUM ADA PROJECT', variant: 'slate' },
-  active: { label: 'IN PROGRESS', variant: 'blue' },
-  submitted: { label: 'MENUNGGU REVIEW', variant: 'amber' },
-  under_review: { label: 'SEDANG DIREVIEW', variant: 'amber' },
-  review_ready: { label: 'FEEDBACK SIAP', variant: 'recommended' },
-  completed: { label: 'COMPLETED', variant: 'mint' },
+  none: { label: 'BELUM ADA PROYEK', variant: 'slate' },
+  active: { label: 'SEDANG DIKERJAKAN', variant: 'blue' },
+  submitted: { label: 'MENUNGGU PENILAIAN', variant: 'amber' },
+  under_review: { label: 'SEDANG DINILAI', variant: 'amber' },
+  review_ready: { label: 'HASIL SIAP', variant: 'recommended' },
+  completed: { label: 'SELESAI', variant: 'mint' },
 };
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {
@@ -17,8 +17,8 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
 
 export const WORKSPACE_STEP_LABELS: Record<WorkspaceStep, string> = {
   brief: 'Brief',
-  plan: 'Plan Your Work',
-  work: 'Do The Work',
-  review: 'Review Checklist',
-  submit: 'Submit',
+  plan: 'Rencana',
+  work: 'Kerjakan',
+  review: 'Periksa',
+  submit: 'Kirim hasil',
 };

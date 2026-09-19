@@ -10,7 +10,7 @@ import { Trophy } from 'lucide-react';
 import { getLatestSpotlightWithConsent, listSpotlightHistory } from '@/server/finalization/showcase-service';
 import { isoWeekNumber, monthDayLabel } from '@/lib/arena-view';
 
-export const metadata = { title: 'Weekly Spotlight' };
+export const metadata = { title: 'Sorotan Mingguan' };
 export const dynamic = 'force-dynamic';
 
 function weekLabel(opensAt: Date) {
@@ -18,7 +18,7 @@ function weekLabel(opensAt: Date) {
 }
 
 function scoreBand(score: number) {
-  return score >= 86 ? 'EXCELLENT' : score >= 70 ? 'STRONG WORK' : 'SOLID';
+  return score >= 86 ? 'SANGAT BAIK' : score >= 70 ? 'KERJA BAGUS' : 'HASIL BAIK';
 }
 
 export default async function ShowcasePage() {
@@ -31,21 +31,20 @@ export default async function ShowcasePage() {
       <div className="ambient" aria-hidden />
 
       <div className="relative z-[2] mx-auto max-w-6xl px-6 pb-24 pt-28 md:pt-32">
-        <Breadcrumb items={[{ label: 'Arena', href: '/arena' }, { label: 'Weekly Spotlight' }]} />
+        <Breadcrumb items={[{ label: 'Arena', href: '/arena' }, { label: 'Sorotan Mingguan' }]} />
 
         <div className="mb-10 mt-7 max-w-[640px]">
           <Entrance>
-            <span className="eyebrow">Weekly Spotlight</span>
+            <span className="eyebrow">Sorotan Mingguan</span>
           </Entrance>
           <Entrance delay={0.1}>
             <h1 className="mb-3 mt-3 text-[34px] font-extrabold leading-[1.05] tracking-[-0.025em] text-sk-navy sm:text-[44px]">
-              Project terbaik <span className="text-sk-blue">minggu ini</span>.
+              Lihat karya yang <span className="text-sk-blue">masuk peringkat</span>.
             </h1>
           </Entrance>
           <Entrance delay={0.2}>
             <p className="text-[14.5px] leading-relaxed text-sk-muted">
-              Setiap minggu ditutup dan dinilai, lalu peringkatnya dikunci. Yang tampil di sini adalah hasil final —
-              bukan pilihan redaksi, bukan hadiah keberuntungan.
+              Setelah penilaian selesai, karya peserta berperingkat ditampilkan di sini jika pemiliknya mengizinkan.
             </p>
           </Entrance>
         </div>
@@ -54,18 +53,18 @@ export default async function ShowcasePage() {
           <Reveal y={16}>
             <Card className="p-10 text-center">
               <h2 className="text-[20px] font-extrabold tracking-[-0.02em] text-sk-navy">
-                {withheld > 0 ? 'Belum ada peserta yang mengizinkan karyanya tampil.' : 'Belum ada minggu yang difinalisasi.'}
+                {withheld > 0 ? 'Belum ada peserta yang mengizinkan karyanya tampil.' : 'Belum ada hasil mingguan yang selesai dinilai.'}
               </h2>
               {/* An empty Showcase has two very different causes, and saying
                   which one it is matters: "nobody has finished yet" and
                   "everyone declined to be featured" call for opposite actions. */}
               <p className="mx-auto mt-2 max-w-[420px] text-[13.5px] leading-relaxed text-sk-muted">
                 {withheld > 0
-                  ? `Minggu terakhir sudah difinalisasi, tetapi ${withheld} peserta berperingkat teratas belum mengizinkan karyanya ditampilkan publik. Showcase hanya menampilkan peserta yang menyetujuinya lewat halaman profil.`
-                  : 'Spotlight terbit setelah satu minggu ditutup dan seluruh review-nya selesai. Minggu pertama yang selesai akan muncul di sini dengan sendirinya.'}
+                  ? `${withheld} peserta berperingkat teratas belum mengizinkan karyanya ditampilkan. Hanya karya yang disetujui pemiliknya yang bisa muncul di sini.`
+                  : 'Karya berperingkat akan muncul setelah minggu Arena ditutup dan penilaiannya selesai.'}
               </p>
               <ButtonLink href="/arena/projects" size="lg" className="mt-6">
-                Lihat Project Minggu Ini
+                Lihat Proyek Minggu Ini
               </ButtonLink>
             </Card>
           </Reveal>
@@ -106,7 +105,7 @@ export default async function ShowcasePage() {
                       </span>
                     </div>
                     <div className="rounded-[var(--radius-sk-2xl)] border border-white/15 bg-white/10 p-6 text-center backdrop-blur-md">
-                      <div className="font-mono text-[10px] tracking-[0.15em] text-white/65">FINAL SCORE</div>
+                      <div className="font-mono text-[10px] tracking-[0.15em] text-white/65">SKOR AKHIR</div>
                       <div className="my-1.5 text-[64px] font-extrabold leading-none tracking-[-0.04em]">
                         <CountUp to={featured.finalScore} />
                       </div>
@@ -201,7 +200,7 @@ export default async function ShowcasePage() {
               </h3>
             </div>
             <ButtonLink href="/arena/projects" size="lg">
-              Ikut Project Minggu Ini
+              Lihat Proyek Minggu Ini
             </ButtonLink>
           </div>
         </Reveal>

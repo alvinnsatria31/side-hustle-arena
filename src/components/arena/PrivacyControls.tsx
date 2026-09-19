@@ -35,8 +35,8 @@ export function PrivacyControls() {
     try {
       const result = await setParticipantShowcaseConsent(!consented);
       setNotice(result.consented
-        ? 'Karyamu boleh tampil di Showcase publik. Kamu bisa mencabutnya kapan saja.'
-        : 'Izin dicabut. Kamu tidak akan tampil di Showcase pada pemuatan berikutnya.');
+        ? 'Karyamu boleh tampil di Sorotan Mingguan. Kamu bisa mencabut izin ini kapan saja.'
+        : 'Izin dicabut. Karyamu tidak akan tampil di Sorotan Mingguan saat halaman dimuat ulang.');
       await privacy.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Pengaturan gagal disimpan.');
@@ -71,11 +71,11 @@ export function PrivacyControls() {
       {error && <p role="alert" className="mb-4 text-sm text-sk-error">{error}</p>}
 
       <div className="rounded-lg border border-sk-border bg-white p-5">
-        <h3 className="font-semibold text-sk-navy">Tampil di Showcase publik</h3>
+        <h3 className="font-semibold text-sk-navy">Tampilkan karya di Sorotan Mingguan</h3>
         <p className="mt-2 text-sm leading-relaxed text-sk-muted">
-          Showcase menampilkan nama, avatar, project dan skor kamu ke pengunjung umum. Ini <strong>mati secara default</strong>:
-          peringkat bagus saja tidak dianggap sebagai izin. Papan peringkat mingguan adalah halaman terpisah dan tetap publik
-          sesuai aturan program.
+          Jika kamu mengizinkan, pengunjung bisa melihat nama, avatar, proyek, dan skormu di Sorotan Mingguan.
+          <strong> Izin ini awalnya tidak aktif.</strong> Masuk peringkat tidak otomatis memberi izin. Papan peringkat mingguan
+          tetap terbuka untuk umum sesuai aturan program.
         </p>
         {privacy.data?.showcaseConsentAt && (
           <p className="mt-2 text-xs text-sk-muted">Diizinkan sejak {participantDate(privacy.data.showcaseConsentAt)} WIB.</p>
@@ -87,16 +87,16 @@ export function PrivacyControls() {
           disabled={busy || privacy.loading}
           onClick={() => void toggleConsent()}
         >
-          {consented ? 'Cabut izin tampil' : 'Izinkan tampil di Showcase'}
+          {consented ? 'Cabut izin tampil' : 'Izinkan karya tampil'}
         </Button>
       </div>
 
       <div className="mt-4 rounded-lg border border-sk-border bg-white p-5">
         <h3 className="font-semibold text-sk-navy">Hapus akun</h3>
         <p className="mt-2 text-sm leading-relaxed text-sk-muted">
-          Email, nama, avatar, hasil scan CV, notifikasi dan catatan workspace kamu dihapus, dan akunmu tidak bisa dipakai
-          masuk lagi. Poin, peringkat minggu yang sudah difinalisasi dan catatan ledger tetap ada dalam bentuk anonim —
-          menghapusnya akan mengubah hasil minggu yang sudah diumumkan untuk peserta lain.
+          Email, nama, avatar, hasil scan CV, notifikasi, dan catatan ruang kerjamu akan dihapus. Kamu tidak bisa masuk
+          lagi dengan akun ini. Poin, peringkat yang sudah diumumkan, dan catatan transaksi tetap tersimpan tanpa identitasmu
+          agar hasil peserta lain tidak berubah.
         </p>
         {!showDelete ? (
           <Button className="mt-4" size="sm" variant="ghost" onClick={() => setShowDelete(true)} iconLeft={<Trash2 size={15} aria-hidden />}>
