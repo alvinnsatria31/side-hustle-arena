@@ -1,12 +1,12 @@
 import { ButtonLink } from '@/components/primitives/Button';
-import { Entrance, Reveal } from '@/components/motion/Reveal';import { CountUp } from '@/components/motion/CountUp';
+import { Entrance, Reveal } from '@/components/motion/Reveal';
+import { CountUp } from '@/components/motion/CountUp';
 import { StatCard } from '@/components/primitives/StatCard';
-import { JourneyStrip } from '@/components/arena/HowItWorks';
+import { HowItWorks } from '@/components/arena/HowItWorks';
 import { HERO_FLOAT_CARDS } from '@/data/mock/arena';
 import { cn } from '@/lib/cn';
-import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 
-const HERO_LINES = ['Bangun Skill.', 'Buktikan Kemampuan.', 'Majukan Karirmu.'];
+const HERO_LINES = ['Coba tantangan kerja.', 'Tunjukkan hasilnya.', 'Buka peluang baru.'];
 const FLOAT_POSITIONS = [
   'left-0 top-4 md:left-2',
   'right-0 top-8 md:right-2',
@@ -27,7 +27,7 @@ export default function LandingPage() {
         <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
           <div>
             <Entrance>
-              <span className="eyebrow">All-in-one Career Ecosystem</span>
+              <span className="eyebrow">Sekolah Karir</span>
             </Entrance>
 
             <h1 className="mb-5 mt-4 text-[42px] font-extrabold leading-[1.05] tracking-[-0.035em] text-sk-navy sm:text-[52px] lg:text-[64px]">
@@ -44,19 +44,13 @@ export default function LandingPage() {
 
             <Entrance delay={0.45}>
               <p className="mb-8 max-w-[520px] text-[15px] leading-relaxed text-sk-muted md:text-[16px]">
-                Scan CV, temukan skill gap, kerjakan project dunia nyata, bangun bukti skill, dan temukan peluang kerja yang
-                lebih relevan.
+                Kenali kemampuanmu, coba tantangan kerja nyata, lalu tunjukkan hasilnya saat mencari peluang baru.
               </p>
             </Entrance>
 
             <Entrance delay={0.55}>
               <div className="flex flex-wrap gap-3">
-                {isCvScannerEnabled() && (
-                  <ButtonLink href="/cv-scanner" size="lg">
-                    Scan CV Gratis
-                  </ButtonLink>
-                )}
-                <ButtonLink href="/arena" variant={isCvScannerEnabled() ? 'ghost' : 'primary'} size="lg">
+                <ButtonLink href="/arena" size="lg">
                   Lihat Side Hustle Arena
                 </ButtonLink>
               </div>
@@ -66,10 +60,10 @@ export default function LandingPage() {
               <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-sk-muted">
                 <span className="inline-flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-sk-success" aria-hidden />
-                  Project mingguan untuk latihan
+                  Proyek mingguan untuk latihan
                 </span>
                 <span aria-hidden>·</span>
-                <span>Pencocokan skill ke peran</span>
+                <span>Penilaian berdasarkan hasil kerja</span>
                 <span aria-hidden>·</span>
                 <span>Gratis untuk memulai</span>
               </div>
@@ -102,15 +96,15 @@ export default function LandingPage() {
           </Reveal>
         </div>
 
-        {/* ---------------- JOURNEY STRIP ---------------- */}
+        {/* ---------------- ARENA STEPS ---------------- */}
         <Reveal className="mt-24 md:mt-32" y={16}>
           <div className="mb-10 max-w-xl">
-            <span className="eyebrow">Satu Ekosistem</span>
+            <span className="eyebrow">Cara Kerja Arena</span>
             <h2 className="mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
-              Dari tahu apa yang kurang, sampai terbukti bisa.
+              Dari memilih proyek sampai punya hasil yang bisa ditunjukkan.
             </h2>
           </div>
-          <JourneyStrip />
+          <HowItWorks />
         </Reveal>
 
         {/* ---------------- CLOSING CTA ---------------- */}
@@ -124,20 +118,15 @@ export default function LandingPage() {
               <div className="max-w-lg">
                 <span className="eyebrow">Mulai Hari Ini</span>
                 <h3 className="mt-2 text-[22px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[26px]">
-                  Pindah dari &ldquo;bisa&rdquo; ke &ldquo;terbukti bisa&rdquo;.
+                  Mulai bangun bukti dari hasil kerjamu.
                 </h3>
                 <p className="mt-2 text-[13.5px] leading-relaxed text-sk-muted">
-                  Mulai dari scan CV — lima menit, gratis, dan langsung dapat langkah berikutnya yang spesifik.
+                  Pilih satu proyek yang menarik buatmu, lalu mulai kerjakan.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                {isCvScannerEnabled() && (
-                  <ButtonLink href="/cv-scanner" size="lg">
-                    Scan CV Gratis
-                  </ButtonLink>
-                )}
-                <ButtonLink href="/arena/projects" variant={isCvScannerEnabled() ? 'ghost' : 'primary'} size="lg">
-                  Lihat Project Minggu Ini
+                <ButtonLink href="/arena/projects" size="lg">
+                  Lihat Proyek Minggu Ini
                 </ButtonLink>
               </div>
             </div>

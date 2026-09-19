@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowDownRight, ArrowUpRight, FileCheck2, Target } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Target } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Breadcrumb } from '@/components/primitives/Breadcrumb';
@@ -96,7 +96,6 @@ export default function CareerReportPage() {
             if (unmeasured) return `Skill seperti ${unmeasured.name} sudah kamu pakai, tetapi belum ada kriteria rubrik yang mengukurnya. Ambil project yang menilai skill itu secara langsung.`;
             return 'Tambah pengalaman lewat project mingguan yang sesuai minatmu.';
           })()}</p><ButtonLink href="/app/arena/projects" size="sm">Jelajahi project</ButtonLink></Card>
-          <Card className="p-6"><FileCheck2 size={22} aria-hidden className="text-sk-blue" /><h2 className="mt-3 text-lg font-bold text-sk-navy">Bawa buktimu ke peluang baru</h2><p className="my-3 text-sm leading-relaxed text-sk-muted">Bandingkan skill yang sudah terbukti dengan kebutuhan peran. Sumber lowongan dan cara pencocokan ditampilkan di halaman Jobs.</p><ButtonLink href="/app/jobs" size="sm" variant="ghost">Lihat pencocokan skill</ButtonLink></Card>
         </aside>
       </div>}
       <p className="mt-6 border-t border-sk-border pt-4 text-xs leading-relaxed text-sk-muted">Sumber: hasil final Arena dan ledger poin akunmu. Hasil yang masih disegel serta project yang dibatalkan tidak dihitung.</p>

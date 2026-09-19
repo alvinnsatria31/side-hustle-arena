@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
-import { deadlinePhrase } from '@/lib/deadline';
 import { Check, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { ButtonLink } from '@/components/primitives/Button';
@@ -33,7 +32,6 @@ export default function ProjectResultPage() {
   const [result, setResult] = useState<Ranked | null>(null);
   const [sealed, setSealed] = useState<Sealed | null>(null);
   const [projectCategory, setProjectCategory] = useState('');
-  const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
   const [counted, setCounted] = useState(false);
 
   useEffect(() => {
@@ -50,8 +48,6 @@ export default function ProjectResultPage() {
         const res = await getResult(enrollment.enrollmentId);
         if (cancelled) return;
         setProjectCategory(detail.division.name);
-        // This project's week: an ad-hoc week does not finalise on a Friday.
-        setDeadlineIso(detail.week?.submissionDeadlineAt ?? null);
         if (res.sealed) {
           setSealed(res);
           setBoot('sealed');
@@ -98,27 +94,27 @@ export default function ProjectResultPage() {
       <div>
         <Breadcrumb
           items={[
-            { label: 'App', href: '/app' },
+            { label: 'Beranda', href: '/app' },
             { label: 'Arena', href: '/app/arena' },
-            { label: 'Submission', href: `/app/arena/submission/${params.projectId}` },
-            { label: 'Result' },
+            { label: 'Kiriman', href: `/app/arena/submission/${params.projectId}` },
+            { label: 'Hasil' },
           ]}
         />
         <Card className="mt-5 p-7 sm:p-9">
-          <span className="eyebrow">Disegel sampai finalisasi</span>
+          <span className="eyebrow">Menunggu hasil akhir</span>
           <h1 className="mb-2 mt-2.5 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[32px]">
-            Feedback belum bisa dibuka.
+            Hasil penilaian belum dibuka.
           </h1>
           <p className="mb-6 max-w-[560px] text-[14px] leading-relaxed text-sk-muted">
-            Reviewer mungkin sudah menilai, tapi skor dikunci {deadlinePhrase(deadlineIso, 'sampai finalisasi minggu ini')} biar
-            adil buat semua peserta. Jatah review kepakai {sealed?.reviewAttemptsUsed ?? 0}/3.
+            Penilaian mungkin sudah berlangsung, tetapi skor baru dibuka setelah hasil akhir ditetapkan agar semua peserta
+            diperlakukan sama. Jatah penilaian terpakai {sealed?.reviewAttemptsUsed ?? 0}/3.
           </p>
           <div className="mb-7 flex flex-wrap gap-2">
-            <Badge variant="slate">{(sealed?.submissionStatus ?? 'DRAFT').replace(/_/g, ' ')}</Badge>
+            <Badge variant="slate">{({ DRAFT: 'Draf', SUBMITTED: 'Sudah dikirim', UNDER_REVIEW: 'Sedang dinilai', REVIEWED_HIDDEN: 'Menunggu hasil akhir' } as Record<string, string>)[sealed?.submissionStatus ?? 'DRAFT'] ?? 'Menunggu hasil akhir'}</Badge>
           </div>
           <div className="flex flex-wrap gap-3">
             <ButtonLink href={`/app/arena/submission/${params.projectId}`} variant="ghost">
-              Lihat Submission
+              Lihat kiriman
             </ButtonLink>
             <ButtonLink href="/app/arena" variant="ghost">
               Kembali ke Arena
@@ -132,10 +128,10 @@ export default function ProjectResultPage() {
   if (boot === 'unranked') {
     return (
       <ErrorState
-        title="Belum ada hasil final."
-        description="Week ini sudah difinalisasi tapi submission kamu tidak masuk peringkat (tidak submit, tidak lolos syarat, atau dibatalkan). Coba lagi minggu depan."
+        title="Belum ada hasil akhir untuk proyek ini."
+        description="Minggu Arena ini sudah selesai, tetapi kirimanmu tidak masuk peringkat. Ini bisa terjadi jika hasil belum dikirim, belum memenuhi syarat, atau pendaftaran dibatalkan."
         primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
-        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+        secondaryAction={{ label: 'Lihat proyek minggu ini', href: '/app/arena/projects' }}
       />
     );
   }
@@ -143,10 +139,10 @@ export default function ProjectResultPage() {
   if (boot === 'missing') {
     return (
       <ErrorState
-        title="Feedback belum tersedia."
-        description="Kamu belum punya hasil review untuk project ini. Selesaikan workspace dan submit dulu."
+        title="Hasil penilaian belum tersedia."
+        description="Belum ada kiriman yang dinilai untuk proyek ini. Selesaikan proyekmu dan kirim hasilnya terlebih dulu."
         primaryAction={{ label: 'Buka Arena', href: '/app/arena' }}
-        secondaryAction={{ label: 'Lihat Project Minggu Ini', href: '/app/arena/projects' }}
+        secondaryAction={{ label: 'Lihat proyek minggu ini', href: '/app/arena/projects' }}
       />
     );
   }
@@ -155,8 +151,8 @@ export default function ProjectResultPage() {
     return (
       <ErrorState
         title="Sesi berakhir."
-        description="Login ulang untuk melihat hasil kamu."
-        primaryAction={{ label: 'Login', href: '/login' }}
+        description="Masuk kembali untuk melihat hasilmu."
+        primaryAction={{ label: 'Masuk kembali', href: '/login' }}
         secondaryAction={{ label: 'Kembali ke Arena', href: '/app/arena' }}
       />
     );
@@ -177,10 +173,10 @@ export default function ProjectResultPage() {
     <div>
       <Breadcrumb
         items={[
-          { label: 'App', href: '/app' },
+          { label: 'Beranda', href: '/app' },
           { label: 'Arena', href: '/app/arena' },
-          { label: 'Submission', href: `/app/arena/submission/${params.projectId}` },
-          { label: 'Result' },
+          { label: 'Kiriman', href: `/app/arena/submission/${params.projectId}` },
+          { label: 'Hasil' },
         ]}
       />
 
@@ -193,9 +189,9 @@ export default function ProjectResultPage() {
           />
           <div className="relative z-[1] grid items-center gap-10 lg:grid-cols-[1fr_320px]">
             <div>
-              <span className="eyebrow eyebrow-dark">Project Result</span>
+              <span className="eyebrow eyebrow-dark">Hasil proyek</span>
               <h1 className="mb-2.5 mt-3 text-[32px] font-extrabold leading-[1.05] tracking-[-0.025em] sm:text-[44px]">
-                Great work.
+                Ini hasil kerjamu.
               </h1>
               <p className="mb-5 max-w-[520px] text-[14.5px] leading-relaxed text-white/75">{result.summary ?? ''}</p>
               <div className="flex flex-wrap gap-2">
@@ -295,7 +291,7 @@ export default function ProjectResultPage() {
         className="mb-8 flex flex-wrap items-center justify-between gap-6 rounded-[var(--radius-sk-2xl)] border border-sk-blue-tint-border bg-gradient-to-br from-[#F4F8FF] to-white p-7 sm:p-8"
       >
         <div>
-          <div className="mb-4 font-mono text-[11px] tracking-[0.15em] text-sk-blue">SKILLS PROVEN</div>
+          <div className="mb-4 font-mono text-[11px] tracking-[0.15em] text-sk-blue">KEMAMPUAN YANG TERBUKTI</div>
           <div className="flex flex-wrap gap-2.5">
             {result.skillsProven.map((skill, i) => (
               <motion.span
@@ -320,14 +316,14 @@ export default function ProjectResultPage() {
           className="text-right"
         >
           <div className="text-[36px] font-extrabold leading-none tracking-[-0.02em] text-sk-blue">+{result.pointsAwarded}</div>
-          <div className="mt-1 font-mono text-[11px] tracking-[0.1em] text-sk-muted">CAREER POINTS</div>
+          <div className="mt-1 font-mono text-[11px] tracking-[0.1em] text-sk-muted">POIN KARIER</div>
         </motion.div>
       </motion.div>
 
       {/* Close the loop */}
       <div className="flex flex-wrap justify-end gap-3">
         <ButtonLink href="/app/arena/projects" variant="ghost">
-          Lihat Project Berikutnya
+          Lihat proyek lain
         </ButtonLink>
         <ButtonLink href="/app/career-report">
           Lihat Career Report

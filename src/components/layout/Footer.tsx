@@ -1,21 +1,15 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
 import { WHATSAPP_SUPPORT_URL } from './FloatingWhatsApp';
 
-const PRODUCT_LINKS_ALL = [
-  { label: 'CV Scanner', href: '/cv-scanner' },
+const PRODUCT_LINKS = [
   { label: 'Side Hustle Arena', href: '/arena' },
   { label: 'Career Report', href: '/app/career-report' },
-  { label: 'Jobs', href: '/app/jobs' },
 ];
 
-/** The CV Scanner stays out of navigation until its backend is switched on. */
-const PRODUCT_LINKS = PRODUCT_LINKS_ALL.filter((item) => !item.href.includes('/cv-scanner') || isCvScannerEnabled());
-
 const EXPLORE_LINKS = [
-  { label: 'Project Minggu Ini', href: '/arena/projects' },
-  { label: 'Weekly Spotlight', href: '/arena/showcase' },
+  { label: 'Proyek Minggu Ini', href: '/arena/projects' },
+  { label: 'Sorotan Mingguan', href: '/arena/showcase' },
   { label: 'Masuk / Daftar', href: '/login' },
 ];
 
@@ -27,7 +21,7 @@ export function Footer() {
         <div className="sm:col-span-2 lg:col-span-1">
           <BrandLogo />
           <p className="mt-3 max-w-xs text-[13px] leading-relaxed text-sk-muted">
-            Scan CV, kerjakan project dunia nyata, bangun bukti skill, dan temukan peluang kerja yang lebih relevan.
+            Kerjakan proyek nyata, dapatkan penilaian, dan tunjukkan hasil kerjamu.
           </p>
         </div>
 
@@ -60,7 +54,7 @@ export function Footer() {
         <div>
           <h4 className="mb-3 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sk-muted">Tentang</h4>
           <p className="text-[13px] leading-relaxed text-sk-body">
-            Sekolah Karir membantu kamu pindah dari &ldquo;bisa&rdquo; ke &ldquo;terbukti bisa&rdquo; — lewat project nyata, feedback, dan bukti skill.
+            Sekolah Karir membantumu menunjukkan kemampuan lewat proyek nyata, penilaian, dan hasil kerja yang bisa kamu bagikan.
           </p>
           <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="mt-4 inline-block text-[13px] font-semibold leading-relaxed text-sk-blue hover:underline">
             Jika mengalami kendala, hubungi WhatsApp CS: +62 851-1730-4579
@@ -70,8 +64,8 @@ export function Footer() {
 
       <div className="border-t border-sk-border">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-6 py-5">
-          <p className="font-mono text-[11px] text-sk-muted">© 2026 SEKOLAH KARIR · CAREER ECOSYSTEM</p>
-          <p className="font-mono text-[11px] text-sk-muted">BANGUN SKILL · BUKTIKAN KEMAMPUAN · MAJUKAN KARIRMU</p>
+          <p className="font-mono text-[11px] text-sk-muted">© 2026 SEKOLAH KARIR</p>
+          <p className="font-mono text-[11px] text-sk-muted">LATIH KEMAMPUAN · TUNJUKKAN HASIL · BUKA PELUANG</p>
         </div>
       </div>
     </footer>

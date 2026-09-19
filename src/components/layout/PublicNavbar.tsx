@@ -9,25 +9,10 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
 import { cn } from '@/lib/cn';
-import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
-import { isStoreEnabled } from '@/lib/store-flags';
-
-const NAV_LINKS_ALL = [
-  { label: 'CV Scanner', href: '/cv-scanner' },
+const NAV_LINKS = [
   { label: 'Side Hustle Arena', href: '/arena' },
-  { label: 'Showcase', href: '/arena/showcase' },
-  { label: 'Jobs', href: '/app/jobs' },
-  { label: 'Produk', href: '/store' },
+  { label: 'Sorotan', href: '/arena/showcase' },
 ];
-
-/**
- * Two features stay out of navigation until their backends are switched on. A
- * link to a route that 404s is worse than no link: it reads as a broken site
- * rather than as a feature that has not launched.
- */
-const NAV_LINKS = NAV_LINKS_ALL.filter((item) =>
-  (!item.href.includes('/cv-scanner') || isCvScannerEnabled()) &&
-  (item.href !== '/store' || isStoreEnabled()));
 
 /**
  * Floating glass navbar. More transparent at top; slightly smaller and
@@ -99,15 +84,9 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
               <Link href="/login" className="text-[13px] font-semibold text-sk-navy transition-colors hover:text-sk-blue">
                 Masuk
               </Link>
-              {isCvScannerEnabled() ? (
-                <ButtonLink href="/cv-scanner" size="sm">
-                  Scan CV Gratis
-                </ButtonLink>
-              ) : (
-                <ButtonLink href="/arena" size="sm">
-                  Masuk Arena
-                </ButtonLink>
-              )}
+              <ButtonLink href="/arena" size="sm">
+                Jelajahi Arena
+              </ButtonLink>
             </>
           )}
         </div>
@@ -154,8 +133,8 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
                 <ButtonLink href="/login" variant="ghost" size="sm" className="flex-1">
                   Masuk
                 </ButtonLink>
-                <ButtonLink href={isCvScannerEnabled() ? '/cv-scanner' : '/arena'} size="sm" className="flex-1">
-                  {isCvScannerEnabled() ? 'Scan CV Gratis' : 'Masuk Arena'}
+                <ButtonLink href="/arena" size="sm" className="flex-1">
+                  Jelajahi Arena
                 </ButtonLink>
               </>
             )}
