@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { footerColumns } from '@/components/layout/nav-links';
+import { ExternalMark, NavAnchor, NewBadge, PROMO_PILL } from '@/components/layout/NavPromo';
+import { cn } from '@/lib/cn';
 import { WHATSAPP_SUPPORT_URL } from './FloatingWhatsApp';
 
 /**
@@ -20,8 +22,8 @@ export function Footer() {
         <div className="sm:col-span-2 lg:col-span-1">
           <BrandLogo />
           <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-sk-muted">
-            Kompetisi proyek mingguan. Kerjakan brief nyata, dapatkan penilaian per
-            kriteria, dan tunjukkan hasil kerjamu.
+            Kompetisi proyek mingguan. Kerjakan brief nyata, dapatkan penilaian per kriteria, dan
+            tunjukkan hasil kerjamu.
           </p>
         </div>
 
@@ -33,9 +35,22 @@ export function Footer() {
             <ul className="flex flex-col gap-3 text-[13.5px] font-medium text-sk-body">
               {column.links.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="transition-colors hover:text-sk-blue">
+                  <NavAnchor
+                    link={link}
+                    className={cn(
+                      'transition-colors',
+                      link.highlight
+                        ? cn(
+                            'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold duration-200',
+                            PROMO_PILL,
+                          )
+                        : 'hover:text-sk-blue',
+                    )}
+                  >
                     {link.label}
-                  </Link>
+                    {link.highlight && <NewBadge />}
+                    {link.external && <ExternalMark />}
+                  </NavAnchor>
                 </li>
               ))}
             </ul>
@@ -66,9 +81,7 @@ export function Footer() {
       <div className="border-t border-sk-border">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-6 py-5">
           <p className="font-mono text-[11px] text-sk-faint">© 2026 SEKOLAH KARIR</p>
-          <p className="font-mono text-[11px] text-sk-faint">
-            KERJAKAN · DINILAI · TUNJUKKAN
-          </p>
+          <p className="font-mono text-[11px] text-sk-faint">KERJAKAN · DINILAI · TUNJUKKAN</p>
         </div>
       </div>
     </footer>

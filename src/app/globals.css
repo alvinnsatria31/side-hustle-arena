@@ -42,6 +42,9 @@
   --color-sk-cyan: #50c8dc;
   --color-sk-violet: #8a6bfc;
   --color-sk-violet-tint: #ece6ff;
+  /* Darker stops so white text on a violet pill clears 4.5:1 (6.9:1 and 5.5:1). */
+  --color-sk-violet-600: #6d4de0;
+  --color-sk-violet-700: #5b3fd0;
   --color-sk-mint: #5ae0a0;
 
   /* Feedback */

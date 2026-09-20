@@ -8,6 +8,7 @@ import { Bell, LogOut, ShieldCheck, UserRound } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AvatarBadge } from '@/components/arena/AvatarBadge';
 import { appNavLinks, isNavActive } from '@/components/layout/nav-links';
+import { ExternalMark, NavAnchor, NewBadge, PROMO_PILL } from '@/components/layout/NavPromo';
 import { useIsAdmin, useParticipant } from '@/features/arena/participant';
 import { getNotifications } from '@/lib/arena-client';
 import { cn } from '@/lib/cn';
@@ -28,12 +29,18 @@ export function AppNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const links = appNavLinks();
-  const sectionTitle = pathname === '/app/arena' || pathname === '/app' ? 'Ringkasan'
-    : pathname.startsWith('/app/arena/my-projects') ? 'Proyekku'
-      : pathname.startsWith('/app/arena/projects') ? 'Jelajahi proyek'
-        : pathname.startsWith('/app/arena/leaderboard') ? 'Peringkat'
-          : pathname.startsWith('/app/profile') ? 'Profil'
-            : 'Ruang kerja';
+  const sectionTitle =
+    pathname === '/app/arena' || pathname === '/app'
+      ? 'Ringkasan'
+      : pathname.startsWith('/app/arena/my-projects')
+        ? 'Proyekku'
+        : pathname.startsWith('/app/arena/projects')
+          ? 'Jelajahi proyek'
+          : pathname.startsWith('/app/arena/leaderboard')
+            ? 'Peringkat'
+            : pathname.startsWith('/app/profile')
+              ? 'Profil'
+              : 'Ruang kerja';
 
   useEffect(() => {
     let active = true;
@@ -76,7 +83,9 @@ export function AppNavbar() {
         aria-label="Navigasi aplikasi"
       >
         <BrandLogo href="/app/arena" className="lg:hidden" />
-        <span className="hidden font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-sk-faint lg:block">Arena / <span className="text-sk-blue-700">{sectionTitle}</span></span>
+        <span className="hidden font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-sk-faint lg:block">
+          Arena / <span className="text-sk-blue-700">{sectionTitle}</span>
+        </span>
 
         <div className="ml-auto flex items-center gap-2.5" ref={menuRef}>
           <Link
@@ -140,19 +149,24 @@ export function AppNavbar() {
               const Icon = link.icon;
               const active = isNavActive(link.href, pathname);
               return (
-                <Link
+                <NavAnchor
                   key={link.href}
-                  href={link.href}
+                  link={link}
                   onClick={() => setMenuOpen(false)}
                   role="menuitem"
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg',
-                    active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
+                    'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] transition-colors',
+                    link.highlight
+                      ? cn('font-semibold duration-200', PROMO_PILL)
+                      : 'font-medium text-sk-body hover:bg-sk-bg',
+                    !link.highlight && active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
                   )}
                 >
                   <Icon size={15} strokeWidth={2.1} aria-hidden /> {link.label}
-                </Link>
+                  {link.highlight && <NewBadge className="ml-auto" />}
+                  {link.external && <ExternalMark />}
+                </NavAnchor>
               );
             })}
             <div className="my-1 h-px bg-sk-border" />

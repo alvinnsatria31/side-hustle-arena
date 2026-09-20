@@ -9,6 +9,7 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { PublicUserMenu, type PublicNavUser } from '@/components/layout/PublicUserMenu';
 import { isNavActive, publicNavLinks } from '@/components/layout/nav-links';
+import { ExternalMark, NavAnchor, NewBadge, PROMO_PILL } from '@/components/layout/NavPromo';
 import { cn } from '@/lib/cn';
 
 /**
@@ -58,16 +59,26 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
         <ul className="hidden items-center justify-center gap-6 text-[13px] font-medium text-sk-body lg:flex xl:gap-7">
           {links.map((link) => (
             <li key={link.href}>
-              <Link
-                href={link.href}
+              <NavAnchor
+                link={link}
                 aria-current={isNavActive(link.href, pathname) ? 'page' : undefined}
                 className={cn(
-                  'whitespace-nowrap transition-colors hover:text-sk-navy',
-                  isNavActive(link.href, pathname) && 'font-semibold text-sk-navy',
+                  'whitespace-nowrap transition-colors',
+                  link.highlight
+                    ? cn(
+                        'inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 font-semibold duration-200',
+                        PROMO_PILL,
+                      )
+                    : 'hover:text-sk-navy',
+                  !link.highlight &&
+                    isNavActive(link.href, pathname) &&
+                    'font-semibold text-sk-navy',
                 )}
               >
                 {link.label}
-              </Link>
+                {link.highlight && <NewBadge />}
+                {link.external && <ExternalMark />}
+              </NavAnchor>
             </li>
           ))}
         </ul>
@@ -120,18 +131,23 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
             const Icon = link.icon;
             const active = isNavActive(link.href, pathname);
             return (
-              <Link
+              <NavAnchor
                 key={link.href}
-                href={link.href}
+                link={link}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex min-h-[44px] items-center gap-3 rounded-[var(--radius-sk-md)] px-3 text-[14px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy',
-                  active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
+                  'flex min-h-[44px] items-center gap-3 rounded-[var(--radius-sk-md)] px-3 text-[14px] transition-colors',
+                  link.highlight
+                    ? cn('font-semibold duration-200', PROMO_PILL)
+                    : 'font-medium text-sk-body hover:bg-sk-bg hover:text-sk-navy',
+                  !link.highlight && active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
                 )}
               >
                 <Icon size={17} strokeWidth={2.1} aria-hidden className="flex-none" />
                 {link.label}
-              </Link>
+                {link.highlight && <NewBadge className="ml-auto" />}
+                {link.external && <ExternalMark className={link.highlight ? '' : 'ml-auto'} />}
+              </NavAnchor>
             );
           })}
 
