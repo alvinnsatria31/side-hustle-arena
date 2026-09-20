@@ -14,7 +14,7 @@ export function AppSidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 flex-col bg-[#102544] px-4 py-6 text-white lg:flex xl:w-[260px]">
       <Link href="/app/arena" className="flex min-h-12 items-center gap-3 rounded-xl px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-        <Image src="/logo.png" alt="" width={34} height={34} className="h-[34px] w-[34px] rounded-lg bg-white object-contain" unoptimized />
+        <Image src="/logo-mark.png" alt="SekolahKarir Arena" width={34} height={34} className="h-[34px] w-[34px] rounded-lg bg-white object-contain p-0.5" unoptimized />
         <span className="min-w-0 leading-tight">
           <span className="block text-[13px] font-extrabold tracking-[-0.02em]">Sekolah Karir</span>
           <span className="mt-1 block font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-[#93baff]">Side Hustle Arena</span>

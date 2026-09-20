@@ -22,13 +22,11 @@ function StaircaseMark({ className }: { className?: string }) {
 }
 
 /**
- * Brand logo: blue staircase mark with the Sekolah Karir wordmark.
+ * Brand logo: SekolahKarir Arena official logo.
  *
- * The image is served as-is (`unoptimized`): it is a 96×96 PNG of 11 KB, so
- * the optimizer adds a server round-trip and a failure mode without saving
- * anything. `priority` keeps it out of lazy loading, since it is always above
- * the fold. The wordmark never wraps and hides only on very narrow screens
- * (< 360px), where the mark alone keeps the navbar from overlapping its icons.
+ * Served unoptimized and with priority since it sits above the fold on all
+ * key layout surfaces. On ultra-narrow screens (< 360px) or in compact mode,
+ * the mark is displayed alone to prevent overlapping adjacent navigation actions.
  */
 export function BrandLogo({
   dark,
@@ -44,35 +42,61 @@ export function BrandLogo({
   href?: string;
 }) {
   const [failed, setFailed] = useState(false);
+
   return (
     <Link
       href={href}
-      aria-label="Sekolah Karir — beranda"
-      className={cn('flex shrink-0 items-center gap-2.5 font-extrabold tracking-[-0.01em]', className)}
+      aria-label="SekolahKarir Arena — beranda"
+      className={cn('flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-sk-blue', className)}
     >
       {failed ? (
-        <StaircaseMark className="h-8 w-8 shrink-0 text-sk-blue" />
-      ) : (
+        <div className="flex items-center gap-2">
+          <StaircaseMark className="h-8 w-8 shrink-0 text-[#098d4b]" />
+          {showWordmark && !compact && (
+            <span className={cn('whitespace-nowrap font-extrabold text-[15.5px] leading-none', dark ? 'text-white' : 'text-sk-navy')}>
+              SekolahKarir <span className="text-[#098d4b]">Arena</span>
+            </span>
+          )}
+        </div>
+      ) : compact || !showWordmark ? (
         <Image
-          src="/logo.png"
-          alt=""
+          src="/logo-mark.png"
+          alt="SekolahKarir Arena"
           width={32}
           height={32}
           className="h-8 w-8 shrink-0 object-contain"
           priority
           unoptimized
           onError={() => setFailed(true)}
-          // An error that fired before hydration never reaches onError; a
-          // completed image with no pixels is that case, caught on mount.
           ref={(img) => {
             if (img?.complete && img.naturalWidth === 0) setFailed(true);
           }}
         />
-      )}
-      {showWordmark && !compact && (
-        <span className={cn('whitespace-nowrap text-[15.5px] leading-none max-[359px]:hidden', dark ? 'text-white' : 'text-sk-navy')}>
-          Sekolah Karir
-        </span>
+      ) : (
+        <>
+          <Image
+            src="/logo.png"
+            alt="SekolahKarir Arena"
+            width={198}
+            height={32}
+            className={cn('h-8 w-auto object-contain', 'max-[359px]:hidden')}
+            priority
+            unoptimized
+            onError={() => setFailed(true)}
+            ref={(img) => {
+              if (img?.complete && img.naturalWidth === 0) setFailed(true);
+            }}
+          />
+          <Image
+            src="/logo-mark.png"
+            alt="SekolahKarir Arena"
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 object-contain min-[360px]:hidden"
+            priority
+            unoptimized
+          />
+        </>
       )}
     </Link>
   );
