@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { ArrowUpRight, Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { ARENA_ENTRY_LABEL, arenaEntryHref } from '@/components/landing/arena-entry';
@@ -18,9 +18,13 @@ import { cn } from '@/lib/cn';
  * leave without ever seeing the Arena.
  *
  * So: where this sits in the Sekolah Karir family, where to get help, and one
- * button. Career is named because people ask what else exists, and carries no
- * link because it is not deployed — a link to nothing reads as a broken site.
+ * button. Tools is named because people ask what else exists, and it now
+ * carries a link: the toolbox is live on its own host, so the chip that used
+ * to say "segera hadir" would be advertising a launch that already happened.
  */
+/** The toolbox's own host — the same URL the shared nav list promotes. */
+const TOOLS_URL = 'https://tools.sekolahkarir.id';
+
 export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; mainSiteUrl: string }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,16 +43,26 @@ export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; ma
   // which never fires for `#kontak`.
   const closeMenu = () => setMenuOpen(false);
 
-  const careerChip = (
-    <span
-      className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-sk-border bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-sk-muted"
-      title="Sekolah Karir Career belum tersedia untuk publik"
+  /**
+   * The sibling product, on its own host.
+   *
+   * A separate deployment, so it is a plain anchor with a new-tab target
+   * rather than a router link. The pill treatment stays from when this chip
+   * announced a launch — it is what keeps the centre of the bar from reading
+   * as three identical text links — but the amber "coming soon" dot and label
+   * are gone, and the arrow now says the click leaves this site.
+   */
+  const toolsChip = (
+    <a
+      href={TOOLS_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-sk-border bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-sk-body transition-colors hover:border-sk-blue/40 hover:bg-white hover:text-sk-navy"
     >
-      <span aria-hidden className="h-1.5 w-1.5 flex-none rounded-full bg-sk-warning" />
-      Sekolah Karir Career
-      <span aria-hidden className="text-sk-faint">·</span>
-      <span className="font-semibold text-sk-warning-ink">Segera hadir</span>
-    </span>
+      Sekolah Karir Tools
+      <ArrowUpRight size={13} aria-hidden className="flex-none opacity-70" />
+      <span className="sr-only">(buka di tab baru)</span>
+    </a>
   );
 
   return (
@@ -76,7 +90,7 @@ export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; ma
           >
             Sekolah Karir
           </a>
-          {careerChip}
+          {toolsChip}
           <a
             href="#kontak"
             className="whitespace-nowrap text-[13px] font-medium text-sk-body transition-colors hover:text-sk-navy"
@@ -130,7 +144,19 @@ export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; ma
           >
             Kontak
           </a>
-          <div className="flex min-h-[44px] items-center px-3">{careerChip}</div>
+          {/* Full-width row, not the pill: inside the sheet every entry is a
+              44px target, and a chip floating in a padded div is a small one. */}
+          <a
+            href={TOOLS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={closeMenu}
+            className="flex min-h-[44px] items-center gap-1.5 rounded-[var(--radius-sk-md)] px-3 text-[14px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy"
+          >
+            Sekolah Karir Tools
+            <ArrowUpRight size={14} aria-hidden className="flex-none opacity-70" />
+            <span className="sr-only">(buka di tab baru)</span>
+          </a>
         </motion.div>
       )}
     </header>
