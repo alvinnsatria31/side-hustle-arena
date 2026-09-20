@@ -20,6 +20,12 @@
   --color-sk-navy-3: #1a2f5a;
   --color-sk-navy-4: #183a7a;
 
+  /* Ink on navy — the dark panels used to hardcode these three hexes. */
+  --color-sk-on-navy: #ffffff;
+  --color-sk-on-navy-body: #c2d5ef;
+  --color-sk-on-navy-accent: #93baff;
+  --color-sk-on-navy-track: rgba(255, 255, 255, 0.16);
+
   /* Ink */
   --color-sk-text: #1a2540;
   --color-sk-body: #3a4a68;
@@ -35,6 +41,7 @@
   /* Supporting */
   --color-sk-cyan: #50c8dc;
   --color-sk-violet: #8a6bfc;
+  --color-sk-violet-tint: #ece6ff;
   --color-sk-mint: #5ae0a0;
 
   /* Feedback */
@@ -320,6 +327,51 @@ select {
   -webkit-backdrop-filter: blur(10px);
   position: relative;
   z-index: 1;
+}
+
+/* Sprint hero — the one dark panel on the participant dashboard. Kept here so
+   the gradient, the glow and the grain stay one decision instead of six inline
+   hexes spread across the component. */
+.sprint-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sk-3xl);
+  background:
+    radial-gradient(120% 140% at 88% -10%, rgba(36, 107, 253, 0.45), transparent 58%),
+    radial-gradient(90% 120% at 0% 110%, rgba(80, 200, 220, 0.18), transparent 60%),
+    linear-gradient(140deg, #0b1933 0%, #102544 52%, #16305a 100%);
+  color: var(--color-sk-on-navy);
+  box-shadow: var(--shadow-sk-lg);
+}
+.sprint-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(160deg, #000 0%, transparent 60%);
+  -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 60%);
+}
+
+/* The one hover treatment every card on the participant dashboard shares. It
+   lived as four different inline transition stacks before, which is why a stat
+   tile and a project card used to rise by different amounts. */
+.card-rise {
+  transition:
+    transform 200ms ease-out,
+    box-shadow 200ms ease-out,
+    border-color 200ms ease-out;
+}
+.card-rise:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-sk-md);
+  border-color: var(--color-sk-blue-tint-border);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-rise:hover {
+    transform: none;
+  }
 }
 
 /* ---------- Reduced motion ---------- */
