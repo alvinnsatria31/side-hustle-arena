@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowUpRight, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { ButtonLink } from '@/components/primitives/Button';
 import { ARENA_ENTRY_LABEL, arenaEntryHref } from '@/components/landing/arena-entry';
+import { TOOLS_URL } from '@/components/layout/nav-links';
+import { ExternalMark, NewBadge, PROMO_PILL } from '@/components/layout/NavPromo';
 import { cn } from '@/lib/cn';
 
 /**
@@ -22,10 +24,13 @@ import { cn } from '@/lib/cn';
  * carries a link: the toolbox is live on its own host, so the chip that used
  * to say "segera hadir" would be advertising a launch that already happened.
  */
-/** The toolbox's own host — the same URL the shared nav list promotes. */
-const TOOLS_URL = 'https://tools.sekolahkarir.id';
-
-export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; mainSiteUrl: string }) {
+export function LandingHeader({
+  signedIn,
+  mainSiteUrl,
+}: {
+  signedIn: boolean;
+  mainSiteUrl: string;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const reduce = useReducedMotion();
@@ -47,20 +52,24 @@ export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; ma
    * The sibling product, on its own host.
    *
    * A separate deployment, so it is a plain anchor with a new-tab target
-   * rather than a router link. The pill treatment stays from when this chip
-   * announced a launch — it is what keeps the centre of the bar from reading
-   * as three identical text links — but the amber "coming soon" dot and label
-   * are gone, and the arrow now says the click leaves this site.
+   * rather than a router link, and it wears the same promo pill the shared
+   * nav list gives it everywhere else. It used to be a quiet white chip, which
+   * is the treatment for a link that has always been there — the opposite of
+   * what a launch needs from the one screen a stranger lands on first.
    */
   const toolsChip = (
     <a
       href={TOOLS_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-sk-border bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-sk-body transition-colors hover:border-sk-blue/40 hover:bg-white hover:text-sk-navy"
+      className={cn(
+        'inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold duration-200',
+        PROMO_PILL,
+      )}
     >
       Sekolah Karir Tools
-      <ArrowUpRight size={13} aria-hidden className="flex-none opacity-70" />
+      <NewBadge />
+      <ExternalMark />
       <span className="sr-only">(buka di tab baru)</span>
     </a>
   );
@@ -151,10 +160,14 @@ export function LandingHeader({ signedIn, mainSiteUrl }: { signedIn: boolean; ma
             target="_blank"
             rel="noopener noreferrer"
             onClick={closeMenu}
-            className="flex min-h-[44px] items-center gap-1.5 rounded-[var(--radius-sk-md)] px-3 text-[14px] font-medium text-sk-body transition-colors hover:bg-sk-bg hover:text-sk-navy"
+            className={cn(
+              'flex min-h-[44px] items-center gap-1.5 rounded-[var(--radius-sk-md)] px-3 text-[14px] font-semibold duration-200',
+              PROMO_PILL,
+            )}
           >
             Sekolah Karir Tools
-            <ArrowUpRight size={14} aria-hidden className="flex-none opacity-70" />
+            <NewBadge className="ml-auto" />
+            <ExternalMark />
             <span className="sr-only">(buka di tab baru)</span>
           </a>
         </motion.div>

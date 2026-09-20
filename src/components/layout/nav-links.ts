@@ -51,9 +51,11 @@ export interface NavLink {
  * decision, not a permanent style: drop `highlight` and it becomes an ordinary
  * link without touching any of the five surfaces that draw it.
  */
+export const TOOLS_URL = 'https://tools.sekolahkarir.id';
+
 const TOOLS: NavLink = {
   label: 'Tools',
-  href: 'https://tools.sekolahkarir.id',
+  href: TOOLS_URL,
   icon: Wrench,
   external: true,
   highlight: true,
