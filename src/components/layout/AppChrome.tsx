@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { AppNavbar } from "@/components/layout/AppNavbar";
+import { AppSidebar } from "@/components/layout/AppSidebar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 
 function LoadingScreen() {
@@ -16,7 +17,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   // different places, and the bottom tab bar would sit over the tables.
   const console = pathname.startsWith("/app/admin");
   if (console) return <div key={pathname} className="anim-fade-in">{children}</div>;
-  return <div className="flex min-h-screen flex-col bg-sk-bg"><AppNavbar /><main key={pathname} className="anim-fade-in mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-16 md:pt-8">{children}</main><MobileBottomNav /></div>;
+  return <div className="flex min-h-screen bg-sk-bg"><AppSidebar /><div className="flex min-w-0 flex-1 flex-col"><AppNavbar /><main key={pathname} className="anim-fade-in mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-16 md:pt-8 lg:px-8">{children}</main><MobileBottomNav /></div></div>;
 }
 
 export function ProtectedAppChrome({ children }: { children: React.ReactNode }) {

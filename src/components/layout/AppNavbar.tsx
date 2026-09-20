@@ -28,6 +28,12 @@ export function AppNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const links = appNavLinks();
+  const sectionTitle = pathname === '/app/arena' || pathname === '/app' ? 'Ringkasan'
+    : pathname.startsWith('/app/arena/my-projects') ? 'Proyekku'
+      : pathname.startsWith('/app/arena/projects') ? 'Jelajahi proyek'
+        : pathname.startsWith('/app/arena/leaderboard') ? 'Peringkat'
+          : pathname.startsWith('/app/profile') ? 'Profil'
+            : 'Ruang kerja';
 
   useEffect(() => {
     let active = true;
@@ -61,43 +67,21 @@ export function AppNavbar() {
     };
   }, [menuOpen]);
 
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
-
   const name = user.displayName ?? 'Peserta';
 
   return (
-    <header className="sticky top-0 z-40 px-4 pt-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-sk-border bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
       <nav
-        className="glass-nav mx-auto flex max-w-6xl items-center gap-4 rounded-[var(--radius-sk-xl)] px-4 py-2.5 md:px-5"
+        className="mx-auto flex h-[68px] max-w-6xl items-center gap-4"
         aria-label="Navigasi aplikasi"
       >
-        <BrandLogo />
+        <BrandLogo href="/app/arena" className="lg:hidden" />
+        <span className="hidden font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-sk-faint lg:block">Arena / <span className="text-sk-blue-700">{sectionTitle}</span></span>
 
-        <ul className="mx-auto hidden items-center gap-1 overflow-x-auto md:flex [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {links.map((link) => {
-            const active = isNavActive(link.href, pathname);
-            return (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'block whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-medium text-sk-muted transition-colors hover:text-sk-navy',
-                    active && 'bg-sk-blue-tint font-bold text-sk-blue-700 hover:text-sk-blue-700',
-                  )}
-                >
-                  {link.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-
-        <div className="ml-auto flex items-center gap-2.5 md:ml-0" ref={menuRef}>
+        <div className="ml-auto flex items-center gap-2.5" ref={menuRef}>
           <Link
             href="/app/notifications"
+            onClick={() => setMenuOpen(false)}
             title="Notifikasi"
             aria-label={`Notifikasi, ${unread} belum dibaca`}
             className="relative grid h-10 w-10 place-items-center rounded-full text-sk-muted transition-colors hover:bg-white/70 hover:text-sk-navy focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2"
@@ -159,6 +143,7 @@ export function AppNavbar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={() => setMenuOpen(false)}
                   role="menuitem"
                   aria-current={active ? 'page' : undefined}
                   className={cn(
@@ -176,6 +161,7 @@ export function AppNavbar() {
           {isAdmin && (
             <Link
               href="/app/admin"
+              onClick={() => setMenuOpen(false)}
               role="menuitem"
               className="flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
             >
@@ -184,6 +170,7 @@ export function AppNavbar() {
           )}
           <Link
             href="/app/profile"
+            onClick={() => setMenuOpen(false)}
             role="menuitem"
             className="flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
           >

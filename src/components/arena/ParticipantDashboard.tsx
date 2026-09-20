@@ -1,39 +1,26 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Bell, Bookmark, CalendarClock, Gift, LayoutGrid, LoaderCircle, LogOut, RefreshCw, Trophy, UserRound } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarClock, Gift, LoaderCircle, LogOut, RefreshCw, Trophy } from 'lucide-react';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { useParticipant } from '@/features/arena/participant';
 import { SignInButton } from '@/components/auth/SignInButton';
 import { LogoutForm } from '@/components/auth/LogoutForm';
-import { MilestoneRoadmap, RewardProgress } from '@/components/arena/MilestoneRoadmap';
 import { ArenaApiError } from '@/lib/arena-client';
-import { getParticipantMilestones, getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
+import { getParticipantOverview, useParticipantResource, type ParticipantEnrollment, type ParticipantOverview } from '@/lib/participant-client';
 import type { ReactNode } from 'react';
 import { WHATSAPP_SUPPORT_URL } from '@/components/layout/FloatingWhatsApp';
+import { dashboardFocus } from '@/lib/dashboard-view';
+import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
+import type { PublicArenaHome } from '@/lib/arena-view';
 
 export function participantDate(value: string) {
   return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(value));
 }
 
-export function ParticipantNav() {
-  const pathname = usePathname();
-  return <nav aria-label="Navigasi peserta" className="mb-7 flex flex-wrap gap-x-5 gap-y-3 border-b border-sk-border pb-4 text-sm">
-    {[
-      { href: '/app', label: 'Beranda', Icon: LayoutGrid },
-      { href: '/app/arena', label: 'Arena', Icon: Trophy },
-      { href: '/app/arena/leaderboard', label: 'Peringkat', Icon: Trophy },
-      { href: '/app/notifications', label: 'Pesan', Icon: Bell },
-      { href: '/app/profile', label: 'Profil', Icon: UserRound },
-    ].map(({ href, label, Icon }) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined} className={`inline-flex items-center gap-2 py-1 font-semibold ${pathname === href ? 'text-sk-blue' : 'text-sk-muted hover:text-sk-blue'}`}><Icon size={15} aria-hidden />{label}</Link>)}
-  </nav>;
-}
-
 export function ParticipantShell({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return <div className="min-w-0 [overflow-wrap:anywhere] [letter-spacing:0]">
-    <ParticipantNav />
     <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
       <h1 className="text-2xl font-extrabold text-sk-navy sm:text-3xl">{title}</h1>
       {action}
@@ -104,46 +91,70 @@ export function ParticipantLogout() {
   return <LogoutForm><Button type="submit" variant="ghost" iconLeft={<LogOut size={15} aria-hidden />}>Keluar</Button></LogoutForm>;
 }
 
-/** The reward ladder with the participant's own progress, on the Arena page. */
-function ArenaRewardLadder({ balance }: { balance: number }) {
-  const rewards = useParticipantResource(getParticipantMilestones);
-  const ladder = rewards.data?.ladder;
-  return <section aria-labelledby="arena-rewards-title" className="mb-8">
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h2 id="arena-rewards-title" className="flex items-center gap-2 text-lg font-bold text-sk-navy"><Gift size={20} aria-hidden />Hadiah dan progresmu</h2>
-      <ButtonLink href="/app/profile#rewards" size="sm" variant="ghost">Tukar poin</ButtonLink>
-    </div>
-    {rewards.error
-      ? <p className="text-sm text-sk-muted">Daftar hadiah belum bisa dimuat. Coba perbarui halaman.</p>
-      : !ladder
-        ? null
-        : ladder.steps.length === 0
-          ? <p className="text-sm text-sk-muted">Belum ada hadiah aktif.</p>
-          : <>
-            <RewardProgress lifetimePoints={ladder.lifetimePoints} balance={balance} steps={ladder.steps} className="mb-5" />
-            <MilestoneRoadmap steps={ladder.steps} points={ladder.lifetimePoints} />
-          </>}
-  </section>;
-}
-
-export default function ParticipantDashboard({ arena = false }: { arena?: boolean }) {
+export default function ParticipantDashboard({ projects = [] }: { projects?: PublicArenaHome['projects'] }) {
   const user = useParticipant();
   const resource = useParticipantResource(getParticipantOverview);
   const data = resource.data;
   const active = data?.history.find((row) => row.id === data.currentEnrollmentId);
-  return <ParticipantShell title={arena ? 'Side Hustle Arena' : `Halo, ${user.displayName ?? 'Peserta'}`} action={<RefreshButton refresh={resource.refresh} loading={resource.loading} />}>
+  const focus = active ? dashboardFocus(active) : null;
+  const available = projects.filter((project) => project.slug !== active?.project.slug).slice(0, 2);
+  return <ParticipantShell title={`Halo, ${user.displayName ?? 'Peserta'}.`} action={<RefreshButton refresh={resource.refresh} loading={resource.loading} />}>
     <ResourceState loading={resource.loading} error={resource.error} retry={resource.refresh} />
     {data && !resource.loading && <>
-      {data.currentWeek && <div className="mb-4 flex flex-wrap items-center gap-3"><span className="text-sm font-semibold text-sk-body">{data.currentWeek.title}</span><Badge variant={data.currentWeek.canSelect ? 'mint' : 'slate'}>{weekStatusLabels[data.currentWeek.status] ?? data.currentWeek.status}</Badge></div>}
-      {active ? <EnrollmentCard enrollment={active} /> : <section className="border-y border-sk-border py-7">
-        <h2 className="mb-4 text-lg font-bold text-sk-navy">{data.currentWeek?.canSelect ? 'Kamu belum memilih proyek minggu ini' : data.currentWeek ? 'Pendaftaran proyek belum dibuka' : 'Belum ada proyek Arena yang tersedia'}</h2>
-        <ButtonLink href="/app/arena/projects" iconLeft={<LayoutGrid size={15} aria-hidden />}>Lihat proyek</ButtonLink>
-      </section>}
-      <ParticipantStats data={data} />
-      {arena && <ArenaRewardLadder balance={data.points.balance} />}
-      <div className="flex flex-wrap gap-3"><ButtonLink href="/app/arena/projects" variant="ghost">Semua proyek</ButtonLink><ButtonLink href="/app/arena/projects?view=saved" variant="ghost" iconLeft={<Bookmark size={15} aria-hidden />}>Tersimpan</ButtonLink><ButtonLink href="/app/arena/leaderboard" variant="ghost" iconLeft={<Trophy size={15} aria-hidden />}>Peringkat</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost">Hadiah</ButtonLink></div>
-      <EnrollmentHistory history={data.history.filter((row) => row.id !== active?.id)} />
-      <p className="mt-8 text-sm text-sk-muted">Butuh bantuan? Hubungi kami lewat WhatsApp: <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-sk-blue hover:underline">+62 851-1730-4579</a></p>
+      <div className="-mt-3 mb-6 flex flex-wrap items-center gap-3">
+        <p className="text-[14px] text-sk-muted">Ayo tuntaskan langkah berikutnya di Arena.</p>
+        {data.currentWeek && <Badge variant={data.currentWeek.canSelect ? 'mint' : 'slate'}>{data.currentWeek.title} · {weekStatusLabels[data.currentWeek.status] ?? data.currentWeek.status}</Badge>}
+      </div>
+
+      <section aria-label="Langkah berikutnya" className="relative overflow-hidden rounded-[var(--radius-sk-2xl)] bg-[#102544] p-6 text-white shadow-sk-lg sm:p-8">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(72,142,255,0.35),transparent_68%)]" />
+        <div className="relative flex flex-wrap items-center justify-between gap-8">
+          <div className="max-w-xl">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#93baff]">{active ? 'Project aktifmu' : 'Langkah berikutnya'}</p>
+            <h2 className="mt-3 text-[24px] font-extrabold tracking-[-0.035em] sm:text-[30px]">
+              {active?.project.title ?? (data.currentWeek?.canSelect ? 'Pilih project untuk sprint ini.' : 'Siapkan langkahmu untuk sprint berikutnya.')}
+            </h2>
+            <p className="mt-2 max-w-[54ch] text-[13.5px] leading-relaxed text-[#c2d5ef]">
+              {active ? `${focus?.stage}. Batas pengumpulan ${participantDate(active.week.submissionDeadlineAt)} WIB.` : data.currentWeek?.canSelect ? 'Baca brief yang tersedia, pilih yang sesuai arah kariermu, lalu mulai bekerja.' : 'Project baru akan muncul di sini saat sprint berikutnya dibuka.'}
+            </p>
+            <div className="mt-6">
+              <ButtonLink href={focus?.href ?? '/app/arena/projects'} size="sm" className="rounded-full bg-white text-sk-blue hover:bg-sk-blue-tint" iconRight={<ArrowRight size={15} aria-hidden />}>
+                {focus?.label ?? 'Jelajahi proyek'}
+              </ButtonLink>
+            </div>
+          </div>
+          {focus && <div className="grid h-24 w-24 flex-none place-items-center rounded-full p-2" style={{ background: `conic-gradient(#ffffff ${focus.progress}%, #4b78b5 ${focus.progress}% 100%)` }} aria-label={`Progres ${focus.progress} persen`}>
+            <div className="grid h-full w-full place-items-center rounded-full bg-[#102544] font-mono text-[20px] font-bold">{focus.progress}%</div>
+          </div>}
+        </div>
+      </section>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {[
+          ['Poin tersedia', data.points.balance],
+          ['Project selesai', data.completedProjects],
+          ['Skill terbukti', data.provenSkills],
+        ].map(([label, value]) => <div key={label} className="rounded-[var(--radius-sk-xl)] border border-sk-border bg-white p-5 shadow-sm"><dt className="text-[12px] font-medium text-sk-muted">{label}</dt><dd className="mt-2 font-mono text-[26px] font-bold tracking-[-0.04em] text-sk-navy">{(value as number).toLocaleString('id-ID')}</dd></div>)}
+      </dl>
+
+      <section className="mt-10" aria-labelledby="dashboard-projects-title">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+          <div><p className="eyebrow">Minggu ini</p><h2 id="dashboard-projects-title" className="mt-2 text-[22px] font-extrabold tracking-[-0.03em] text-sk-navy">Jelajahi project lain</h2></div>
+          <Link href="/app/arena/projects" className="inline-flex items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline">Lihat semua <ArrowRight size={15} aria-hidden /></Link>
+        </div>
+        {available.length > 0 ? <div className="grid gap-4 md:grid-cols-2">{available.map((project) => <Link key={project.slug} href={`/app/arena/projects/${encodeURIComponent(project.slug)}`} className="group overflow-hidden rounded-[var(--radius-sk-xl)] border border-sk-border bg-white transition-all hover:-translate-y-1 hover:border-sk-blue-tint-border hover:shadow-sk-md focus-visible:outline-2 focus-visible:outline-sk-blue">
+          <div className="h-32 overflow-hidden border-b border-sk-border"><ProjectMiniVisual motif={motifForDivision(project.categorySlug, project.category)} /></div>
+          <div className="p-5"><p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-sk-blue-700">{project.category}</p><h3 className="mt-2 text-[16px] font-bold text-sk-navy">{project.title}</h3><p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-sk-muted">{project.deliverable}</p><span className="mt-4 inline-flex items-center gap-1 text-[12px] font-bold text-sk-blue">Lihat brief <ArrowRight size={13} aria-hidden /></span></div>
+        </Link>)}</div> : <div className="rounded-[var(--radius-sk-xl)] border border-dashed border-sk-border bg-white p-6 text-[13px] text-sk-muted">Belum ada project lain yang dibuka minggu ini.</div>}
+      </section>
+
+      <section id="proyekku" className="mt-10 scroll-mt-24" aria-labelledby="dashboard-history-title">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><h2 id="dashboard-history-title" className="text-[22px] font-extrabold tracking-[-0.03em] text-sk-navy">Proyekku</h2><Link href="/app/arena/my-projects" className="inline-flex items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline">Lihat riwayat <ArrowRight size={15} aria-hidden /></Link></div>
+        {data.history.filter((row) => row.id !== active?.id).length > 0 ? <div className="grid gap-4 md:grid-cols-2">{data.history.filter((row) => row.id !== active?.id).slice(0, 2).map((row) => <EnrollmentCard key={row.id} enrollment={row} />)}</div> : <div className="rounded-[var(--radius-sk-xl)] border border-dashed border-sk-border bg-white p-6 text-[13px] text-sk-muted">Project yang kamu kerjakan akan tercatat di sini.</div>}
+      </section>
+
+      <div className="mt-10 flex flex-wrap gap-3"><ButtonLink href="/app/arena/leaderboard" variant="ghost" size="sm" iconLeft={<Trophy size={15} aria-hidden />}>Peringkat</ButtonLink><ButtonLink href="/app/profile#rewards" variant="ghost" size="sm" iconLeft={<Gift size={15} aria-hidden />}>Poin & hadiah</ButtonLink><ButtonLink href="/app/arena/projects?view=saved" variant="ghost" size="sm" iconLeft={<Bookmark size={15} aria-hidden />}>Tersimpan</ButtonLink></div>
+      <p className="mt-8 text-[12px] text-sk-muted">Butuh bantuan? <a href={WHATSAPP_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-sk-blue hover:underline">Hubungi WhatsApp CS</a>.</p>
     </>}
   </ParticipantShell>;
 }

@@ -14,6 +14,11 @@ const config = [
       // eslint-config-next's own defaults, restated because listing `ignores`
       // here replaces rather than extends them.
       '.next/**',
+      // The isolated browser fixture builds into its own dist dir so it can run
+      // beside a normal dev server (next.config.mjs, ARENA_LOCAL_SANDBOX). It is
+      // generated output like `.next/`, and linting it buried the real findings
+      // under a thousand errors from compiled chunks.
+      '.next-arena-local/**',
       'out/**',
       'build/**',
       'next-env.d.ts',

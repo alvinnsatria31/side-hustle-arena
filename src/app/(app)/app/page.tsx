@@ -1,5 +1,7 @@
 import ParticipantDashboard from '@/components/arena/ParticipantDashboard';
+import { getPublicArenaHome } from '@/lib/arena-view';
 
-export default function CareerHomePage() {
-  return <ParticipantDashboard />;
+export default async function CareerHomePage() {
+  const home = await getPublicArenaHome().catch(() => null);
+  return <ParticipantDashboard projects={home?.projects ?? []} />;
 }

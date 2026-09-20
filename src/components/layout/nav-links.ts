@@ -1,16 +1,14 @@
 import {
   Award,
   FileSearch,
+  FolderOpen,
   Gift,
   Home,
   LayoutGrid,
-  ScrollText,
   Sparkles,
   Store,
-  Target,
   Trophy,
   UserRound,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { isCvScannerEnabled } from '@/lib/cv-scan-limits';
@@ -42,32 +40,30 @@ function enabled(link: NavLink): boolean {
 }
 
 /**
- * Public nav, in the order a first-time visitor needs it: what this is, how it
- * is judged, what is open now, who has won, what it pays.
+ * Public nav, in the order a first-time visitor needs it: what this is, what
+ * is open now, who has won.
  *
- * Judging sits second on purpose. It is the objection that stops people
- * entering a competition, so it gets a nav slot rather than only a section
- * someone has to scroll far enough to find.
+ * Every entry is a route. The two landing-page anchors that used to sit here —
+ * `/#nilai` and `/#hadiah` — went when the landing page was rebuilt around the
+ * live week and those sections stopped existing. A nav link to a hash with
+ * nothing behind it does not 404, it silently does nothing, which is the one
+ * kind of broken link a visitor blames themselves for.
  */
 const PUBLIC_ALL: NavLink[] = [
   { label: 'Cara kerja', href: '/arena', icon: Sparkles },
-  { label: 'Penilaian', href: '/#nilai', icon: ScrollText },
   { label: 'Proyek', href: '/arena/projects', icon: LayoutGrid },
   { label: 'Sorotan', href: '/arena/showcase', icon: Trophy },
-  { label: 'Hadiah', href: '/#hadiah', icon: Gift },
   { label: 'Scan CV', href: '/cv-scanner', icon: FileSearch, flag: 'cv-scanner' },
   { label: 'Toko', href: '/store', icon: Store, flag: 'store' },
 ];
 
 /** Participant app nav — the places someone returns to while a week runs. */
 const APP_ALL: NavLink[] = [
-  { label: 'Beranda', href: '/app', icon: Home },
-  { label: 'Arena', href: '/app/arena', icon: Zap },
+  { label: 'Ringkasan', href: '/app/arena', icon: Home },
+  { label: 'Jelajahi proyek', href: '/app/arena/projects', icon: LayoutGrid },
+  { label: 'Proyekku', href: '/app/arena/my-projects', icon: FolderOpen },
   { label: 'Peringkat', href: '/app/arena/leaderboard', icon: Trophy },
-  { label: 'Career Report', href: '/app/career-report', icon: Award },
-  { label: 'Scan CV', href: '/app/cv-scanner', icon: FileSearch, flag: 'cv-scanner' },
-  { label: 'Lowongan', href: '/app/jobs', icon: Target },
-  { label: 'Toko', href: '/app/store', icon: Store, flag: 'store' },
+  { label: 'Poin & hadiah', href: '/app/profile#rewards', icon: Gift },
 ];
 
 /**
@@ -75,10 +71,10 @@ const APP_ALL: NavLink[] = [
  * the targets drop under the 44px minimum.
  */
 const BOTTOM_ALL: NavLink[] = [
-  { label: 'Beranda', href: '/app', icon: Home },
-  { label: 'Arena', href: '/app/arena', icon: Zap },
+  { label: 'Ringkasan', href: '/app/arena', icon: Home },
+  { label: 'Proyek', href: '/app/arena/projects', icon: LayoutGrid },
+  { label: 'Proyekku', href: '/app/arena/my-projects', icon: FolderOpen },
   { label: 'Peringkat', href: '/app/arena/leaderboard', icon: Trophy },
-  { label: 'Scan CV', href: '/app/cv-scanner', icon: FileSearch, flag: 'cv-scanner' },
   { label: 'Profil', href: '/app/profile', icon: UserRound },
 ];
 
@@ -109,6 +105,7 @@ export function footerColumns(): Array<{ heading: string; links: NavLink[] }> {
  */
 export function isNavActive(href: string, pathname: string): boolean {
   if (href.startsWith('/#')) return false;
-  if (href === '/app') return pathname === '/app';
-  return pathname === href || pathname.startsWith(href + '/');
+  const target = href.split('#')[0];
+  if (target === '/app' || target === '/app/arena' || href.includes('#')) return pathname === target;
+  return pathname === target || pathname.startsWith(target + '/');
 }

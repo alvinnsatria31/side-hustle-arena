@@ -35,16 +35,18 @@ export function BrandLogo({
   className,
   compact,
   showWordmark = true,
+  href = '/',
 }: {
   dark?: boolean;
   className?: string;
   compact?: boolean;
   showWordmark?: boolean;
+  href?: string;
 }) {
   const [failed, setFailed] = useState(false);
   return (
     <Link
-      href="/"
+      href={href}
       aria-label="Sekolah Karir — beranda"
       className={cn('flex shrink-0 items-center gap-2.5 font-extrabold tracking-[-0.01em]', className)}
     >

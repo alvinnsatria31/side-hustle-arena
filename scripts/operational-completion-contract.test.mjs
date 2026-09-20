@@ -16,10 +16,10 @@ test('WhatsApp support is global and exposes the exact official contact contract
   assert.match(component, /target=["']_blank["']/);
   assert.match(component, /rel=["']noopener noreferrer["']/);
   assert.ok(layout.includes('<FloatingWhatsApp'));
-  for (const source of [footer, dashboard]) {
-    assert.ok(source.includes('Jika mengalami kendala, hubungi WhatsApp CS:'));
-    assert.ok(source.includes('+62 851-1730-4579'));
-  }
+  assert.ok(footer.includes('+62 851-1730-4579'));
+  assert.ok(footer.includes('href={WHATSAPP_SUPPORT_URL}'));
+  assert.ok(dashboard.includes('href={WHATSAPP_SUPPORT_URL}'));
+  assert.ok(dashboard.includes('Hubungi WhatsApp CS'));
 });
 
 test('live setup docs name the voucher contract and a disabled-first Jobs source', () => {

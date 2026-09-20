@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The isolated browser fixture can run alongside a developer's normal
+  // server without contending for Next's dev lock or build artifacts.
+  ...(process.env.ARENA_LOCAL_SANDBOX === '1' ? { distDir: '.next-arena-local' } : {}),
 
   /**
    * Self-hosted deployment (Sekolah Karir VPS, Docker). `next build` emits

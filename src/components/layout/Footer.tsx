@@ -42,7 +42,10 @@ export function Footer() {
           </nav>
         ))}
 
-        <div>
+        {/* Anchor target for the landing page's "Kontak" link. `scroll-mt`
+            clears the fixed header, which would otherwise cover the heading
+            the visitor just asked to be taken to. */}
+        <div id="kontak" className="scroll-mt-28">
           <h4 className="mb-4 font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sk-faint">
             Bantuan
           </h4>

@@ -33,6 +33,10 @@ function collectHydrationComplaints(page: import("@playwright/test").Page): stri
 }
 
 const PAGES: Array<{ path: string; name: string }> = [
+  // The public pitch is the densest use of these wrappers on the site — every
+  // section, every card and every illustration sits inside one — so it is the
+  // page where a stuck Reveal costs the most and shows up first.
+  { path: "/", name: "public landing page" },
   { path: "/arena", name: "Arena landing" },
   { path: "/arena/projects", name: "public project list" },
   { path: `/arena/projects/${PROJECT_SLUG}`, name: "public project brief" },

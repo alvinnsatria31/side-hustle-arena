@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db/client";
-import { enrollments, projectSkills, projectSubmissionRequirements, skills } from "@/server/db/schema";
+import { enrollments, projectSkills, projectSubmissionRequirements, skills, weekRules } from "@/server/db/schema";
 import { getCurrentArenaWeek, getVisibleArenaProject, listActiveArenaDivisions, listVisibleArenaProjects } from "@/server/arena";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { deadlineLabel } from "@/lib/deadline";
@@ -97,6 +97,21 @@ function toBaseProject(project: Summary, weekNo: number, deadline: string): Aren
   };
 }
 
+/**
+ * The point ladder a participant can actually earn this week.
+ *
+ * Read from `arena.week_rules`, never assumed: the columns carry defaults, but
+ * a week is free to run a different ladder and the landing page promises what
+ * that week pays. Absent when the row has not been written, which is the only
+ * honest way to render "no points announced yet".
+ */
+export interface PublicWeekPoints {
+  completion: number;
+  rank1: number;
+  rank2: number;
+  rank3: number;
+}
+
 export interface PublicArenaHome {
   weekNo: number;
   weekLabel: string;
@@ -106,13 +121,18 @@ export interface PublicArenaHome {
   status: string;
   projectCount: number;
   divisionCount: number;
+  points: PublicWeekPoints | null;
   projects: Array<{
     slug: string;
     title: string;
     category: string;
+    /** Division slug — drives the per-category mini visual on the landing card. */
+    categorySlug: string;
     estimatedTime: string;
     deliverable: string;
     participantCount: number;
+    /** Proxy route, or null when the brief has no generated cover. */
+    coverImageUrl: string | null;
   }>;
 }
 
@@ -171,6 +191,17 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
           .orderBy(asc(projectSubmissionRequirements.sortOrder)),
       ])
     : [[], []];
+  // The week's own ladder. A week with no rules row pays nothing this reader
+  // knows about, so `points` stays null and the page says nothing about points.
+  const [rules] = await getDb()
+    .select({
+      completion: weekRules.completionPoints,
+      rank1: weekRules.rank1Points,
+      rank2: weekRules.rank2Points,
+      rank3: weekRules.rank3Points,
+    })
+    .from(weekRules)
+    .where(eq(weekRules.weekId, week.id));
   const participantsByProject = new Map(participantRows.map((row) => [row.projectId, row.participantCount]));
   const deliverableByProject = new Map<string, string>();
   for (const row of deliverableRows) {
@@ -186,13 +217,16 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
     status: week.status,
     projectCount: projects.length,
     divisionCount: divisions.length,
+    points: rules ?? null,
     projects: projects.slice(0, 3).map((project) => ({
       slug: project.slug,
       title: project.title,
       category: project.division.name,
+      categorySlug: project.division.slug,
       estimatedTime: estimatedLabel(project.estimatedMinutes),
       deliverable: deliverableByProject.get(project.id) ?? project.shortDescription ?? "Lihat detail project",
       participantCount: participantsByProject.get(project.id) ?? 0,
+      coverImageUrl: project.coverImageUrl ? `/api/arena/covers/${project.slug}` : null,
     })),
   };
 }

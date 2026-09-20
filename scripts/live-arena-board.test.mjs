@@ -11,7 +11,7 @@ test("countdown formats remaining time without negative values", async () => {
   assert.equal(formatCountdown(-10_000), "Selesai");
 });
 
-test("public Arena hero renders the linked live board instead of KanbanPreview", () => {
+test("public Arena page renders the linked live board instead of KanbanPreview", () => {
   const componentPath = new URL("../src/components/arena/LiveArenaBoard.tsx", import.meta.url);
   assert.equal(existsSync(componentPath), true, "LiveArenaBoard component must exist");
 
@@ -21,11 +21,11 @@ test("public Arena hero renders the linked live board instead of KanbanPreview",
   assert.match(page, /import \{ LiveArenaBoard \}/);
   assert.match(page, /<LiveArenaBoard/);
   assert.doesNotMatch(page, /<KanbanPreview/);
-  assert.match(board, /LIVE ARENA BOARD/);
+  assert.match(board, /PROYEK PEKAN INI/);
   assert.match(board, /DeadlineCountdown/);
   assert.match(board, /href=\{`\/arena\/projects\/\$\{project\.slug\}`\}/);
-  assert.match(board, /Ikuti/);
-  assert.match(board, /Belum ada event aktif/);
+  assert.match(board, /Lihat proyek/);
+  assert.match(board, /Belum ada proyek yang dibuka/);
 });
 
 test("live board keeps the Stitch desktop proportions without breaking mobile", () => {

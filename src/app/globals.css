@@ -73,6 +73,14 @@
 }
 
 /* Base */
+html {
+  /* In-page anchors (the landing header's "Kontak", the hero's "Lihat cara
+     kerja") land under a fixed navbar without this. Smooth scrolling is
+     switched back off in the reduced-motion block at the foot of this file. */
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
+
 html,
 body {
   background-color: var(--color-sk-bg);
