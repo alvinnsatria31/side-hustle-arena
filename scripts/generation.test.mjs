@@ -99,6 +99,17 @@ test("publication holds a validated project until at least one HTTPS resource ex
   assert.equal(publicationResourceBlock({ ...fixture(), resources: [{ label: "Dataset", url: "https://example.com/data.csv" }] }), null);
 });
 
+test("publication distinguishes reference reading from real case material or an explicit self-sourcing brief", () => {
+  const referenceOnly = { ...fixture(), resources: [{ label: "Panduan Pandas", url: "https://pandas.pydata.org/docs" }] };
+  assert.match(publicationResourceBlock(referenceOnly), /reference reading/i);
+  const withTemplate = { ...referenceOnly, resources: [...referenceOnly.resources, { label: "Template laporan", url: "https://example.com/template.pdf" }] };
+  assert.match(publicationResourceBlock(withTemplate), /reference reading/i);
+  const withDataset = { ...referenceOnly, resources: [...referenceOnly.resources, { label: "Data mentah tiket", url: "https://example.com/tickets.csv" }] };
+  assert.equal(publicationResourceBlock(withDataset), null);
+  const selfSourced = { ...referenceOnly, objective: `${referenceOnly.objective} Buatlah dataset sintetis sendiri yang merepresentasikan kasus ini.` };
+  assert.equal(publicationResourceBlock(selfSourced), null);
+});
+
 test("Jakarta weekly schedule is stable across the Sunday/Monday UTC boundary", () => {
   const sunday = weeklyWindow(new Date("2026-09-06T02:00:00Z"));
   assert.equal(sunday.opensAt.toISOString(), "2026-09-07T01:00:00.000Z");

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
-import { deliveries, jobSources, logs, reviewJobs, runs } from "@/server/db/schema";
+import { deliveries, jobSources, logs, projects, reviewJobs, runs, weeks } from "@/server/db/schema";
 import { EMAIL_RETRY_WINDOW_MS, MAX_EMAIL_ATTEMPTS } from "@/server/notifications/outbox-policy";
 import { JOB_LEASE_SECONDS, MAX_JOB_ATTEMPTS } from "@/server/reviews/queue-policy";
 import { getSpendWindow } from "@/server/cv/rate-limit";
@@ -219,6 +219,27 @@ export async function getAutomationHealth(db: Db = getDb(), now = new Date()) {
         action: expectation.action,
       });
     }
+  }
+
+  // --- week coverage -------------------------------------------------------
+  // A heartbeat only proves a job ran, not that it produced anything — the
+  // 18 September incident was a fresh `project-generate` heartbeat sitting
+  // next to a week with zero projects, because the run itself failed with no
+  // provider/library candidate. This looks at the outcome directly: any week
+  // whose opening time has already passed but which never got a single
+  // PUBLISHED project is a week participants can see is empty right now.
+  const openedWeeks = await db.select({ id: weeks.id, weekCode: weeks.weekCode, status: weeks.status })
+    .from(weeks).where(and(inArray(weeks.status, ["DRAFT", "PREVIEW", "SCHEDULED", "OPEN"]), lte(weeks.opensAt, now)));
+  for (const week of openedWeeks) {
+    const [published] = await db.select({ count: sql<number>`count(*)::int` }).from(projects)
+      .where(and(eq(projects.weekId, week.id), eq(projects.status, "PUBLISHED")));
+    if ((published?.count ?? 0) > 0) continue;
+    signals.push({
+      key: `week-no-published-project:${week.weekCode}`,
+      level: "ALERT",
+      detail: `Minggu ${week.weekCode} sudah lewat jadwal buka (status ${week.status}) tetapi belum punya satu pun project PUBLISHED.`,
+      action: "Buka /app/admin/generation: cek held/preview project, perbaiki bahan yang menahan, lalu jalankan publish manual untuk minggu ini.",
+    });
   }
 
   // --- automation runs ----------------------------------------------------

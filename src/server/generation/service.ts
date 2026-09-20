@@ -39,7 +39,12 @@ async function audit(db: Store, actor: Actor, action: string, entityType: string
 async function weekState(db: Store, weekId: string, mutable = false, now = new Date()) {
   const [week] = await db.select().from(weeks).where(eq(weeks.id, weekId)).for("update");
   if (!week) throw new ArenaDomainError("WEEK_NOT_FOUND", "Week not found.");
-  if (mutable && (!["DRAFT", "PREVIEW", "SCHEDULED"].includes(week.status) || now >= week.submissionDeadlineAt)) {
+  // OPEN is included here so a project a partial publish left behind
+  // (held/unapproved while a sibling division already went live) can still be
+  // edited, approved or regenerated. reviewProject separately refuses to
+  // touch a project that is already PUBLISHED or ARCHIVED, so this cannot
+  // reopen content participants can already see.
+  if (mutable && (!["DRAFT", "PREVIEW", "SCHEDULED", "OPEN"].includes(week.status) || now >= week.submissionDeadlineAt)) {
     throw new ArenaDomainError("WEEK_NOT_READY", "Week cannot accept project changes in its current state or after its deadline.");
   }
   const [rules] = await db.select().from(weekRules).where(eq(weekRules.weekId, weekId));
@@ -452,23 +457,35 @@ export async function publishWeek(input: Options & { weekId: string }) {
     const [flag] = await tx.select().from(featureFlags).where(eq(featureFlags.key, "arena-publish")).for("share");
     if (flag?.maintenanceMode) throw new ArenaDomainError("FEATURE_CLOSED", flag.message ?? "Weekly publication is paused.");
     const { week } = await weekState(tx, input.weekId, false, now);
-    if (week.status === "OPEN") return { weekId: week.id, skipped: "week already open", published: [], held: [] };
-    if (!["DRAFT", "PREVIEW", "SCHEDULED"].includes(week.status)) throw new ArenaDomainError("WEEK_NOT_READY", "Week is not awaiting publication.");
+    // A partial publish opens the week with one division live and another
+    // still held (a preview not yet approved, a resource gap, whatever the
+    // reason). The old behaviour treated OPEN as fully done and refused ever
+    // to look at the week again, so the held division's project could never
+    // reach a participant even after someone fixed it. Retrying only
+    // considers projects that never made it out (PREVIEWED/SCHEDULED,
+    // excluding whichever division is already PUBLISHED) — an already-open
+    // week with nothing left to retry still reports skipped, same as before.
+    const retryingOpenWeek = week.status === "OPEN";
+    if (!retryingOpenWeek && !["DRAFT", "PREVIEW", "SCHEDULED"].includes(week.status)) throw new ArenaDomainError("WEEK_NOT_READY", "Week is not awaiting publication.");
+    if (now >= week.submissionDeadlineAt) return { weekId: week.id, skipped: "submission deadline has passed", published: [], held: [] };
     const rows = await tx.select().from(projects).where(eq(projects.weekId, week.id)).orderBy(asc(projects.createdAt));
+    const publishedDivisions = new Set(rows.filter((p) => p.status === "PUBLISHED").map((p) => p.divisionId));
+    const candidates = retryingOpenWeek
+      ? rows.filter((p) => ["PREVIEWED", "SCHEDULED"].includes(p.status) && !publishedDivisions.has(p.divisionId))
+      : rows.filter((p) => p.status !== "ARCHIVED");
+    if (retryingOpenWeek && !candidates.length) return { weekId: week.id, skipped: "week already open", published: [], held: [] };
     const published: string[] = []; const held: Array<{ projectId: string; reason: string }> = [];
     const valid: Array<{ project: typeof projects.$inferSelect; package: ProjectPackage }> = [];
-    for (const project of rows.filter((p) => p.status !== "ARCHIVED")) {
+    for (const project of candidates) {
       try {
         const validation = await validationRecord(tx, project.id);
         if (!validation) throw new ArenaDomainError("VALIDATION_ERROR", "No validation record exists.");
         const block = publicationBlock({ week, project, now, validatedAt: validation.createdAt, previewHours: generationConfig().previewHours });
         if (block) throw new ArenaDomainError("WEEK_NOT_READY", block);
-        const persistedResources = await tx.select({ label: projectResources.label, url: projectResources.url })
-          .from(projectResources).where(eq(projectResources.projectId, project.id)).limit(1);
-        const resourceBlock = publicationResourceBlock({ resources: persistedResources });
-        if (resourceBlock) throw new ArenaDomainError("WEEK_NOT_READY", resourceBlock);
         const p = ordered(validatePackage(await storedPackage(tx, project, validation.metadata.package), await contextFor(tx, project.divisionId, week.weekCode)));
         if (contentHash(p) !== validation.metadata.contentHash || rubricHash(p.rubric) !== validation.metadata.baseRubricHash) throw new ArenaDomainError("VALIDATION_ERROR", "Stored package changed after validation.");
+        const resourceBlock = publicationResourceBlock(p);
+        if (resourceBlock) throw new ArenaDomainError("WEEK_NOT_READY", resourceBlock);
         if (isDuplicate(p, await recentHistory(tx, week, project.id), generationConfig().threshold)) throw new ArenaDomainError("VALIDATION_ERROR", "Recent project duplicate.");
         if (valid.some((entry) => entry.project.divisionId === project.divisionId)) throw new ArenaDomainError("VALIDATION_ERROR", "Only one project per division may be published.");
         valid.push({ project, package: p });
@@ -488,10 +505,15 @@ export async function publishWeek(input: Options & { weekId: string }) {
       published.push(project.id);
     }
     await tx.update(weeks).set({ status: "OPEN", updatedAt: now }).where(eq(weeks.id, week.id));
+    // A retry is a distinct attempt, not a re-run of the original publish, so
+    // it gets its own idempotency key rather than silently no-op'ing against
+    // the first run's row (which would otherwise leave the retry's outcome
+    // unrecorded in `runs`, and automation-health reading stale numbers).
     await tx.insert(runs).values({ type: "PROJECT_PUBLICATION", weekId: week.id, status: held.length ? "PARTIAL" : "SUCCESS",
-      idempotencyKey: `publication:${week.weekCode}`, startedAt: now, completedAt: now,
+      idempotencyKey: retryingOpenWeek ? `publication:${week.weekCode}:retry:${now.getTime()}` : `publication:${week.weekCode}`,
+      startedAt: now, completedAt: now,
       itemsTotal: published.length + held.length, itemsSuccess: published.length, itemsFailed: held.length }).onConflictDoNothing();
-    await audit(tx, input, "week-opened", "week", week.id, { published, held, notifications: "not-dispatched" }, now);
+    await audit(tx, input, retryingOpenWeek ? "publication-retry" : "week-opened", "week", week.id, { published, held, notifications: "not-dispatched" }, now);
     return { weekId: week.id, published, held };
   });
 }

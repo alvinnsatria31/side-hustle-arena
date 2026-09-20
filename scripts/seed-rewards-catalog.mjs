@@ -38,6 +38,12 @@ const skus = [
     currency: null,
     inventoryMode: "UNLIMITED",
     isActive: true,
+    // Notion drafts only accept an external image cover, never a public share
+    // link automatically — the workspace owner must Share -> Publish first
+    // (the API cannot do this), then export that URL here. Until this env var
+    // is set, the claim path deliberately stays MANUAL_REQUIRED rather than
+    // emailing a link the public cannot open.
+    deliveryUrl: process.env.REWARD_NOTION_KIT_DELIVERY_URL || null,
   },
   {
     slug: "ebook",
@@ -49,6 +55,8 @@ const skus = [
     currency: null,
     inventoryMode: "UNLIMITED",
     isActive: true,
+    // Same publish-then-paste dependency as notion-kit above.
+    deliveryUrl: process.env.REWARD_EBOOK_DELIVERY_URL || null,
   },
   {
     slug: "voucher-50",
@@ -112,18 +120,27 @@ async function seed() {
   const sql = postgres(process.env.DATABASE_URL, { max: 1 });
   try {
     for (const sku of skus) {
+      const deliveryUrl = sku.deliveryUrl ?? null;
       await sql`
-        insert into rewards.catalog (slug, title, description, points_cost, reward_type, monetary_value_minor, currency, inventory_mode, is_active)
-        values (${sku.slug}, ${sku.title}, ${sku.description}, ${sku.pointsCost}, ${sku.rewardType}, ${sku.monetaryValueMinor}, ${sku.currency}, ${sku.inventoryMode}, ${sku.isActive})
+        insert into rewards.catalog (slug, title, description, points_cost, reward_type, monetary_value_minor, currency, inventory_mode, is_active, delivery_url)
+        values (${sku.slug}, ${sku.title}, ${sku.description}, ${sku.pointsCost}, ${sku.rewardType}, ${sku.monetaryValueMinor}, ${sku.currency}, ${sku.inventoryMode}, ${sku.isActive}, ${deliveryUrl})
         on conflict (slug) do update set
           title = excluded.title,
           description = excluded.description,
           is_active = excluded.is_active,
+          -- Only ever set a delivery link this seed was actually given; never
+          -- overwrite one an admin already pasted in via /app/admin/rewards
+          -- with a null just because the env var was not exported this run.
+          delivery_url = coalesce(excluded.delivery_url, rewards.catalog.delivery_url),
           updated_at = now()
       `;
     }
     const active = skus.filter((sku) => sku.isActive).length;
+    const digitalWithoutLink = skus.filter((sku) => sku.isActive && sku.rewardType === "DIGITAL" && !sku.deliveryUrl).map((sku) => sku.slug);
     console.log(`Reward catalog ready: ${active} active SKUs, ${skus.length - active} retired.`);
+    if (digitalWithoutLink.length) {
+      console.log(`No delivery_url provided for: ${digitalWithoutLink.join(", ")}. These stay MANUAL_REQUIRED until REWARD_NOTION_KIT_DELIVERY_URL / REWARD_EBOOK_DELIVERY_URL are set or an admin pastes a link at /app/admin/rewards.`);
+    }
   } finally {
     await sql.end({ timeout: 5 });
   }

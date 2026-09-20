@@ -295,8 +295,31 @@ export function publicationBlock(input: {
   return null;
 }
 
-export function publicationResourceBlock(project: Pick<ProjectPackage, "resources">): string | null {
-  return project.resources.length > 0 ? null : "Project requires at least one HTTPS resource before publication.";
+/**
+ * A brief that promises the participant will work from real material ("log
+ * tiket", "screenshot dasbor", data terlampir) but only ships reference
+ * reading (library docs, methodology articles) leaves the participant to
+ * invent the very case they were told was given to them. `resources.length >
+ * 0` cannot catch this: ten links to Pandas documentation satisfy it while
+ * providing no case material at all.
+ *
+ * The distinguishing fact this checks for is a resource `resourceKind`
+ * already classifies as usable working material (DATASET or TEMPLATE), not a
+ * DOCUMENT/LINK read. When no such resource exists, the brief text itself
+ * must say — explicitly — that the participant is the one building or
+ * sourcing the data, so the promise and the material actually match.
+ */
+const SELF_SOURCING_INSTRUCTION = /\b(dataset sintetis|data sintetis|buatlah?\s+data(?:mu)?\s+sendiri|kumpulkan(?:lah)?\s+data(?:mu)?\s+sendiri|susun(?:lah)?\s+data(?:mu)?\s+sendiri|cari(?:lah)?\s+data(?:mu)?\s+sendiri|riset\s+mandiri|self-sourced\s+data|synthetic\s+data)\b/i;
+
+export function publicationResourceBlock(project: Pick<ProjectPackage, "resources" | "caseBackground" | "objective" | "mission"> & { requirements?: Array<Pick<ProjectPackage["requirements"][number], "instructions">> }): string | null {
+  if (!project.resources.length) return "Project requires at least one HTTPS resource before publication.";
+  // TEMPLATE is a reusable scaffold (a report outline, a slide skeleton) —
+  // reference material exactly like a DOCUMENT link, not the case itself. Only
+  // DATASET is actual working data the participant did not have to invent.
+  if (project.resources.some((resource) => resourceKind(resource) === "DATASET")) return null;
+  const brief = [project.caseBackground, project.objective, project.mission, ...(project.requirements ?? []).map((r) => r.instructions)].join(" ");
+  if (SELF_SOURCING_INSTRUCTION.test(brief)) return null;
+  return "Project resources are reference reading only, with no case dataset/template and no brief text instructing participants to source or synthesize their own data.";
 }
 
 export function weeklyWindow(now: Date) {

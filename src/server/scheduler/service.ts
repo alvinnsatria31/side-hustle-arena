@@ -186,8 +186,13 @@ const projectJobs = {
   publish: publishWeek,
   budgetMs: EXECUTION_CONTRACT.drainBudgetMs,
   clock: () => Date.now(),
+  // OPEN is included so a week left partially published (one division live,
+  // another held) keeps getting retried by this same job once whatever held
+  // it is fixed — publishWeek() itself scopes an OPEN-week retry to the
+  // still-unpublished projects and returns cheaply when there is nothing
+  // left to do, so this adds no real work to a week that fully published.
   due: async (now: Date) => getDb().select({ id: weeks.id, weekCode: weeks.weekCode }).from(weeks)
-    .where(and(inArray(weeks.status, ["DRAFT", "PREVIEW", "SCHEDULED"]),
+    .where(and(inArray(weeks.status, ["DRAFT", "PREVIEW", "SCHEDULED", "OPEN"]),
       lte(weeks.opensAt, now), gt(weeks.submissionDeadlineAt, now)))
     .orderBy(asc(weeks.opensAt)),
 };

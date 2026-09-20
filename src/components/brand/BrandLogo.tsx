@@ -51,10 +51,10 @@ export function BrandLogo({
     >
       {failed ? (
         <div className="flex items-center gap-2">
-          <StaircaseMark className="h-8 w-8 shrink-0 text-[#098d4b]" />
+          <StaircaseMark className="h-8 w-8 shrink-0 text-[#026bf4]" />
           {showWordmark && !compact && (
             <span className={cn('whitespace-nowrap font-extrabold text-[15.5px] leading-none', dark ? 'text-white' : 'text-sk-navy')}>
-              SekolahKarir <span className="text-[#098d4b]">Arena</span>
+              SekolahKarir <span className="text-[#026bf4]">Arena</span>
             </span>
           )}
         </div>
@@ -77,7 +77,7 @@ export function BrandLogo({
           <Image
             src="/logo.png"
             alt="SekolahKarir Arena"
-            width={198}
+            width={200}
             height={32}
             className={cn('h-8 w-auto object-contain', 'max-[359px]:hidden')}
             priority
