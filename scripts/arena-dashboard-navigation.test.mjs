@@ -11,6 +11,7 @@ test('participant navigation stays inside Arena and exposes the project workflow
     'Proyekku',
     'Peringkat',
     'Poin & hadiah',
+    'Tools',
   ]);
   assert.deepEqual(bottomNavLinks().map(({ label }) => label), [
     'Ringkasan',
@@ -19,7 +20,14 @@ test('participant navigation stays inside Arena and exposes the project workflow
     'Peringkat',
     'Profil',
   ]);
-  assert.ok(links.every(({ href }) => href.startsWith('/app/arena') || href.startsWith('/app/profile')));
+  assert.ok(
+    links.every(
+      ({ href }) =>
+        href.startsWith('/app/arena') ||
+        href.startsWith('/app/profile') ||
+        href === 'https://tools.sekolahkarir.id',
+    ),
+  );
 });
 
 test('dashboard and project navigation highlight only the current section', () => {
