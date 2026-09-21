@@ -77,7 +77,7 @@ export function AppNavbar() {
   const name = user.displayName ?? 'Peserta';
 
   return (
-    <header className="sticky top-0 z-40 border-b border-sk-border bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 border-b border-sk-border bg-white/85 px-4 shadow-[0_1px_12px_rgba(16,37,68,0.06)] backdrop-blur-md sm:px-6 lg:px-8">
       <nav
         className="mx-auto flex h-[68px] max-w-6xl items-center gap-4"
         aria-label="Navigasi aplikasi"
@@ -131,7 +131,7 @@ export function AppNavbar() {
         <div
           role="menu"
           aria-label="Menu pengguna"
-          className="fixed right-4 top-16 z-50 w-60 rounded-[var(--radius-sk-lg)] border border-sk-border bg-white p-1.5 shadow-sk-lg sm:right-6"
+          className="fixed right-4 top-16 z-50 w-60 rounded-[var(--radius-sk-xl)] border border-sk-border bg-white p-1.5 shadow-sk-lg sm:right-6"
         >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             {user.avatarId ? <AvatarBadge avatarId={user.avatarId} size="sm" /> : null}
