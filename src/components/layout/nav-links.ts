@@ -39,6 +39,8 @@ export interface NavLink {
   external?: boolean;
   /** Promo treatment: the gradient pill and the "BARU" flag. */
   highlight?: boolean;
+  /** Sidebar grouping. Links without a section render in the main group. */
+  section?: 'arena' | 'lainnya';
 }
 
 /**
@@ -88,12 +90,12 @@ const PUBLIC_ALL: NavLink[] = [
 
 /** Participant app nav — the places someone returns to while a week runs. */
 const APP_ALL: NavLink[] = [
-  { label: 'Ringkasan', href: '/app/arena', icon: Home },
-  { label: 'Jelajahi proyek', href: '/app/arena/projects', icon: LayoutGrid },
-  { label: 'Proyekku', href: '/app/arena/my-projects', icon: FolderOpen },
-  { label: 'Peringkat', href: '/app/arena/leaderboard', icon: Trophy },
-  { label: 'Poin & hadiah', href: '/app/profile#rewards', icon: Gift },
-  TOOLS,
+  { label: 'Ringkasan', href: '/app/arena', icon: Home, section: 'arena' },
+  { label: 'Jelajahi proyek', href: '/app/arena/projects', icon: LayoutGrid, section: 'arena' },
+  { label: 'Proyekku', href: '/app/arena/my-projects', icon: FolderOpen, section: 'arena' },
+  { label: 'Peringkat', href: '/app/arena/leaderboard', icon: Trophy, section: 'arena' },
+  { label: 'Poin & hadiah', href: '/app/profile#rewards', icon: Gift, section: 'lainnya' },
+  { ...TOOLS, section: 'lainnya' },
 ];
 
 /**

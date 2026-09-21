@@ -37,3 +37,16 @@ test('dashboard and project navigation highlight only the current section', () =
   assert.equal(isNavActive('/app/arena/my-projects', '/app/arena/my-projects'), true);
   assert.equal(isNavActive('/app/profile#rewards', '/app/profile'), true);
 });
+
+test('sidebar groups arena links above secondary links', () => {
+  const links = appNavLinks();
+  const arena = links.filter((l) => l.section !== 'lainnya');
+  const secondary = links.filter((l) => l.section === 'lainnya');
+  assert.deepEqual(arena.map(({ label }) => label), [
+    'Ringkasan',
+    'Jelajahi proyek',
+    'Proyekku',
+    'Peringkat',
+  ]);
+  assert.deepEqual(secondary.map(({ label }) => label), ['Poin & hadiah', 'Tools']);
+});
