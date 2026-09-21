@@ -31,6 +31,9 @@ next-env.d.ts
 # Brainstorm visual companion
 .superpowers/
 
+# Isolated git worktrees (subagent-driven development)
+.worktrees/
+
 # Vercel CLI link
 .vercel
 
