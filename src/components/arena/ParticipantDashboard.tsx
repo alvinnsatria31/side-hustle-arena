@@ -21,6 +21,7 @@ import { ProjectPeekCard } from '@/components/arena/dashboard/ProjectPeekCard';
 import { QuickActions } from '@/components/arena/dashboard/QuickActions';
 import { SprintHero } from '@/components/arena/dashboard/SprintHero';
 import { StatStrip } from '@/components/arena/dashboard/StatStrip';
+import { LeaderboardPreview } from '@/components/arena/dashboard/LeaderboardPreview';
 import type { PublicArenaHome } from '@/lib/arena-view';
 import { cn } from '@/lib/cn';
 
@@ -280,6 +281,7 @@ export default function ParticipantDashboard({
           />
 
           <StatStrip data={data} />
+          <LeaderboardPreview history={data.history} />
 
           <section className="mt-10" aria-labelledby="dashboard-projects-title">
             <SectionHead
