@@ -77,6 +77,63 @@ Expected: commit contains exactly 1 file. Then owner marks each finding accepted
 
 ## Phase 1 — Pure logic (TDD)
 
+### Task 1b: Repair stale baseline expectations (test-only, owner-approved)
+
+**Context:** On clean HEAD `0cf6f3d`, two suites fail before any implementation change:
+1. `scripts/arena-dashboard-navigation.test.mjs:8` expects 5 app labels, but `APP_ALL` (`src/components/layout/nav-links.ts:90-97`) already includes the `TOOLS` promo entry — the sidebar (`AppSidebar.tsx:41`) renders it, so the test is stale, not the code.
+2. `scripts/arena-dashboard-focus.test.mjs:8` expects `dashboardFocus` without `step`, but the implementation (`src/lib/dashboard-view.ts:54-60`) returns `step` and `SprintHero` consumes `focus.step` — the test is stale, not the code.
+
+Owner approved test-only repairs (no behavior change) so the verification gate is honestly green.
+
+**Files:**
+- Modify: `scripts/arena-dashboard-navigation.test.mjs` (expected app labels)
+- Modify: `scripts/arena-dashboard-focus.test.mjs` (expected objects)
+
+- [ ] **Step 1: Repair the navigation expectation**
+
+In `scripts/arena-dashboard-navigation.test.mjs`, add `'Tools'` to the expected `appNavLinks()` labels:
+
+```js
+assert.deepEqual(links.map(({ label }) => label), [
+  'Ringkasan',
+  'Jelajahi proyek',
+  'Proyekku',
+  'Peringkat',
+  'Poin & hadiah',
+  'Tools',
+]);
+```
+
+Also update the URL guard on the next line if needed: it asserts every href starts with `/app/arena` or `/app/profile` — `TOOLS` href is `https://tools.sekolahkarir.id`, so the guard MUST be relaxed to allow it explicitly:
+
+```js
+assert.ok(
+  links.every(
+    ({ href }) =>
+      href.startsWith('/app/arena') ||
+      href.startsWith('/app/profile') ||
+      href === 'https://tools.sekolahkarir.id',
+  ),
+);
+```
+
+- [ ] **Step 2: Repair the focus expectations**
+
+Read `scripts/arena-dashboard-focus.test.mjs` fully. For every expected object compared against `dashboardFocus(...)`, add the `step` field per the implementation contract (`src/lib/dashboard-view.ts:54-60`): `step` equals the workspace `currentStep` when it is one of `BRIEF/PLAN/WORK/REVIEW/SUBMIT` (else `'BRIEF'`), and `null` for the VOIDED/ranking/submitted early-return branches (`dashboard-view.ts:23-51`). Derive each value from the test's own fixture input — do not copy the actual output blindly; the point is the expectation now documents the real contract.
+
+- [ ] **Step 3: Run both suites the official way**
+
+Run: `node --import ./scripts/node-test-hooks.mjs --test --test-force-exit scripts/arena-dashboard-navigation.test.mjs scripts/arena-dashboard-focus.test.mjs`
+Expected: all PASS. If anything else fails, stop and report — do not "fix" further.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git status --short
+git add scripts/arena-dashboard-navigation.test.mjs scripts/arena-dashboard-focus.test.mjs
+git commit -m "test: repair stale dashboard nav/focus expectations (Tools entry, step field)"
+```
+
 ### Task 1: Sidebar grouping metadata in nav-links.ts
 
 **Files:**
@@ -134,7 +191,7 @@ const APP_ALL: NavLink[] = [
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test scripts/arena-dashboard-navigation.test.mjs`
-Expected: PASS, 3/3 tests (the 2 pre-existing tests must still pass unchanged).
+Expected: PASS, 3/3 tests (the 2 pre-existing tests, repaired in Task 1b, must still pass).
 
 - [ ] **Step 5: Commit**
 
