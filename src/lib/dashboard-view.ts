@@ -119,3 +119,21 @@ export function bestRanking(history: ParticipantOverview['history']) {
     ranked[0],
   );
 }
+
+/**
+ * My placing for one week, read from overview history.
+ *
+ * Leaderboard rows carry no user key, so the preview never guesses which row
+ * is mine — the "Kamu" strip comes from here instead.
+ */
+export function myWeekRanking(
+  history: Array<{
+    week: { weekCode: string };
+    ranking: { rank: number; finalScore: number } | null | undefined;
+  }>,
+  weekCode: string,
+): { rank: number; finalScore: number } | null {
+  const row = history.find((entry) => entry.week.weekCode === weekCode);
+  if (!row?.ranking) return null;
+  return { rank: row.ranking.rank, finalScore: row.ranking.finalScore };
+}
