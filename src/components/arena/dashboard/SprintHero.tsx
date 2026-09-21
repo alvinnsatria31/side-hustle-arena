@@ -88,13 +88,13 @@ export function SprintHero({ name, week, active, focus, dateLabel }: SprintHeroP
   const title =
     active?.project.title ??
     (week?.canSelect
-      ? 'Pilih project untuk sprint ini.'
+      ? 'Pilih proyek untuk sprint ini.'
       : 'Siapkan langkahmu untuk sprint berikutnya.');
   const body = active
     ? `${focus?.stage}. Selesaikan tahap ini, lalu kirim sebelum tenggat.`
     : week?.canSelect
       ? 'Baca brief yang tersedia, pilih yang paling dekat dengan arah kariermu, lalu mulai bekerja.'
-      : 'Project baru muncul di sini begitu sprint berikutnya dibuka. Sementara itu, lihat hasil sprint sebelumnya.';
+      : 'Proyek baru muncul di sini begitu sprint berikutnya dibuka. Sementara itu, lihat hasil sprint sebelumnya.';
 
   return (
     <section aria-labelledby="sprint-hero-title" className="sprint-hero p-6 sm:p-8">

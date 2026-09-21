@@ -7,7 +7,7 @@ only real bugs in what exists today are flagged — not deviations from the futu
 Reference implementations read first, in full: `src/components/layout/nav-links.ts`,
 `src/components/layout/NavPromo.tsx`, `src/lib/dashboard-view.ts`.
 
-Counts: 0 blocker · 0 major · 1 minor · 27 pass.
+Counts: 0 blocker · 0 major · 1 minor · 28 pass.
 
 ---
 
@@ -23,7 +23,7 @@ Counts: 0 blocker · 0 major · 1 minor · 27 pass.
   (`src/components/arena/dashboard/SprintHero.tsx:91` `'Pilih project untuk sprint ini.'`). Both
   spellings are used for the same product concept on adjacent surfaces.
 - **Fix:** Pick one spelling for user-facing copy (recommend `proyek`, matching `nav-links.ts`) and apply it consistently across dashboard headings, tiles, and hero.
-- **Status:** pending (owner decides: accepted | rejected)
+- **Status:** fixed (copy standardized to proyek; WA contract test repaired — the feature was never broken)
 
 ---
 

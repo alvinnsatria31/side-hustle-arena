@@ -180,8 +180,8 @@ export function EnrollmentHistory({ history }: { history: ParticipantOverview['h
         <EmptyState
           icon={FolderOpen}
           title="Belum ada riwayat"
-          body="Project yang kamu selesaikan akan tercatat di sini lengkap dengan skor dan poinnya."
-          action={{ label: 'Jelajahi project', href: '/app/arena/projects' }}
+          body="Proyek yang kamu selesaikan akan tercatat di sini lengkap dengan skor dan poinnya."
+          action={{ label: 'Jelajahi proyek', href: '/app/arena/projects' }}
         />
       )}
     </section>
@@ -287,7 +287,7 @@ export default function ParticipantDashboard({
             <SectionHead
               id="dashboard-projects-title"
               eyebrow="Minggu ini"
-              title="Jelajahi project lain"
+              title="Jelajahi proyek lain"
               link={{ label: 'Lihat semua', href: '/app/arena/projects' }}
             />
             {available.length ? (
@@ -299,7 +299,7 @@ export default function ParticipantDashboard({
             ) : (
               <EmptyState
                 icon={Compass}
-                title="Belum ada project lain minggu ini"
+                title="Belum ada proyek lain minggu ini"
                 body="Sprint berikutnya membuka brief baru. Sementara itu, cek katalog lengkapnya."
                 action={{ label: 'Buka katalog', href: '/app/arena/projects' }}
               />
@@ -326,10 +326,10 @@ export default function ParticipantDashboard({
             ) : (
               <EmptyState
                 icon={FolderOpen}
-                title="Project pertamamu belum selesai"
+                title="Proyek pertamamu belum selesai"
                 body="Begitu satu sprint kelar, skor, poin dan skill yang terbukti muncul di sini."
                 action={{
-                  label: 'Mulai satu project',
+                  label: 'Mulai satu proyek',
                   href: '/app/arena/projects',
                 }}
               />

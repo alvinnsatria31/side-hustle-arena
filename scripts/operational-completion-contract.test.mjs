@@ -10,6 +10,7 @@ test('WhatsApp support is global and exposes the exact official contact contract
   const layout = read('src/app/layout.tsx');
   const footer = read('src/components/layout/Footer.tsx');
   const dashboard = read('src/components/arena/ParticipantDashboard.tsx');
+  const quickActions = read('src/components/arena/dashboard/QuickActions.tsx');
   assert.ok(component.includes(whatsappUrl));
   assert.ok(component.includes('#25D366'));
   assert.ok(component.includes('Butuh bantuan? Chat kami di WhatsApp'));
@@ -18,8 +19,10 @@ test('WhatsApp support is global and exposes the exact official contact contract
   assert.ok(layout.includes('<FloatingWhatsApp'));
   assert.ok(footer.includes('+62 851-1730-4579'));
   assert.ok(footer.includes('href={WHATSAPP_SUPPORT_URL}'));
-  assert.ok(dashboard.includes('href={WHATSAPP_SUPPORT_URL}'));
-  assert.ok(dashboard.includes('Hubungi WhatsApp CS'));
+  assert.ok(dashboard.includes('<QuickActions'));
+  assert.ok(quickActions.includes('href: WHATSAPP_SUPPORT_URL'));
+  assert.ok(quickActions.includes('Chat CS via WhatsApp'));
+  assert.match(quickActions, /target=["']_blank["']/);
 });
 
 test('live setup docs name the voucher contract and a disabled-first Jobs source', () => {

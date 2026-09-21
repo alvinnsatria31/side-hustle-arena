@@ -81,9 +81,9 @@ export function StatStrip({ data }: { data: ParticipantOverview }) {
       accent: 'bg-sk-blue-tint text-sk-blue',
     },
     {
-      label: 'Project selesai',
+      label: 'Proyek selesai',
       value: data.completedProjects,
-      caption: attempted ? `dari ${attempted} project yang diambil` : 'belum ada project diambil',
+      caption: attempted ? `dari ${attempted} proyek yang diambil` : 'belum ada proyek diambil',
       href: '/app/arena/my-projects',
       icon: FolderCheck,
       accent: 'bg-sk-success-tint text-sk-success',
