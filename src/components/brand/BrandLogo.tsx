@@ -46,7 +46,7 @@ export function BrandLogo({
   return (
     <Link
       href={href}
-      aria-label="SekolahKarir Arena — beranda"
+      aria-label="Side Hustle Arena — beranda"
       className={cn('flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-sk-blue', className)}
     >
       {failed ? (
@@ -54,14 +54,14 @@ export function BrandLogo({
           <StaircaseMark className="h-8 w-8 shrink-0 text-[#026bf4]" />
           {showWordmark && !compact && (
             <span className={cn('whitespace-nowrap font-extrabold text-[15.5px] leading-none', dark ? 'text-white' : 'text-sk-navy')}>
-              SekolahKarir <span className="text-[#026bf4]">Arena</span>
+              Side Hustle <span className="text-[#026bf4]">Arena</span>
             </span>
           )}
         </div>
       ) : compact || !showWordmark ? (
         <Image
           src="/logo-mark.png"
-          alt="SekolahKarir Arena"
+          alt="Side Hustle Arena"
           width={32}
           height={32}
           className="h-8 w-8 shrink-0 object-contain"
@@ -76,10 +76,10 @@ export function BrandLogo({
         <>
           <Image
             src="/logo.png"
-            alt="SekolahKarir Arena"
-            width={200}
-            height={32}
-            className={cn('h-8 w-auto object-contain', 'max-[359px]:hidden')}
+            alt="Side Hustle Arena by SekolahKarir"
+            width={195}
+            height={40}
+            className={cn('h-9 w-auto object-contain', 'max-[359px]:hidden')}
             priority
             unoptimized
             onError={() => setFailed(true)}
@@ -89,7 +89,7 @@ export function BrandLogo({
           />
           <Image
             src="/logo-mark.png"
-            alt="SekolahKarir Arena"
+            alt="Side Hustle Arena"
             width={32}
             height={32}
             className="h-8 w-8 shrink-0 object-contain min-[360px]:hidden"
