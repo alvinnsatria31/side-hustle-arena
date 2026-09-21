@@ -28,7 +28,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="glass-nav safe-bottom fixed inset-x-0 bottom-0 z-40 rounded-b-none border-x-0 border-b-0 md:hidden"
+      className="glass-nav safe-bottom fixed inset-x-0 bottom-0 z-40 rounded-b-none border-x-0 border-b-0 shadow-[0_-4px_20px_rgba(16,37,68,0.08)] md:hidden"
       style={{ background: 'rgba(255,255,255,0.95)' }}
       aria-label="Navigasi bawah"
     >
