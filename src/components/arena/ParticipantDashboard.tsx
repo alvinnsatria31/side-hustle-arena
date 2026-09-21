@@ -13,15 +13,18 @@ import {
   type ParticipantOverview,
 } from '@/lib/participant-client';
 import type { ReactNode } from 'react';
-import { dashboardFocus } from '@/lib/dashboard-view';
+import { dashboardFocus, enrollmentStatus } from '@/lib/dashboard-view';
 import { EnrollmentCard } from '@/components/arena/dashboard/EnrollmentCard';
 import { DashboardSkeleton } from '@/components/arena/dashboard/DashboardSkeleton';
 import { EmptyState } from '@/components/arena/dashboard/EmptyState';
 import { ProjectPeekCard } from '@/components/arena/dashboard/ProjectPeekCard';
 import { QuickActions } from '@/components/arena/dashboard/QuickActions';
 import { SprintHero } from '@/components/arena/dashboard/SprintHero';
+import { DeadlineCard } from '@/components/arena/dashboard/DeadlineCard';
+import { RewardPreviewCard } from '@/components/arena/dashboard/RewardPreviewCard';
 import { StatStrip } from '@/components/arena/dashboard/StatStrip';
 import { LeaderboardPreview } from '@/components/arena/dashboard/LeaderboardPreview';
+import { Reveal } from '@/components/motion/Reveal';
 import type { PublicArenaHome } from '@/lib/arena-view';
 import { cn } from '@/lib/cn';
 
@@ -259,6 +262,11 @@ export default function ParticipantDashboard({
   const focus = active ? dashboardFocus(active) : null;
   const available = projects.filter((project) => project.slug !== active?.project.slug).slice(0, 2);
   const past = (data?.history ?? []).filter((row) => row.id !== active?.id).slice(0, 2);
+  // A countdown only means something while there is still work to hand in:
+  // an enrollment in progress, or an open week with nothing picked yet.
+  const counting = active ? enrollmentStatus(active).tone === 'active' : Boolean(data?.currentWeek?.canSelect);
+  const deadline = counting ? (active?.week.submissionDeadlineAt ?? data?.currentWeek?.submissionDeadlineAt ?? null) : null;
+  const deadlineHref = focus?.href ?? '/app/arena/projects';
 
   return (
     <div className="min-w-0 [overflow-wrap:anywhere] [letter-spacing:0]">
@@ -272,39 +280,51 @@ export default function ParticipantDashboard({
           aria-busy={resource.loading}
           className={cn('transition-opacity duration-200', resource.loading && 'opacity-60')}
         >
-          <SprintHero
-            name={user.displayName ?? 'Peserta'}
-            week={data.currentWeek}
-            active={active}
-            focus={focus}
-            dateLabel={participantDate}
-          />
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <SprintHero name={user.displayName ?? 'Peserta'} week={data.currentWeek} active={active} focus={focus} />
+            <div className="flex flex-col gap-5">
+              {deadline && (
+                <DeadlineCard
+                  deadlineAt={deadline}
+                  href={deadlineHref}
+                  dateLabel={participantDate}
+                  progress={active ? focus?.progress ?? null : null}
+                />
+              )}
+              <RewardPreviewCard />
+            </div>
+          </div>
 
-          <StatStrip data={data} />
-          <LeaderboardPreview history={data.history} />
+          <div className="mt-10">
+            <StatStrip data={data} />
+          </div>
 
-          <section className="mt-10" aria-labelledby="dashboard-projects-title">
-            <SectionHead
-              id="dashboard-projects-title"
-              eyebrow="Minggu ini"
-              title="Jelajahi proyek lain"
-              link={{ label: 'Lihat semua', href: '/app/arena/projects' }}
-            />
-            {available.length ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {available.map((project) => (
-                  <ProjectPeekCard key={project.slug} project={project} />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon={Compass}
-                title="Belum ada proyek lain minggu ini"
-                body="Sprint berikutnya membuka brief baru. Sementara itu, cek katalog lengkapnya."
-                action={{ label: 'Buka katalog', href: '/app/arena/projects' }}
+          <Reveal className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            <LeaderboardPreview history={data.history} />
+
+            <section aria-labelledby="dashboard-projects-title">
+              <SectionHead
+                id="dashboard-projects-title"
+                eyebrow="Minggu ini"
+                title="Arena lain"
+                link={{ label: 'Lihat semua', href: '/app/arena/projects' }}
               />
-            )}
-          </section>
+              {available.length ? (
+                <div className="flex flex-col gap-3">
+                  {available.map((project) => (
+                    <ProjectPeekCard key={project.slug} project={project} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Compass}
+                  title="Belum ada proyek lain minggu ini"
+                  body="Sprint berikutnya membuka brief baru. Sementara itu, cek katalog lengkapnya."
+                  action={{ label: 'Buka katalog', href: '/app/arena/projects' }}
+                />
+              )}
+            </section>
+          </Reveal>
 
           <section
             id="proyekku"
@@ -314,7 +334,7 @@ export default function ParticipantDashboard({
             <SectionHead
               id="dashboard-history-title"
               eyebrow="Rekam jejak"
-              title="Proyekku"
+              title="Riwayat pertandingan"
               link={{ label: 'Lihat riwayat', href: '/app/arena/my-projects' }}
             />
             {past.length ? (

@@ -1,55 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
-import { Gift } from 'lucide-react';
+import { ArrowRight, Gift } from 'lucide-react';
 import { useParticipant } from '@/features/arena/participant';
-import { Button } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { AvatarChooser } from '@/components/arena/AvatarChooser';
 import { PrivacyControls } from '@/components/arena/PrivacyControls';
-import { RewardProgress } from '@/components/arena/MilestoneRoadmap';
-import { getParticipantMilestones, getParticipantOverview, takeParticipantReward, useParticipantResource } from '@/lib/participant-client';
+import { REWARDS_PATH } from '@/components/layout/nav-links';
+import { getParticipantOverview, useParticipantResource } from '@/lib/participant-client';
 import { presentSkillEvidence } from '@/lib/skill-evidence-label';
-import { EnrollmentHistory, ParticipantLogout, ParticipantShell, ParticipantStats, RefreshButton, ResourceState, participantDate } from './ParticipantDashboard';
+import { EnrollmentHistory, ParticipantLogout, ParticipantShell, ParticipantStats, RefreshButton, ResourceState } from './ParticipantDashboard';
 
 export default function ParticipantProfile() {
   const user = useParticipant();
   const resource = useParticipantResource(getParticipantOverview);
-  const rewards = useParticipantResource(getParticipantMilestones);
-  const claiming = useRef(false);
-  const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-  const [message, setMessage] = useState('');
   const data = resource.data;
-  const refresh = () => { void resource.refresh(); void rewards.refresh(); };
 
-  async function claim(slug: string, retryOf: string | null) {
-    if (claiming.current) return;
-    claiming.current = true;
-    setPending(slug);
-    setError(null);
-    setMessage('');
-    try {
-      const { taken } = await takeParticipantReward(slug, retryOf);
-      const delivery = taken.delivery;
-      setMessage(delivery?.status === 'DELIVERED'
-        ? 'url' in delivery
-          ? 'Hadiah berhasil diklaim. Tautannya sudah dikirim ke emailmu dan bisa dilihat di riwayat hadiah.'
-          : 'Hadiah berhasil diklaim. Kode vouchermu bisa dilihat di riwayat hadiah.'
-        : delivery?.status === 'MANUAL_REQUIRED'
-          ? 'Hadiah berhasil diklaim. Tim kami sedang menyiapkannya. Pantau statusnya di riwayat hadiah.'
-          : 'Hadiah berhasil diklaim.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error('Hadiah belum berhasil diklaim. Coba lagi.'));
-    } finally {
-      await Promise.all([resource.refresh(), rewards.refresh()]);
-      claiming.current = false;
-      setPending(null);
-    }
-  }
-
-  return <ParticipantShell title="Profil" action={<RefreshButton refresh={refresh} loading={resource.loading || rewards.loading} />}>
+  return <ParticipantShell title="Profil" action={<RefreshButton refresh={() => void resource.refresh()} loading={resource.loading} />}>
     <div className="flex flex-wrap items-center gap-4 border-b border-sk-border pb-6">
       <AvatarChooser />
       <div className="min-w-0 flex-1"><h2 className="text-xl font-bold text-sk-navy">{user.displayName ?? 'Peserta'}</h2><p className="mt-1 break-all text-sm text-sk-muted">{user.email ?? 'Email belum tersedia'}</p></div>
@@ -57,28 +24,22 @@ export default function ParticipantProfile() {
     </div>
     <ResourceState loading={resource.loading} error={resource.error} retry={resource.refresh} />
     {data && !resource.loading && <ParticipantStats data={data} />}
+    {/* Claims, the reward ladder and the claim history live on their own page
+        now; this card keeps the old "#rewards" entry point one tap away. */}
     <section id="rewards" className="mt-8 scroll-mt-24">
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-sk-navy"><Gift size={20} aria-hidden />Hadiah</h2>
-      {message && <p role="status" className="mb-4 text-sm text-sk-success">{message}</p>}
-      {error && <p role="alert" className="mb-4 text-sm text-sk-error">{error.message}</p>}
-      <ResourceState loading={rewards.loading} error={rewards.error} retry={rewards.refresh} />
-      {rewards.data && !rewards.loading && rewards.data.ladder.steps.length > 0 && <RewardProgress lifetimePoints={rewards.data.ladder.lifetimePoints} balance={data?.points.balance} steps={rewards.data.ladder.steps} className="mb-5" />}
-      {rewards.data && !rewards.loading && <div className="divide-y divide-sk-border border-y border-sk-border">
-        {rewards.data.ladder.steps.length === 0 && <p className="py-5 text-sm text-sk-muted">Belum ada hadiah yang tersedia.</p>}
-        {rewards.data.ladder.steps.map((step) => <div key={step.slug} className="flex flex-wrap items-center justify-between gap-4 py-5">
-          <div className="min-w-0"><h3 className="font-semibold text-sk-navy">{step.title}</h3><p className="mt-1 text-sm text-sk-muted">{step.pointsRequired.toLocaleString('id-ID')} poin{step.outOfStock && step.state === 'locked' ? ' · stok periode ini habis' : ''}</p></div>
-          {step.state === 'taken'
-            ? <Badge variant="mint">Sudah diklaim</Badge>
-            : step.state === 'out_of_stock'
-              ? <Button size="sm" variant="ghost" disabled iconLeft={<Gift size={15} aria-hidden />}>Stok habis</Button>
-              : <Button size="sm" variant={step.state === 'ready' ? 'primary' : 'ghost'} disabled={step.state !== 'ready' || !data || resource.loading || data.points.balance < step.pointsRequired || pending !== null} loading={pending === step.slug} onClick={() => void claim(step.slug, step.retryOf)} iconLeft={<Gift size={15} aria-hidden />}>{step.state === 'ready' ? (step.retryOf ? 'Klaim ulang' : 'Klaim hadiah') : `Kurang ${step.deficit.toLocaleString('id-ID')} poin`}</Button>}
-        </div>)}
-      </div>}
+      <Link
+        href={REWARDS_PATH}
+        className="card-rise group flex flex-wrap items-center gap-4 rounded-[var(--radius-sk-2xl)] border border-sk-border bg-white p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue"
+      >
+        <span aria-hidden className="grid h-12 w-12 place-items-center rounded-2xl bg-sk-violet-tint text-sk-violet"><Gift size={22} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-bold text-sk-navy">Poin &amp; hadiah</span>
+          <span className="mt-0.5 block text-[13px] text-sk-muted">Klaim hadiah tangga, tukar poin di katalog, dan lihat riwayat hadiahmu.</span>
+        </span>
+        <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sk-blue">Buka <ArrowRight size={15} aria-hidden className="transition-transform group-hover:translate-x-[3px]" /></span>
+      </Link>
     </section>
     {data && !resource.loading && <>
-      <section className="mt-8"><h2 className="mb-4 text-lg font-bold text-sk-navy">Riwayat hadiah</h2>
-        {data.redemptions.length === 0 ? <p className="py-4 text-sm text-sk-muted">Kamu belum mengklaim hadiah.</p> : <ul className="divide-y divide-sk-border">{data.redemptions.map((item) => <li key={item.id} className="flex flex-wrap justify-between gap-3 py-4"><div className="min-w-0"><h3 className="font-semibold text-sk-navy">{item.title}</h3><p className="mt-1 text-xs text-sk-muted">{participantDate(item.redeemedAt)} WIB / {item.pointsSpent} poin</p>{item.fulfilledAt && <p className="mt-1 text-xs text-sk-success">Selesai {participantDate(item.fulfilledAt)} WIB</p>}{item.deliveryNote && <p className="mt-2 whitespace-pre-line break-words text-sm text-sk-body"><span className="font-semibold text-sk-navy">Catatan penyerahan:</span> {item.deliveryNote}</p>}</div><Badge className="self-start" variant={item.status === 'FULFILLED' ? 'mint' : item.status === 'FAILED' || item.status === 'ADMIN_REVERSED' ? 'slate' : 'amber'}>{({ PENDING: 'Menunggu', PROCESSING: 'Diproses', FULFILLED: 'Selesai', FAILED: 'Gagal', ADMIN_REVERSED: 'Dikembalikan' } as Record<string, string>)[item.status] ?? item.status}</Badge></li>)}</ul>}
-      </section>
       <section className="mt-8"><h2 className="mb-4 text-lg font-bold text-sk-navy">Bukti kemampuan</h2>
         {data.skillEvidence.length === 0 ? <p className="py-4 text-sm text-sk-muted">Bukti kemampuanmu akan muncul setelah hasil proyek dinilai.</p> : <ul className="grid gap-4 md:grid-cols-2">{data.skillEvidence.map((item) => { const view = presentSkillEvidence(item); return <li key={item.id} className="rounded-lg border border-sk-border bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1"><h3 className="font-bold text-sk-navy">{item.name}</h3><div className="text-right"><span className={view.measured ? 'font-semibold text-sk-success' : 'text-sm font-semibold text-sk-body'}>{view.scoreText}</span><p className="text-xs text-sk-muted">{view.scoreLabel}</p></div></div>{view.badge && <Badge className="mt-2" variant="slate">{view.badge}</Badge>}{view.note && <p className="mt-2 text-xs leading-relaxed text-sk-muted">{view.note}</p>}{item.summary && <p className="mt-2 text-sm text-sk-body">{item.summary}</p>}<Link className="mt-3 block text-sm text-sk-blue hover:underline" href={`/app/arena/result/${encodeURIComponent(item.projectSlug)}`}>{item.projectTitle} / {item.weekCode}</Link></li>; })}</ul>}
       </section>

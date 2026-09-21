@@ -5,7 +5,7 @@ import { Modal } from '@/components/primitives/Modal';
 import { Button } from '@/components/primitives/Button';
 import { AvatarBadge } from '@/components/arena/AvatarBadge';
 import { AvatarChoices } from '@/components/arena/AvatarChoices';
-import { useParticipantAvatar } from '@/features/arena/participant';
+import { useParticipant, useParticipantAvatar } from '@/features/arena/participant';
 import { setParticipantAvatar } from '@/lib/participant-client';
 import { DEFAULT_AVATAR_ID } from '@/lib/avatars';
 
@@ -17,6 +17,7 @@ import { DEFAULT_AVATAR_ID } from '@/lib/avatars';
  * they had rather than with nothing.
  */
 export function AvatarChooser() {
+  const user = useParticipant();
   const { avatarId, setAvatarId } = useParticipantAvatar();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(avatarId ?? DEFAULT_AVATAR_ID);
@@ -52,7 +53,7 @@ export function AvatarChooser() {
         className="group flex shrink-0 items-center gap-2 rounded-full focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2"
         aria-label="Ganti avatar"
       >
-        <AvatarBadge avatarId={avatarId} size="lg" className="transition-transform group-hover:scale-105" />
+        <AvatarBadge avatarId={avatarId} seed={user.displayName ?? user.email} size="lg" className="transition-transform group-hover:scale-105" />
         <span className="text-[12.5px] font-semibold text-sk-blue group-hover:underline">Ganti</span>
       </button>
 

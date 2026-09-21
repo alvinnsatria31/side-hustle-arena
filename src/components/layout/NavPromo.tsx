@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
  * The promo treatment a highlighted nav entry gets, in one place.
  *
  * Five surfaces render the shared link list — the public bar, its mobile
- * sheet, the app sidebar, the app's small-screen menu and the footer. A pill
+ * sheet, the app bar, the app's small-screen menu and the footer. A pill
  * hand-written into each of them is a pill that drifts: the last time a link
  * was added to only some of them, the site advertised a route on one surface
  * and hid it on another, which is why `nav-links.ts` exists at all. The same
@@ -24,21 +24,30 @@ import { cn } from '@/lib/cn';
  * nav must never be ambiguous about. Violet is already in the palette, says
  * "a different product" rather than "your position", and clears 4.5:1 against
  * white at both gradient stops.
+ *
+ * The app bar is the exception: its current page is marked by an underline,
+ * not a blue fill, so its Tools button is solid brand blue (TOOLS_BUTTON).
  */
 export const PROMO_PILL =
   'bg-gradient-to-r from-sk-violet-700 to-sk-violet-600 text-white shadow-[0_6px_16px_-6px_rgba(109,77,224,0.65)] hover:from-sk-violet-700 hover:to-sk-violet-700';
+
+export const TOOLS_BUTTON =
+  'bg-sk-blue text-white shadow-[0_8px_18px_-8px_rgba(36,107,253,0.7)] hover:bg-sk-blue-700 hover:-translate-y-px';
 
 /**
  * The "BARU" flag.
  *
  * Mono and uppercase like every other micro-label in the system, and sized so
- * it reads as a tag on the link rather than as a second word in it.
+ * it reads as a tag on the link rather than as a second word in it. Its ink
+ * follows the pill it sits on: violet on the promo gradient, blue on the app
+ * bar's blue Tools button.
  */
-export function NewBadge({ className }: { className?: string }) {
+export function NewBadge({ className, tone = 'violet' }: { className?: string; tone?: 'violet' | 'blue' }) {
   return (
     <span
       className={cn(
-        'rounded-full bg-white px-1.5 py-0.5 font-mono text-[8.5px] font-bold uppercase leading-none tracking-[0.1em] text-sk-violet-700',
+        'rounded-full bg-white px-1.5 py-0.5 font-mono text-[8.5px] font-bold uppercase leading-none tracking-[0.1em]',
+        tone === 'blue' ? 'text-sk-blue-700' : 'text-sk-violet-700',
         className,
       )}
     >

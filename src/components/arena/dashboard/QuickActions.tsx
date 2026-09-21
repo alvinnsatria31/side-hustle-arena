@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Bookmark, Gift, MessageCircle, Trophy, type LucideIcon } from 'lucide-react';
 import { WHATSAPP_SUPPORT_URL } from '@/components/layout/FloatingWhatsApp';
+import { REWARDS_PATH } from '@/components/layout/nav-links';
 
 interface Action {
   label: string;
@@ -20,7 +21,7 @@ const actions: Action[] = [
   {
     label: 'Poin & hadiah',
     hint: 'Tukar poin yang terkumpul',
-    href: '/app/profile#rewards',
+    href: REWARDS_PATH,
     icon: Gift,
   },
   {

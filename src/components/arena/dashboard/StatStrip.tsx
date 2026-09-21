@@ -1,9 +1,21 @@
 import Link from 'next/link';
+import { motion } from 'motion/react';
 import { ArrowUpRight, Award, Coins, FolderCheck, Sparkles, type LucideIcon } from 'lucide-react';
 import { CountUp } from './CountUp';
+import { useSettledReducedMotion } from '@/components/motion/Reveal';
+import { REWARDS_PATH } from '@/components/layout/nav-links';
 import { bestRanking } from '@/lib/dashboard-view';
 import type { ParticipantOverview } from '@/lib/participant-client';
 import { cn } from '@/lib/cn';
+
+const listVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08 } },
+};
+const tileVariants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+};
 
 interface Tile {
   label: string;
@@ -24,8 +36,9 @@ interface Tile {
  * itself the link to the page that explains it.
  */
 function StatTile({ label, value, caption, href, icon: Icon, accent }: Tile) {
+  const reduce = useSettledReducedMotion();
   return (
-    <li className="flex">
+    <motion.li className="flex" variants={reduce ? undefined : tileVariants}>
       <Link
         href={href}
         className="card-rise group relative flex w-full min-h-[104px] flex-col justify-between gap-3 rounded-[var(--radius-sk-xl)] border border-sk-border bg-white p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:p-5"
@@ -44,7 +57,7 @@ function StatTile({ label, value, caption, href, icon: Icon, accent }: Tile) {
         </div>
         <div>
           <p className="font-mono text-[26px] font-bold leading-none tracking-[-0.045em] text-sk-navy sm:text-[28px]">
-            {typeof value === 'number' ? <CountUp value={value} /> : value}
+            {typeof value === 'number' ? <CountUp value={value} from={0} /> : value}
           </p>
           <p className="mt-1.5 flex items-center gap-1 text-[11px] leading-snug text-sk-faint">
             {caption}
@@ -56,7 +69,7 @@ function StatTile({ label, value, caption, href, icon: Icon, accent }: Tile) {
           </p>
         </div>
       </Link>
-    </li>
+    </motion.li>
   );
 }
 
@@ -76,7 +89,7 @@ export function StatStrip({ data }: { data: ParticipantOverview }) {
       label: 'Poin tersedia',
       value: data.points.balance,
       caption: `${data.points.lifetimeEarned.toLocaleString('id-ID')} poin total diperoleh`,
-      href: '/app/profile#rewards',
+      href: REWARDS_PATH,
       icon: Coins,
       accent: 'bg-sk-blue-tint text-sk-blue',
     },
@@ -109,10 +122,24 @@ export function StatStrip({ data }: { data: ParticipantOverview }) {
   ];
 
   return (
-    <ul aria-label="Ringkasan capaian" className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatList tiles={tiles} />
+  );
+}
+
+function StatList({ tiles }: { tiles: Tile[] }) {
+  const reduce = useSettledReducedMotion();
+  return (
+    <motion.ul
+      aria-label="Ringkasan capaian"
+      className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
+      variants={reduce ? undefined : listVariants}
+      initial={reduce ? undefined : 'hidden'}
+      whileInView={reduce ? undefined : 'show'}
+      viewport={{ once: true, margin: '-40px' }}
+    >
       {tiles.map((tile) => (
         <StatTile key={tile.label} {...tile} />
       ))}
-    </ul>
+    </motion.ul>
   );
 }

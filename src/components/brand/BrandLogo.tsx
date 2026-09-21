@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
  * request, a proxy that strips static files, an offline shell — so the navbar
  * never shows a broken-image glyph or an empty corner where the brand belongs.
  */
-function StaircaseMark({ className }: { className?: string }) {
+export function StaircaseMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden focusable="false" className={className}>
       <rect width="32" height="32" rx="8" fill="currentColor" />

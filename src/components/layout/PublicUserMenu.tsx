@@ -57,7 +57,7 @@ export function PublicUserMenu({ user }: { user: PublicNavUser }) {
         {/* The initial stands in only until they have picked an avatar; the
             picker runs on their first arrival inside /app. */}
         {user.avatarId ? (
-          <AvatarBadge avatarId={user.avatarId} size="sm" />
+          <AvatarBadge avatarId={user.avatarId} seed={user.displayName ?? user.email} size="sm" />
         ) : (
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sk-blue to-sk-blue-400 text-[13px] font-bold text-white">
             {name.slice(0, 1).toUpperCase()}

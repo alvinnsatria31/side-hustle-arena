@@ -1,4 +1,5 @@
-import { Banknote, BookOpen, Check, Crown, Gift, GraduationCap, LayoutTemplate, TicketPercent, UserCheck, type LucideIcon } from 'lucide-react';
+import { createElement } from 'react';
+import { Banknote, BookOpen, Check, Crown, Gift, GraduationCap, LayoutTemplate, TicketPercent, UserCheck, type LucideIcon, type LucideProps } from 'lucide-react';
 import { ProgressBar } from '@/components/primitives/ProgressBar';
 import { formatPoints, rewardProgress } from '@/lib/reward-progress';
 import { cn } from '@/lib/cn';
@@ -39,8 +40,17 @@ const ICON_BY_TYPE: Record<string, LucideIcon> = {
   MONETARY: Banknote,
 };
 
+export function rewardIconFor(slug: string, rewardType?: string | null): LucideIcon {
+  return ICON_BY_SLUG[slug] ?? (rewardType ? ICON_BY_TYPE[rewardType] : undefined) ?? Gift;
+}
+
+/** A reward's icon as an element, for surfaces that render one per reward. */
+export function RewardIcon({ slug, rewardType, ...props }: { slug: string; rewardType?: string | null } & LucideProps) {
+  return createElement(rewardIconFor(slug, rewardType), props);
+}
+
 function iconFor(step: RoadmapStep): LucideIcon {
-  return ICON_BY_SLUG[step.slug] ?? (step.rewardType ? ICON_BY_TYPE[step.rewardType] : undefined) ?? Gift;
+  return rewardIconFor(step.slug, step.rewardType);
 }
 
 const STATE_LABEL: Record<RoadmapState, string> = {
@@ -119,65 +129,6 @@ export function MilestoneRoadmap({ steps, points, className }: {
           );
         })}
       </ol>
-    </div>
-  );
-}
-
-/**
- * The participant's own numbers: points collected, the gap to the next reward,
- * and the gap to the main reward, each with a progress bar.
- */
-export function RewardProgress({ lifetimePoints, balance, steps, className }: {
-  lifetimePoints: number;
-  /** Spendable points. Shown separately: claiming spends balance, not progress. */
-  balance?: number | null;
-  steps: RoadmapStep[];
-  className?: string;
-}) {
-  const progress = rewardProgress(lifetimePoints, steps);
-  if (!progress.total) return null;
-  const showMain = progress.main && !progress.mainReached && progress.main.slug !== progress.next?.slug;
-  return (
-    <div className={cn('rounded-[var(--radius-sk-lg)] border border-sk-border bg-white p-5 sm:p-6', className)}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs text-sk-muted">Poin terkumpul</p>
-          <p className="mt-1 text-3xl font-extrabold text-sk-navy">{formatPoints(progress.points)} <span className="text-base font-bold text-sk-muted">poin</span></p>
-        </div>
-        {typeof balance === 'number' && (
-          <p className="text-xs text-sk-muted">Saldo bisa ditukar: <strong className="text-sk-blue">{formatPoints(balance)} poin</strong></p>
-        )}
-      </div>
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <div>
-          <p className="text-[13px] leading-relaxed text-sk-body">
-            {progress.next
-              ? <>Kurang <strong className="text-sk-navy">{formatPoints(progress.next.remaining)} poin</strong> lagi untuk membuka <strong className="text-sk-navy">{progress.next.title}</strong> ({formatPoints(progress.next.pointsRequired)} poin).</>
-              : <>Semua hadiah sudah terbuka. Tukarkan poinmu di bawah.</>}
-          </p>
-          {progress.next && (
-            <div className="mt-2 flex items-center gap-3">
-              <ProgressBar value={progress.next.percent} className="h-2 flex-1" />
-              <span className="w-10 shrink-0 text-right font-mono text-xs text-sk-muted">{progress.next.percent}%</span>
-            </div>
-          )}
-        </div>
-        {progress.main && (
-          <div>
-            <p className="text-[13px] leading-relaxed text-sk-body">
-              {progress.mainReached
-                ? <>Hadiah utama <strong className="text-sk-navy">{progress.main.title}</strong> sudah terbuka.</>
-                : showMain
-                  ? <>Kurang <strong className="text-sk-navy">{formatPoints(progress.main.remaining)} poin</strong> lagi untuk mencapai <strong className="text-sk-navy">{progress.main.title}</strong> ({formatPoints(progress.main.pointsRequired)} poin).</>
-                  : <>Hadiah berikutnya adalah hadiah utama.</>}
-            </p>
-            <div className="mt-2 flex items-center gap-3">
-              <ProgressBar value={progress.main.percent} className="h-2 flex-1" />
-              <span className="w-10 shrink-0 text-right font-mono text-xs text-sk-muted">{progress.main.percent}%</span>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

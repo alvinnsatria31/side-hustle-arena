@@ -389,6 +389,29 @@ export function getLeaderboard(week?: string): Promise<LeaderboardResponse> {
   return request<LeaderboardResponse>(`/api/arena/leaderboard${qs}`);
 }
 
+export interface AllTimeLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  avatarId: string | null;
+  totalPoints: number;
+  weeksRanked: number;
+  bestRank: number;
+  averageScore: number;
+  latestDivisionName: string | null;
+}
+
+export interface AllTimeLeaderboardResponse {
+  weeksCounted: number;
+  latestFinalizedAt: string | Date | null;
+  rows: AllTimeLeaderboardEntry[];
+  /** The signed-in viewer's own placing; null when signed out or never ranked. */
+  viewer: { rank: number; totalPoints: number; weeksRanked: number } | null;
+}
+
+export function getAllTimeLeaderboard(): Promise<AllTimeLeaderboardResponse> {
+  return request<AllTimeLeaderboardResponse>('/api/arena/leaderboard?scope=all');
+}
+
 export type ArenaResult =
   | { sealed: true; weekStatus: string; reviewAttemptsUsed: number; submissionStatus: string }
   | { sealed: false; finalized: false }

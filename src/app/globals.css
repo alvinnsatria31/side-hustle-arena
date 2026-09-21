@@ -59,6 +59,17 @@
   --color-sk-error-wash: #fff6f5;
   --color-sk-error-border: #f5d7d3;
   --color-sk-deadline: #ffd191;
+  --color-sk-deadline-tint: #fef8ee;
+
+  /* Leaderboard podium — gold/silver/bronze, distinct from the warning/deadline
+     ambers so a rank medal never reads as an alert. */
+  --color-sk-gold: #b8862c;
+  --color-sk-gold-tint: #faf1de;
+  --color-sk-gold-wash: #fffbf1;
+  --color-sk-silver: #64748b;
+  --color-sk-silver-tint: #eef1f5;
+  --color-sk-bronze: #a8693f;
+  --color-sk-bronze-tint: #f6ece2;
 
   /* Radii (approved scale) */
   --radius-sk: 8px;
@@ -272,6 +283,88 @@ select {
   animation: floatY 9s ease-in-out 1.6s infinite alternate;
 }
 
+/* Leaderboard winner — ambient effect that survives after the entrance
+   animation finishes. Kept deliberately faint: a rank #1 glow is a reward
+   accent, not a light source. */
+@keyframes podiumGlowBreathe {
+  0%,
+  100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.18;
+  }
+}
+.podium-glow {
+  animation: podiumGlowBreathe 4.5s ease-in-out infinite;
+}
+@keyframes podiumSparkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  8%,
+  20% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  32% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.6);
+  }
+}
+.podium-sparkle {
+  animation: podiumSparkle 5s ease-in-out infinite;
+  opacity: 0;
+}
+/* A claimable reward on the ladder: a soft gold ring that breathes outward
+   until the step is taken. */
+@keyframes rewardReady {
+  0% {
+    box-shadow: 0 0 0 0 rgba(242, 169, 27, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(242, 169, 27, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(242, 169, 27, 0);
+  }
+}
+.reward-ready-ring {
+  animation: rewardReady 2.2s ease-out infinite;
+}
+@keyframes crownBob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(4deg);
+  }
+}
+.crown-bob > * {
+  display: block;
+  animation: crownBob 2.8s ease-in-out 1.2s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .podium-glow {
+    animation: none;
+    opacity: 0.14;
+  }
+  .podium-sparkle {
+    animation: none;
+    opacity: 0;
+  }
+  .crown-bob > * {
+    animation: none;
+  }
+  .reward-ready-ring {
+    animation: none;
+    box-shadow: 0 0 0 4px rgba(242, 169, 27, 0.25);
+  }
+}
+
 .skeleton {
   background: linear-gradient(90deg, #eaeef5 0%, #f2f5fa 50%, #eaeef5 100%);
   background-size: 200% 100%;
@@ -321,42 +414,6 @@ select {
     grid-template-columns: 1.4fr 1fr;
   }
 }
-.side-mini {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--radius-sk-lg);
-  padding: 20px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 1;
-}
-
-/* Sprint hero — the one dark panel on the participant dashboard. Kept here so
-   the gradient, the glow and the grain stay one decision instead of six inline
-   hexes spread across the component. */
-.sprint-hero {
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--radius-sk-3xl);
-  background:
-    radial-gradient(120% 140% at 88% -10%, rgba(36, 107, 253, 0.45), transparent 58%),
-    radial-gradient(90% 120% at 0% 110%, rgba(80, 200, 220, 0.18), transparent 60%),
-    linear-gradient(140deg, #0b1933 0%, #102544 52%, #16305a 100%);
-  color: var(--color-sk-on-navy);
-  box-shadow: var(--shadow-sk-lg);
-}
-.sprint-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 18px 18px;
-  mask-image: linear-gradient(160deg, #000 0%, transparent 60%);
-  -webkit-mask-image: linear-gradient(160deg, #000 0%, transparent 60%);
-}
-
 /* The one hover treatment every card on the participant dashboard shares. It
    lived as four different inline transition stacks before, which is why a stat
    tile and a project card used to rise by different amounts. */

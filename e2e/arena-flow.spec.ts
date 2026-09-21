@@ -221,7 +221,7 @@ test.describe.serial("Arena end-to-end", () => {
   test("a milestone reward can be redeemed", async ({ page, db }) => {
     await ensureMilestoneReward(db);
 
-    await page.goto("/app/profile#rewards");
+    await page.goto("/app/arena/rewards");
     await page.getByRole("button", { name: "Klaim hadiah" }).click();
     await expect(page.getByText("Hadiah berhasil diklaim.", { exact: true })).toBeVisible();
     await expect(page.getByText("Sudah diklaim")).toBeVisible();

@@ -7,13 +7,29 @@ const format = await import("../src/lib/format.ts");
 const flags = await import("../src/server/ops/feature-flags-core.ts");
 
 test("avatar catalogue resolves known ids and degrades unknown ids to the default", () => {
-  assert.equal(avatars.avatarFor("fire").emoji, "🔥");
+  assert.equal(avatars.avatarFor("a012").image, "/arena/avatars/a012.webp");
   assert.equal(avatars.avatarFor("retired-id").id, avatars.DEFAULT_AVATAR_ID);
   assert.equal(avatars.avatarFor(null).id, avatars.DEFAULT_AVATAR_ID);
   assert.equal(avatars.avatarFor(undefined).id, avatars.DEFAULT_AVATAR_ID);
-  assert.equal(avatars.isValidAvatarId("crown"), true);
+  assert.equal(avatars.isValidAvatarId("a110"), true);
   assert.equal(avatars.isValidAvatarId("nope"), false);
+  assert.equal(avatars.isValidAvatarId("constructor"), false);
   assert.equal(new Set(avatars.AVATARS.map((a) => a.id)).size, avatars.AVATARS.length);
+});
+
+test("emoji ids stored before the portraits still resolve, to one stable portrait each", () => {
+  assert.equal(avatars.isValidAvatarId("crown"), true);
+  const fire = avatars.avatarFor("fire");
+  assert.match(fire.id, /^a\d{3}$/);
+  assert.equal(avatars.avatarFor("fire").id, fire.id);
+});
+
+test("an account without a pick gets a face from its name, the same one every time", () => {
+  const first = avatars.avatarFor(null, "Nadia Putri");
+  assert.equal(avatars.avatarFor(null, "Nadia Putri").id, first.id);
+  const faces = new Set(["Nadia", "Raka", "Dimas", "Salsa", "Bima", "Alya", "Fikri", "Tasya"].map((name) => avatars.avatarFor(null, name).id));
+  assert.ok(faces.size >= 6, `expected varied faces, got ${faces.size}`);
+  assert.equal(avatars.avatarFor("a005", "Nadia Putri").id, "a005");
 });
 
 test("username guard accepts clean handles and rejects shape, reserved, and profanity violations", () => {

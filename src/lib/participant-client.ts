@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArenaApiError, type ArenaErrorCode } from './arena-client';
 import type { ParticipantOverview } from '@/server/arena/participant-service';
-import type { MilestoneLadder, RewardDelivery } from '@/server/rewards/milestones';
+import type { MilestoneLadder, MilestoneStep, RewardDelivery } from '@/server/rewards/milestones';
+import type { PointActivity, PointSummary } from '@/server/rewards/activity-service';
 
-export type { ParticipantOverview };
+export type { ParticipantOverview, MilestoneLadder, MilestoneStep, PointActivity, PointSummary };
 export type ParticipantEnrollment = ParticipantOverview['history'][number];
 export interface ParticipantInbox {
   items: Array<{ id: string; type: string; title: string; body: string | null; actionUrl: string | null; readAt: string | null; createdAt: string }>;
@@ -25,6 +26,12 @@ export async function participantRequest<T>(path: string, init?: RequestInit): P
 
 export const getParticipantOverview = () => participantRequest<ParticipantOverview>('/api/arena/me');
 export const getParticipantMilestones = () => participantRequest<{ ladder: MilestoneLadder }>('/api/arena/milestones');
+export const getParticipantPoints = (recent = 0) => participantRequest<PointSummary>(`/api/arena/me/points${recent > 0 ? `?recent=${recent}` : ''}`);
+export const getRewardCatalog = () =>
+  participantRequest<Array<{ slug: string; title: string; description: string | null; pointsCost: number; rewardType: string }>>('/api/arena/rewards/catalog');
+
+/** Fired after anything that moves the balance, so the header pill re-reads it. */
+export const POINTS_CHANGED_EVENT = 'arena:points-changed';
 export const takeParticipantReward = (slug: string, retryOf?: string | null) =>
   participantRequest<{ taken: { redemptionId: string; pointsSpent: number; delivery: RewardDelivery | null } }>('/api/arena/milestones/take', { method: 'POST', body: JSON.stringify(retryOf ? { slug, retryOf } : { slug }) });
 export const setParticipantAvatar = (avatarId: string) =>

@@ -243,12 +243,13 @@ export function ProjectBrowser({
           />
         )
       ) : (
-        <motion.div layout className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
+        <motion.div layout className="grid gap-x-[18px] gap-y-6 md:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence mode="popLayout">
-            {ordered.map((project) => (
+            {ordered.map((project, index) => (
               <ProjectCard
                 key={project.slug}
                 project={project}
+                index={index}
                 hrefPrefix={hrefPrefix}
                 recommended={!savedOnly && showRecommended && project.slug === recommendedSlug}
               />

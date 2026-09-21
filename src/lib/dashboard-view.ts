@@ -89,6 +89,30 @@ export function sprintRemaining(
   return { text: `${days} hari lagi`, tone: 'calm' };
 }
 
+export interface CountdownParts {
+  days: number;
+  hours: number;
+  minutes: number;
+  tone: DeadlineTone;
+  over: boolean;
+}
+
+/**
+ * The same countdown as `sprintRemaining`, broken into the three blocks the
+ * deadline card renders (dd / hh / mm) instead of one formatted sentence.
+ */
+export function sprintRemainingParts(deadlineAt: string, now = Date.now()): CountdownParts {
+  const left = new Date(deadlineAt).getTime() - now;
+  if (!Number.isFinite(left) || left <= 0) {
+    return { days: 0, hours: 0, minutes: 0, tone: 'over', over: true };
+  }
+  const totalMinutes = Math.floor(left / 60_000);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  const tone: DeadlineTone = totalMinutes < 60 || totalHours < 24 ? 'critical' : days < 3 ? 'urgent' : 'calm';
+  return { days, hours: totalHours % 24, minutes: totalMinutes % 60, tone, over: false };
+}
+
 export type EnrollmentTone = 'result' | 'waiting' | 'active' | 'sealed' | 'voided';
 
 /** One reading of "where is this enrollment", shared by every card that shows one. */
