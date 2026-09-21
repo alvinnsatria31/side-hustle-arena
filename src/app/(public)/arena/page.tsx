@@ -6,8 +6,12 @@ import { StatCard } from '@/components/primitives/StatCard';
 import { HowItWorks } from '@/components/arena/HowItWorks';
 import { LiveArenaBoard } from '@/components/arena/LiveArenaBoard';
 import { MilestoneRoadmap } from '@/components/arena/MilestoneRoadmap';
-import { getPublicArenaHome } from '@/lib/arena-view';
+import { ProjectCard } from '@/components/arena/ProjectCard';
+import { getPublicArenaHome, getPublicProjects } from '@/lib/arena-view';
 import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
+
+/** Cards shown on the landing; the rest stay one click away on /arena/projects. */
+const LANDING_PROJECT_LIMIT = 6;
 
 export const metadata = { title: 'Side Hustle Arena' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +24,12 @@ export default async function ArenaLandingPage() {
   // then — it is the public pitch for the Arena — so it renders with the
   // week-dependent slots showing that nothing is scheduled yet.
   const home = await getPublicArenaHome();
+  // Full card data for the browsable section below the hero. Same cached reader
+  // /arena/projects uses, so the landing costs no extra round trip per view.
+  const { projects: catalog } = await getPublicProjects();
+  const featured = catalog.slice(0, LANDING_PROJECT_LIMIT);
+  // Whole week, not just the featured slice — the hero panel counts everyone.
+  const participantTotal = catalog.reduce((sum, project) => sum + (project.participants ?? 0), 0);
   // The ladder is an addition to the pitch, never a dependency of it: a catalog
   // read that fails hides the section instead of taking the page down.
   const rewardSteps = await listActiveCatalogItems()
@@ -76,12 +86,13 @@ export default async function ArenaLandingPage() {
           </div>
 
           {/* Right: this week's drop preview */}
-          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[900px]">
+          <Reveal delay={0.25} y={16} className="mx-auto w-full max-w-[900px] xl:self-center">
             <LiveArenaBoard
-              projects={home?.projects ?? []}
               weekNo={home?.weekNo}
               deadline={home?.deadline}
               deadlineAt={home?.deadlineAt}
+              participantCount={participantTotal}
+              points={home?.points}
             />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">
@@ -89,6 +100,53 @@ export default async function ArenaLandingPage() {
               </Link>
             </div>
           </Reveal>
+        </div>
+
+        {/* Available projects: the actual catalog, not a pitch for it. */}
+        <div id="proyek" className="mt-20 scroll-mt-24 md:mt-24">
+          <Reveal className="mb-7 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+            <div className="max-w-xl">
+              <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
+              <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
+                Proyek yang tersedia sekarang.
+              </h2>
+              <p className="mt-2 text-[14px] leading-relaxed text-sk-muted">
+                {home
+                  ? `Pilih satu yang paling menantang buatmu. Batas pengumpulan ${home.deadline}.`
+                  : 'Proyek baru dibuka setiap Senin. Sekarang belum ada jadwal yang berjalan.'}
+              </p>
+            </div>
+            {catalog.length > 0 && (
+              <Link
+                href="/arena/projects"
+                className="text-[13.5px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700"
+              >
+                Lihat semua proyek →
+              </Link>
+            )}
+          </Reveal>
+
+          {featured.length === 0 ? (
+            <p role="status" className="rounded-[var(--radius-sk-2xl)] border border-dashed border-sk-border bg-white px-6 py-10 text-center text-[14px] text-sk-muted">
+              Belum ada proyek yang dibuka. Proyek baru biasanya hadir setiap Senin — cek lagi nanti, ya.
+            </p>
+          ) : (
+            <Reveal y={16}>
+              <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
+                {featured.map((project) => (
+                  <ProjectCard key={project.slug} project={project} />
+                ))}
+              </div>
+            </Reveal>
+          )}
+
+          {catalog.length > featured.length && (
+            <div className="mt-8 text-center">
+              <ButtonLink href="/arena/projects" variant="ghost" size="md">
+                Lihat {catalog.length - featured.length} proyek lainnya
+              </ButtonLink>
+            </div>
+          )}
         </div>
 
         {/* How it works */}

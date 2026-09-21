@@ -2,28 +2,34 @@ import Link from 'next/link';
 import { ArrowRight, Clock3 } from 'lucide-react';
 import { DeadlineCountdown } from '@/components/arena/DeadlineCountdown';
 
-export interface LiveArenaProject {
-  slug: string;
-  title: string;
-  category: string;
-  estimatedTime: string;
-  deliverable: string;
-  participantCount: number;
+export interface LiveArenaPoints {
+  completion: number;
+  rank1: number;
+  rank2: number;
+  rank3: number;
 }
 
+/**
+ * Hero status panel for the open week.
+ *
+ * It deliberately does NOT list the week's projects: the landing renders those
+ * as full cards under #proyek, and showing both made the same three briefs
+ * appear twice on one screen. What stays here is what a card cannot carry —
+ * the live countdown, how many people already joined, and what the week pays.
+ */
 export function LiveArenaBoard({
-  projects,
   weekNo,
   deadline,
   deadlineAt,
+  participantCount,
+  points,
 }: {
-  projects: LiveArenaProject[];
   weekNo?: number;
   deadline?: string;
   deadlineAt?: string;
+  participantCount: number;
+  points?: LiveArenaPoints | null;
 }) {
-  const latestProject = projects[0];
-
   return (
     <section
       aria-labelledby="live-arena-title"
@@ -46,19 +52,7 @@ export function LiveArenaBoard({
       </div>
 
       <div className="p-3.5 sm:px-[30px] sm:pb-6 sm:pt-6">
-        {deadline && (
-          <div className="mb-4 flex min-h-[40px] flex-wrap items-center justify-between gap-2 rounded-md bg-[#FDE8E6] px-4 py-2.5 text-[#9F101A]">
-            <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase sm:text-[13px]">
-              <Clock3 size={17} strokeWidth={2.3} aria-hidden />
-              Batas pengumpulan: {deadline}
-            </span>
-            <strong className="text-[13px] tabular-nums sm:text-[15px]">
-              {deadlineAt ? <DeadlineCountdown deadlineAt={deadlineAt} /> : deadline}
-            </strong>
-          </div>
-        )}
-
-        {projects.length === 0 ? (
+        {!deadline ? (
           <div className="rounded-xl border border-[#E2E6F4] bg-[#F1F3FE] px-5 py-9 text-center">
             <p className="font-bold text-sk-navy">Belum ada proyek yang dibuka</p>
             <Link href="/arena/projects" className="mt-2 inline-flex min-h-11 items-center font-semibold text-sk-blue hover:underline">
@@ -66,58 +60,57 @@ export function LiveArenaBoard({
             </Link>
           </div>
         ) : (
-          <ul className="grid gap-2">
-            {projects.map((project) => (
-              <li key={project.slug} className="flex rounded-xl border border-[#E3E7F4] bg-[#F0F2FD] px-3.5 py-3 shadow-[0_3px_8px_rgba(14,31,69,0.05)] sm:h-[164px] sm:flex-col sm:px-4 sm:py-3.5">
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-[#555D70] sm:text-[13px]">
-                      <span className="rounded bg-[#DCE5FF] px-1.5 py-0.5 font-extrabold uppercase tracking-[0.08em] text-[#102A54]">
-                        {project.category}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock3 size={15} aria-hidden />
-                        {project.estimatedTime}
-                      </span>
+          <>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-xl border border-[#F3D5D2] bg-[#FDE8E6] px-4 py-3.5 text-[#9F101A]">
+                <p className="inline-flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.08em]">
+                  <Clock3 size={14} strokeWidth={2.4} aria-hidden />
+                  Sisa waktu pengumpulan
+                </p>
+                <p className="mt-1.5 text-[26px] font-extrabold leading-none tabular-nums sm:text-[30px]">
+                  {deadlineAt ? <DeadlineCountdown deadlineAt={deadlineAt} /> : deadline}
+                </p>
+                <p className="mt-1.5 text-[12px] font-semibold text-[#B4443F]">Batas: {deadline}</p>
+              </div>
+
+              {points ? (
+                <div className="rounded-xl border border-[#E3E7F4] bg-[#F0F2FD] px-4 py-3.5">
+                  <p className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-[#555D70]">Poin pekan ini</p>
+                  <dl className="mt-2 space-y-1.5 text-[12.5px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[#555D70]">Proyek selesai dinilai</dt>
+                      <dd className="font-extrabold tabular-nums text-sk-navy">+{points.completion}</dd>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-[#0866BE] sm:text-[13px]">
-                      <span className="h-2 w-2 rounded-full bg-[#0874C9]" aria-hidden />
-                      {project.participantCount} peserta
-                    </span>
-                  </div>
-
-                  <h3 className="mt-2 text-[15px] font-extrabold leading-snug tracking-[-0.015em] text-sk-navy sm:text-[22px]">
-                    {project.title}
-                  </h3>
-
-                  <div className="mt-2 flex flex-col gap-1.5 text-[12px] text-[#555D70] sm:mt-auto sm:flex-row sm:items-end sm:justify-between sm:pt-3 sm:text-[16px]">
-                    <p className="min-w-0 leading-relaxed">
-                      Hasil yang diminta: <strong className="font-bold text-sk-navy">{project.deliverable}</strong>
-                    </p>
-                    <Link
-                      href={`/arena/projects/${project.slug}`}
-                      aria-label={`Lihat proyek ${project.title}`}
-                      className="inline-flex min-h-11 shrink-0 items-center gap-1 self-start font-extrabold text-[#064CB2] transition-colors hover:text-sk-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue focus-visible:ring-offset-2 sm:min-h-0 sm:self-auto sm:text-[16px]"
-                    >
-                      Lihat proyek <ArrowRight size={15} aria-hidden />
-                    </Link>
-                  </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[#555D70]">Peringkat 1 · 2 · 3</dt>
+                      <dd className="font-extrabold tabular-nums text-[#064CB2]">
+                        {points.rank1} · {points.rank2} · {points.rank3}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
+              ) : (
+                <div className="rounded-xl border border-dashed border-[#E3E7F4] bg-[#F7F8FF] px-4 py-3.5">
+                  <p className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-[#555D70]">Poin pekan ini</p>
+                  <p className="mt-2 text-[12.5px] leading-relaxed text-[#727889]">Belum diumumkan untuk minggu ini.</p>
+                </div>
+              )}
+            </div>
 
-        {latestProject && (
-          <Link
-            href={`/arena/projects/${latestProject.slug}`}
-            className="mt-3.5 flex min-h-[40px] flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md bg-[#E9ECF8] px-3.5 py-1.5 text-[11px] text-[#555D70] transition-colors hover:bg-[#DEE4F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue sm:text-[13px]"
-          >
-            <span className="h-2 w-2 rounded-full bg-[#0874C9]" aria-hidden />
-            <strong className="text-sk-navy">Proyek tersedia</strong>
-            <span className="min-w-0 truncate font-bold text-[#064CB2]">“{latestProject.title}”</span>
-            <span className="ml-auto text-[#727889]">lihat detail</span>
-          </Link>
+            <p className="mt-3 flex min-h-[40px] flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md bg-[#E9ECF8] px-3.5 py-1.5 text-[11px] text-[#555D70] sm:text-[13px]">
+              <span className="h-2 w-2 rounded-full bg-[#0874C9]" aria-hidden />
+              <strong className="tabular-nums text-sk-navy">{participantCount} peserta</strong>
+              sudah mengambil proyek pekan ini
+            </p>
+
+            <Link
+              href="#proyek"
+              className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-sk-blue px-4 text-[13.5px] font-extrabold text-white shadow-sk-btn transition-colors hover:bg-sk-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue focus-visible:ring-offset-2"
+            >
+              Pilih proyek pekan ini
+              <ArrowRight size={16} aria-hidden />
+            </Link>
+          </>
         )}
       </div>
     </section>

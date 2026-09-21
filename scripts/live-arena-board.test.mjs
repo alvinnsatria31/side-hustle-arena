@@ -23,9 +23,29 @@ test("public Arena page renders the linked live board instead of KanbanPreview",
   assert.doesNotMatch(page, /<KanbanPreview/);
   assert.match(board, /PROYEK PEKAN INI/);
   assert.match(board, /DeadlineCountdown/);
-  assert.match(board, /href=\{`\/arena\/projects\/\$\{project\.slug\}`\}/);
-  assert.match(board, /Lihat proyek/);
   assert.match(board, /Belum ada proyek yang dibuka/);
+});
+
+/**
+ * The hero panel and the landing card grid must not both list the week's
+ * briefs — that duplication is what the panel was rewritten to remove. The
+ * panel keeps the countdown, the joined-participant total and the week's point
+ * ladder; the titles live in the ProjectCard grid under #proyek.
+ */
+test("live board is a status panel, not a second copy of the project list", () => {
+  const page = read("src/app/(public)/arena/page.tsx");
+  const board = read("src/components/arena/LiveArenaBoard.tsx");
+
+  assert.doesNotMatch(board, /project\.title/, "board must not render project titles");
+  assert.doesNotMatch(board, /projects\.map/, "board must not iterate the project list");
+  assert.match(board, /Sisa waktu pengumpulan/);
+  assert.match(board, /participantCount/);
+  assert.match(board, /points\.rank1/);
+  assert.match(board, /href="#proyek"/, "panel CTA points at the card grid");
+
+  assert.match(page, /participantCount=\{participantTotal\}/);
+  assert.match(page, /id="proyek"/);
+  assert.match(page, /<ProjectCard/, "the landing lists projects as cards");
 });
 
 test("live board keeps the Stitch desktop proportions without breaking mobile", () => {
@@ -35,12 +55,11 @@ test("live board keeps the Stitch desktop proportions without breaking mobile", 
   assert.match(page, /max-w-\[1500px\]/);
   assert.match(page, /xl:grid-cols-\[minmax\(0,1fr\)_minmax\(0,900px\)\]/);
   assert.match(page, /max-w-\[900px\]/);
-  assert.match(board, /sm:h-\[164px\]/);
-  assert.match(board, /sm:min-h-0/);
-  assert.match(board, /sm:text-\[22px\]/);
-  assert.match(board, /sm:text-\[16px\]/);
+  assert.match(board, /sm:grid-cols-2/);
   assert.match(board, /sm:px-\[30px\]/);
   assert.match(board, /sm:pt-6/);
+  // Card grid stays responsive: one column on phones, three on desktop.
+  assert.match(page, /md:grid-cols-2 lg:grid-cols-3/);
 });
 
 test("public Arena home maps honest live board data", () => {

@@ -1,4 +1,4 @@
-import { ArrowRight, FolderGit2, Gift, MoveDown, PenLine, Sparkles, Trophy, Upload } from 'lucide-react';
+import { ArrowRight, Gift, MoveDown, PenLine, Sparkles } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Entrance, Reveal } from '@/components/motion/Reveal';
@@ -7,6 +7,7 @@ import { LandingProjectRail } from '@/components/landing/LandingProjectRail';
 import { SprintStatusStrip } from '@/components/landing/SprintStatusStrip';
 import { PortfolioProofVisual } from '@/components/landing/PortfolioProofVisual';
 import { BriefToPortfolioFlow } from '@/components/landing/BriefToPortfolioFlow';
+import { CaraIkutStepper } from '@/components/landing/CaraIkutStepper';
 import { ARENA_ENTRY_LABEL, arenaEntryHref } from '@/components/landing/arena-entry';
 import { getPublicArenaHome } from '@/lib/arena-view';
 import { getCurrentUser } from '@/server/auth';
@@ -24,25 +25,6 @@ export const dynamic = 'force-dynamic';
  * of 0. There is no stagger anywhere in that design, so there is none here.
  */
 const APPEAR = { y: 100, duration: 0.8, ease: [0.44, 0, 0.56, 1] as [number, number, number, number] };
-
-/** The three steps, in the order someone actually lives them. */
-const STEPS = [
-  {
-    icon: FolderGit2,
-    title: 'Pilih project',
-    body: 'Buka Arena, baca brief-brief yang dibuka minggu ini, lalu ambil satu yang paling dekat dengan arah kariermu.',
-  },
-  {
-    icon: Upload,
-    title: 'Kerjakan dan unggah',
-    body: 'Workspace-nya memandu dari membaca brief sampai mengunggah hasil, sebelum batas pengumpulan minggu itu.',
-  },
-  {
-    icon: Trophy,
-    title: 'Dapat penilaian dan manfaatnya',
-    body: 'Hasilmu dinilai per kriteria yang sudah terbuka sejak awal. Skornya jadi poin, hasilnya jadi bukti kerja.',
-  },
-] as const;
 
 /**
  * The public pitch.
@@ -174,7 +156,7 @@ export default async function LandingPage() {
 
         {/* ─── CARA IKUT ─────────────────────────────────────────────────
             Target of the hero's second button, so it has to answer the whole
-            question in one screen. Three steps, one line each. */}
+            question in one screen. Three steps, walked one at a time. */}
         <section id="cara-ikut" className="scroll-mt-28 mt-28 md:mt-36">
           <Reveal {...APPEAR}>
             <div className="mx-auto max-w-2xl text-center">
@@ -189,30 +171,9 @@ export default async function LandingPage() {
             </div>
           </Reveal>
 
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {STEPS.map((step, index) => {
-              const Icon = step.icon;
-              return (
-                <Reveal key={step.title} {...APPEAR}>
-                  <Card className="group h-full p-7 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-sk-blue-tint-border hover:shadow-sk-md md:p-8">
-                    <div className="flex items-center gap-3">
-                      <span
-                        aria-hidden
-                        className="grid h-11 w-11 flex-none place-items-center rounded-[var(--radius-sk-lg)] border border-sk-blue-tint-border bg-sk-blue-tint text-sk-blue-700 transition-colors duration-300 group-hover:bg-sk-blue group-hover:text-white"
-                      >
-                        <Icon size={19} strokeWidth={2.2} />
-                      </span>
-                      <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-sk-faint">
-                        0{index + 1}
-                      </span>
-                    </div>
-                    <h3 className="mt-5 text-[19px] font-bold tracking-[-0.03em] text-sk-navy">{step.title}</h3>
-                    <p className="mt-2.5 text-[14px] leading-relaxed text-sk-muted">{step.body}</p>
-                  </Card>
-                </Reveal>
-              );
-            })}
-          </div>
+          <Reveal className="mt-12" {...APPEAR}>
+            <CaraIkutStepper />
+          </Reveal>
         </section>
 
         {/* ─── MANFAAT ───────────────────────────────────────────────────
