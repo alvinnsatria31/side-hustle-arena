@@ -9,12 +9,19 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Check,
+  CheckCircle2,
   Coins,
   Compass,
+  Copy,
   Crown,
+  ExternalLink,
+  FileSearch,
   FolderOpen,
   Info,
+  Linkedin,
   Play,
+  Share2,
   Sparkles,
   Trophy,
   User,
@@ -71,6 +78,16 @@ const TOUR_STEPS: ReadonlyArray<TourStep> = [
     badge: '5. PORTOFOLIO & REKAM JEJAK',
     title: 'Bukti kerja nyata yang siap dipamerkan ke HR.',
     body: 'Semua proyek yang telah selesai tercatat permanen di riwayat pertandingan dan Career Report kamu. Lengkap dengan skor, feedback rubrik, dan skill yang terbukti untuk melamar kerja.',
+    id: 'linkedin',
+    badge: '5. 1-KLIK PASANG KE LINKEDIN',
+    title: 'Generate sertifikat & pasang langsung ke LinkedIn.',
+    body: 'Proyek yang selesai otomatis menerbitkan sertifikat resmi dan ID kredensial. Cukup 1-klik, sistem men-generate lisensi sertifikat dan draf postingan untuk langsung dipasang ke profil LinkedIn kamu sebagai bukti skill nyata ke recruiter!',
+  },
+  {
+    id: 'cv-scanner',
+    badge: '6. UPGRADE CV VIA CV SCANNER',
+    title: 'Loloskan portofolio baru ke HR via CV Scanner.',
+    body: 'Portofoliomu sudah bertambah kuat! Sekarang uji format dan skor kelolosan ATS-nya lewat CV Scanner di subdomain SekolahKarir Tools (tools.sekolahkarir.id/cv-scanner) sebelum melamar kerja.',
   },
 ];
 
@@ -295,7 +312,19 @@ function NextRewardCard({
 export function ArenaDashboardMockup() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [tourActive, setTourActive] = useState(true);
+  const [linkedinModalOpen, setLinkedinModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+
+  const sampleLinkedinPost = `🚀 Baru saja menyelesaikan sprint industri di Side Hustle Arena SekolahKarir!\n\n📌 Proyek: Bersihkan data penjualan enam bulan (Divisi Data Analyst)\n📊 Hasil: Skor 88/100 (Peringkat 2 dari ratusan peserta)\n🛠️ Skill terverifikasi: Data Cleaning, Pandas, SQL Transformation, Missing Values Imputation\n\nKredensial & sertifikat terverifikasi:\nhttps://arena.sekolahkarir.id/verify/SK-ARENA-9204-DATA\n\n#SekolahKarir #SideHustleArena #DataAnalyst #PortfolioProject`;
+
+  const copyToClipboard = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(sampleLinkedinPost);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const activeStep = TOUR_STEPS[currentStepIndex];
 
@@ -628,6 +657,7 @@ export function ArenaDashboardMockup() {
             </div>
 
             {/* TARGET 5: RIWAYAT & REKAM JEJAK PORTOFOLIO */}
+            {/* RIWAYAT & REKAM JEJAK PORTOFOLIO */}
             <section
               data-tour="history"
               data-tour-target
@@ -661,9 +691,205 @@ export function ArenaDashboardMockup() {
                   </p>
                 </div>
               </div>
+
+              {/* TARGET 5: LINKEDIN SHOWCASE & 1-KLIK GENERATE */}
+              <div
+                data-tour="linkedin"
+                data-tour-target
+                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-sky-300 bg-gradient-to-br from-sky-50 via-white to-blue-50/60 p-5 sm:p-6 shadow-sm"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-3.5">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#0077B5] text-white shadow-md shadow-[#0077b5]/25">
+                      <Linkedin size={24} />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#0077B5]/10 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-[#0077B5] uppercase">
+                          <Sparkles size={11} /> 1-Klik Add to LinkedIn
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-slate-500">ID: SK-ARENA-9204-DATA</span>
+                      </div>
+                      <h3 className="mt-1 text-[17px] font-extrabold text-sk-navy">
+                        Pasang Portofolio & Kredensial Langsung ke LinkedIn
+                      </h3>
+                      <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-sk-muted">
+                        Proyek yang selesai otomatis menerbitkan sertifikat resmi dan ID kredensial. Cukup 1-klik, sistem men-generate lisensi sertifikat dan draf postingan untuk langsung dipasang ke profil LinkedIn kamu sebagai bukti skill nyata ke recruiter!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setLinkedinModalOpen(true)}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0077B5] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#006097] active:scale-[0.98]"
+                    >
+                      <Linkedin size={15} />
+                      Pasang ke Profil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLinkedinModalOpen(true)}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
+                    >
+                      <Share2 size={14} className="text-slate-500" />
+                      Preview Postingan
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* TARGET 6: UPGRADE CV VIA CV SCANNER */}
+              <div
+                data-tour="cv-scanner"
+                data-tour-target
+                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-teal-50/60 p-5 sm:p-6 shadow-sm"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-3.5">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
+                      <FileSearch size={24} />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-emerald-800 uppercase">
+                          <CheckCircle2 size={11} /> Langkah Berikutnya
+                        </span>
+                        <span className="font-mono text-xs font-semibold text-emerald-700">tools.sekolahkarir.id</span>
+                      </div>
+                      <h3 className="mt-1 text-[17px] font-extrabold text-sk-navy">
+                        Uji Format & Skor ATS Portofolio Barumu di CV Scanner
+                      </h3>
+                      <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-sk-muted">
+                        Portofoliomu sudah bertambah kuat! Sekarang uji format dan skor kelolosan ATS-nya lewat CV Scanner di subdomain SekolahKarir Tools (<span className="font-mono text-emerald-700">tools.sekolahkarir.id/cv-scanner</span>) sebelum melamar kerja.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
+                    <a
+                      href="https://tools.sekolahkarir.id/cv-scanner"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
+                    >
+                      <FileSearch size={15} />
+                      Buka CV Scanner (Tools)
+                      <ExternalLink size={13} className="opacity-80" />
+                    </a>
+                    <a
+                      href="https://tools.sekolahkarir.id/store"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
+                    >
+                      Toko Template CV
+                      <ExternalLink size={12} className="text-slate-400" />
+                    </a>
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
         </main>
+
+        {/* LINKEDIN SHOWCASE & PREVIEW MODAL */}
+        <AnimatePresence>
+          {linkedinModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="relative w-full max-w-lg rounded-[var(--radius-sk-2xl)] border border-slate-200 bg-white p-6 shadow-2xl"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#0077B5] text-white">
+                      <Linkedin size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-sk-navy">Integrasi LinkedIn Showcase</h3>
+                      <p className="text-[11px] text-sk-muted">1-Klik Pasang Kredensial & Draf Postingan</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLinkedinModalOpen(false)}
+                    className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Mockup LinkedIn Post Card */}
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-tr from-sk-blue to-sk-blue-400 font-bold text-white text-xs">
+                      AP
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900">Alvin Pratama</p>
+                      <p className="text-[10.5px] text-slate-500">Aspiring Data Analyst • Peserta Side Hustle Arena</p>
+                      <p className="text-[10px] text-slate-400">1m • Diedit • 🌐 Publik</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs leading-relaxed text-slate-800 space-y-2 font-sans bg-white p-3 rounded-lg border border-slate-100">
+                    <p className="font-semibold text-sk-navy">
+                      🚀 Baru saja menyelesaikan sprint industri di Side Hustle Arena SekolahKarir!
+                    </p>
+                    <p className="text-slate-600">
+                      📌 <strong>Proyek:</strong> Bersihkan data penjualan enam bulan (Divisi Data Analyst)<br/>
+                      📊 <strong>Hasil:</strong> Skor 88/100 (Peringkat 2)<br/>
+                      🛠️ <strong>Skill:</strong> Data Cleaning, Pandas, SQL Transformation
+                    </p>
+                    <p className="text-[11px] text-[#0077B5] font-mono">
+                      Kredensial ID: SK-ARENA-9204-DATA
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={copyToClipboard}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    >
+                      {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      {copied ? 'Teks Tersalin!' : 'Salin Teks Postingan'}
+                    </button>
+                    <a
+                      href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=Side%20Hustle%20Arena%20-%20Data%20Analytics&organizationName=SekolahKarir&issueYear=2026&issueMonth=9&certId=SK-ARENA-9204-DATA&certUrl=https%3A%2F%2Farena.sekolahkarir.id"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0077B5] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#006097] transition"
+                    >
+                      <Linkedin size={14} />
+                      Add to LinkedIn Profile
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg bg-sky-50 p-3 text-[11.5px] leading-relaxed text-sky-900 border border-sky-100">
+                  <strong>💡 Alur Otomatisasi (Next):</strong> Setelah integrasi LinkedIn API aktif, peserta cukup otorisasi akun 1 kali dan setiap sertifikat selesai akan langsung dipublikasikan ke profil & feed tanpa perlu copy-paste manual.
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setLinkedinModalOpen(false)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    Tutup Preview
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* SPOTLIGHT TUTORIAL FLOATING CALLOUT CARD */}
         {tourActive && (
@@ -739,6 +965,17 @@ export function ArenaDashboardMockup() {
                   ))}
                 </div>
 
+                {currentStepIndex === 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setLinkedinModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition"
+                  >
+                    <Linkedin size={13} />
+                    Preview LinkedIn
+                  </button>
+                )}
+
                 {currentStepIndex === TOUR_STEPS.length - 1 ? (
                   <ButtonLink
                     href="/arena/projects"
@@ -747,6 +984,24 @@ export function ArenaDashboardMockup() {
                   >
                     Mulai Bertanding
                   </ButtonLink>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="https://tools.sekolahkarir.id/cv-scanner"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-10 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                    >
+                      Buka CV Scanner
+                      <ExternalLink size={12} />
+                    </a>
+                    <ButtonLink
+                      href="/arena/projects"
+                      size="md"
+                      iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
+                    >
+                      Mulai Bertanding
+                    </ButtonLink>
+                  </div>
                 ) : (
                   <Button
                     size="md"

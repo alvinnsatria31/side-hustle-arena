@@ -79,10 +79,13 @@ function enabled(link: NavLink): boolean {
  */
 const PUBLIC_ALL: NavLink[] = [
   { label: 'Cara kerja', href: '/arena', icon: Sparkles },
+  { label: 'Cara kerja', href: '/cara-kerja', icon: Sparkles },
   { label: 'Proyek', href: '/arena/projects', icon: LayoutGrid },
   { label: 'Sorotan', href: '/arena/showcase', icon: Trophy },
   { label: 'Scan CV', href: '/cv-scanner', icon: FileSearch, flag: 'cv-scanner' },
   { label: 'Toko', href: '/store', icon: Store, flag: 'store' },
+  { label: 'Scan CV', href: `${TOOLS_URL}/cv-scanner`, icon: FileSearch, external: true },
+  { label: 'Toko', href: `${TOOLS_URL}/store`, icon: Store, external: true },
   TOOLS,
 ];
 
@@ -130,6 +133,8 @@ export function footerColumns(): Array<{ heading: string; links: NavLink[] }> {
       links: [
         TOOLS,
         ...PUBLIC_ALL.filter((l) => l.flag).filter(enabled),
+        { label: 'Scan CV', href: `${TOOLS_URL}/cv-scanner`, icon: FileSearch, external: true },
+        { label: 'Toko', href: `${TOOLS_URL}/store`, icon: Store, external: true },
         { label: 'Career Report', href: '/app/career-report', icon: Award },
         { label: 'Masuk', href: '/login', icon: UserRound },
       ],
