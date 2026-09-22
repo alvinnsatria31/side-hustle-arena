@@ -1,4 +1,4 @@
-import { ArrowRight, Gift, MoveDown, PenLine, Sparkles } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Gift, PenLine, Sparkles } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Entrance, Reveal } from '@/components/motion/Reveal';
@@ -109,7 +109,7 @@ export default async function LandingPage() {
                 href={entryHref}
                 size="lg"
                 className="rounded-full"
-                iconRight={<ArrowRight size={16} strokeWidth={2.4} aria-hidden />}
+                iconRight={<ArrowUpRight size={16} strokeWidth={2.4} aria-hidden />}
               >
                 {ARENA_ENTRY_LABEL}
               </ButtonLink>
@@ -118,7 +118,7 @@ export default async function LandingPage() {
                 variant="ghost"
                 size="lg"
                 className="rounded-full"
-                iconRight={<MoveDown size={14} strokeWidth={2.4} aria-hidden />}
+                iconRight={<ChevronDown size={14} strokeWidth={2.4} aria-hidden />}
               >
                 Lihat cara kerja
               </ButtonLink>
@@ -338,7 +338,7 @@ export default async function LandingPage() {
                   href={entryHref}
                   size="lg"
                   className="rounded-full"
-                  iconRight={<ArrowRight size={16} strokeWidth={2.4} aria-hidden />}
+                  iconRight={<ArrowUpRight size={16} strokeWidth={2.4} aria-hidden />}
                 >
                   {ARENA_ENTRY_LABEL}
                 </ButtonLink>
