@@ -75,9 +75,9 @@ const TOUR_STEPS: ReadonlyArray<TourStep> = [
   },
   {
     id: 'linkedin',
-    badge: '5. 1-KLIK PASANG KE LINKEDIN',
-    title: 'Generate sertifikat & pasang langsung ke LinkedIn.',
-    body: 'Proyek yang selesai otomatis menerbitkan sertifikat resmi dan ID kredensial. Cukup 1-klik, sistem men-generate lisensi sertifikat dan draf postingan untuk langsung dipasang ke profil LinkedIn kamu sebagai bukti skill nyata ke recruiter!',
+    badge: '5. PAMERKAN KE LINKEDIN',
+    title: 'Proyek ini bisa kamu pamerkan ke LinkedIn.',
+    body: 'Setiap proyek yang selesai otomatis menghasilkan sertifikat resmi dan bukti skill terverifikasi. Hasil karya nyata ini bisa langsung kamu pamerkan ke profil atau postingan feed LinkedIn untuk menarik perhatian HR & recruiter!',
   },
   {
     id: 'cv-scanner',
@@ -709,15 +709,15 @@ export function ArenaDashboardMockup() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#0077B5]/10 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-[#0077B5] uppercase">
-                          <Sparkles size={11} /> 1-Klik Add to LinkedIn
+                          <Sparkles size={11} /> Portofolio Siap Pamer
                         </span>
                         <span className="font-mono text-xs font-semibold text-slate-500">ID: SK-ARENA-9204-DATA</span>
                       </div>
                       <h3 className="mt-1 text-[17px] font-extrabold text-sk-navy">
-                        Pasang Portofolio & Kredensial Langsung ke LinkedIn
+                        Proyek Ini Siap Kamu Pamerkan ke LinkedIn
                       </h3>
                       <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-sk-muted">
-                        Proyek yang selesai otomatis menerbitkan sertifikat resmi dan ID kredensial. Cukup 1-klik, sistem men-generate lisensi sertifikat dan draf postingan untuk langsung dipasang ke profil LinkedIn kamu sebagai bukti skill nyata ke recruiter!
+                        Setiap proyek yang kamu selesaikan otomatis menerbitkan sertifikat resmi dan skor terverifikasi. Hasil kerja nyata ini bisa langsung kamu pamerkan ke profil atau postingan feed LinkedIn untuk menarik perhatian HR & rekruter!
                       </p>
                     </div>
                   </div>
@@ -728,16 +728,16 @@ export function ArenaDashboardMockup() {
                       onClick={() => setLinkedinModalOpen(true)}
                       className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0077B5] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#006097] active:scale-[0.98]"
                     >
-                      <Linkedin size={15} />
-                      Pasang ke Profil
+                      <Share2 size={14} />
+                      Lihat Contoh Tampilan
                     </button>
                     <button
                       type="button"
-                      onClick={() => setLinkedinModalOpen(true)}
+                      onClick={copyToClipboard}
                       className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
                     >
-                      <Share2 size={14} className="text-slate-500" />
-                      Preview Postingan
+                      {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                      {copied ? 'Teks Tersalin!' : 'Salin Draf Post'}
                     </button>
                   </div>
                 </div>
@@ -819,8 +819,8 @@ export function ArenaDashboardMockup() {
                       <Linkedin size={18} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-extrabold text-sk-navy">Integrasi LinkedIn Showcase</h3>
-                      <p className="text-[11px] text-sk-muted">1-Klik Pasang Kredensial & Draf Postingan</p>
+                      <h3 className="text-sm font-extrabold text-sk-navy">Contoh Tampilan Portofolio di LinkedIn</h3>
+                      <p className="text-[11px] text-sk-muted">Ilustrasi bagaimana proyek ini bisa kamu pamerkan ke recruiter</p>
                     </div>
                   </div>
                   <button
@@ -841,48 +841,43 @@ export function ArenaDashboardMockup() {
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-900">Alvin Pratama</p>
                       <p className="text-[10.5px] text-slate-500">Aspiring Data Analyst • Peserta Side Hustle Arena</p>
-                      <p className="text-[10px] text-slate-400">1m • Diedit • 🌐 Publik</p>
+                      <p className="text-[10px] text-slate-400">1m • 🌐 Publik</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 text-xs leading-relaxed text-slate-800 space-y-2 font-sans bg-white p-3 rounded-lg border border-slate-100">
+                  <div className="mt-3 text-xs leading-relaxed text-slate-800 space-y-2 font-sans bg-white p-3.5 rounded-lg border border-slate-100 shadow-xs">
                     <p className="font-semibold text-sk-navy">
                       🚀 Baru saja menyelesaikan sprint industri di Side Hustle Arena SekolahKarir!
                     </p>
                     <p className="text-slate-600">
                       📌 <strong>Proyek:</strong> Bersihkan data penjualan enam bulan (Divisi Data Analyst)<br/>
                       📊 <strong>Hasil:</strong> Skor 88/100 (Peringkat 2)<br/>
-                      🛠️ <strong>Skill:</strong> Data Cleaning, Pandas, SQL Transformation
+                      🛠️ <strong>Skill Terverifikasi:</strong> Data Cleaning, Pandas, SQL Transformation
                     </p>
-                    <p className="text-[11px] text-[#0077B5] font-mono">
-                      Kredensial ID: SK-ARENA-9204-DATA
-                    </p>
+                    <div className="rounded-md bg-slate-50 p-2 border border-slate-200 font-mono text-[11px] text-slate-600 flex items-center justify-between">
+                      <span>ID Kredensial: SK-ARENA-9204-DATA</span>
+                      <span className="text-emerald-600 font-semibold text-[10px]">✓ Terverifikasi</span>
+                    </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2 pt-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2">
                     <button
                       type="button"
                       onClick={copyToClipboard}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
                     >
                       {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                      {copied ? 'Teks Tersalin!' : 'Salin Teks Postingan'}
+                      {copied ? 'Teks Tersalin!' : 'Salin Format Postingan'}
                     </button>
-                    <a
-                      href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=Side%20Hustle%20Arena%20-%20Data%20Analytics&organizationName=SekolahKarir&issueYear=2026&issueMonth=9&certId=SK-ARENA-9204-DATA&certUrl=https%3A%2F%2Farena.sekolahkarir.id"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0077B5] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#006097] transition"
-                    >
-                      <Linkedin size={14} />
-                      Add to LinkedIn Profile
-                      <ExternalLink size={12} />
-                    </a>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 border border-sky-200/60">
+                      <CheckCircle2 size={13} className="text-sky-600" />
+                      Siap Dipamerkan di Profil & Feed
+                    </span>
                   </div>
                 </div>
 
                 <div className="mt-4 rounded-lg bg-sky-50 p-3 text-[11.5px] leading-relaxed text-sky-900 border border-sky-100">
-                  <strong>💡 Alur Otomatisasi (Next):</strong> Setelah integrasi LinkedIn API aktif, peserta cukup otorisasi akun 1 kali dan setiap sertifikat selesai akan langsung dipublikasikan ke profil & feed tanpa perlu copy-paste manual.
+                  <strong>💡 Bukti Portofolio Nyata:</strong> Proyek yang sudah kamu selesaikan di Arena otomatis menerbitkan sertifikat resmi. Kamu bisa memasangnya di profil LinkedIn (bagian <em>Licenses & Certifications</em>) atau membagikannya di feed untuk membuktikan kompetensi praktismu ke HR!
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
@@ -991,7 +986,7 @@ export function ArenaDashboardMockup() {
                       className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition"
                     >
                       <Linkedin size={13} />
-                      Preview
+                      Lihat Contoh
                     </button>
                   )}
 
