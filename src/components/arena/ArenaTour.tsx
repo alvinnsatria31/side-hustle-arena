@@ -241,7 +241,7 @@ function ArenaTourInner() {
           </span>
           <span className="flex-1" aria-hidden />
           {last ? (
-            <ButtonLink href="/arena/projects" size="md" iconRight={<ArrowRight size={15} strokeWidth={2.4} aria-hidden />} onClick={finish}>
+            <ButtonLink href="/app/arena" size="md" iconRight={<ArrowRight size={15} strokeWidth={2.4} aria-hidden />} onClick={finish}>
               Pilih proyek
             </ButtonLink>
           ) : (

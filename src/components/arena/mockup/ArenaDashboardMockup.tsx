@@ -294,7 +294,7 @@ function NextRewardCard({
         </div>
         <div className="mt-4">
           <Link
-            href="/arena/projects"
+            href="/app/arena"
             className="group inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border border-sk-border bg-white text-[13px] font-bold text-sk-navy transition-colors hover:border-sk-blue/40 hover:text-sk-blue"
           >
             Kumpulkan poin dari proyek
@@ -418,7 +418,7 @@ export function ArenaDashboardMockup() {
               </button>
             )}
             <Link
-              href="/arena/projects"
+              href="/app/arena"
               className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1 text-xs font-bold text-sk-blue shadow-xs hover:bg-sk-blue-wash transition-colors"
             >
               Mulai Bertanding
@@ -1002,7 +1002,7 @@ export function ArenaDashboardMockup() {
                         <ExternalLink size={12} />
                       </a>
                       <ButtonLink
-                        href="/arena/projects"
+                        href="/app/arena"
                         size="md"
                         iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
                       >
