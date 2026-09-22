@@ -29,6 +29,7 @@ docs
 .idea
 .DS_Store
 *.log
+*.tar.gz
 .claude
 .commandcode
 .superpowers
