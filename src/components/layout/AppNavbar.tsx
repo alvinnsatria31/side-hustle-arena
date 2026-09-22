@@ -15,7 +15,7 @@ import { getNotifications } from '@/lib/arena-client';
 import { POINTS_CHANGED_EVENT, getParticipantPoints } from '@/lib/participant-client';
 import { cn } from '@/lib/cn';
 
-const NAV_SEEN_KEY = 'sha-nav-seen-v1';
+
 
 /** Spendable balance for the points pill; re-read on navigation, focus and after a spend. */
 function usePointBalance(pathname: string) {
@@ -101,25 +101,7 @@ export function AppNavbar() {
 
   const name = user.displayName ?? 'Peserta';
 
-  const [bellHovered, setBellHovered] = useState(false);
-  // Panduan klik pertama: goyang halus + titik. Mati total setelah 1 klik.
-  const [hasInteracted, setHasInteracted] = useState(true);
-  useEffect(() => {
-    try {
-      if (!window.localStorage.getItem(NAV_SEEN_KEY)) setHasInteracted(false);
-    } catch {
-      setHasInteracted(false);
-    }
-  }, []);
-  const markNavSeen = () => {
-    if (hasInteracted) return;
-    setHasInteracted(true);
-    try {
-      window.localStorage.setItem(NAV_SEEN_KEY, '1');
-    } catch {
-      /* abaikan: animasi hanya mati sesi ini */
-    }
-  };
+
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#F0F2F5] bg-white/95 shadow-[0_1px_8px_rgba(15,23,42,0.03)] backdrop-blur-md">
@@ -147,139 +129,86 @@ export function AppNavbar() {
             Logo tetap di kiri (link di atas tidak diubah). Bug hover nyangkut
             diperbaiki dengan menghapus hover pill layoutId — hover kini murni
             CSS, yang sliding hanya pill aktif. */}
-        <div className="no-scrollbar hidden min-w-0 flex-1 items-center justify-center overflow-x-auto md:flex">
+        {/* Tengah desktop ala CardChase: segmented pill di dalam kapsul.
+            Ramping, tenang, dan proporsional tanpa animasi gerak yang mengganggu. */}
+        <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
           <div className="flex items-center gap-0.5 rounded-full border border-[#E6EBF2] bg-[#EEF2F7] p-1 shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)]">
-            {sections.map((link, i) => {
+            {sections.map((link) => {
               const active = isNavActive(link.href, pathname);
-              const guiding = !hasInteracted && !active;
 
               return (
                 <NavAnchor
                   key={link.href}
                   link={link}
                   aria-current={active ? 'page' : undefined}
-                  onClick={markNavSeen}
                   className={cn(
-                    'relative flex shrink-0 items-center whitespace-nowrap rounded-full px-4 py-2 text-[13.5px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
+                    'relative flex shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
                     active
                       ? 'font-bold text-sk-navy'
                       : 'font-semibold text-slate-500 hover:bg-white/70 hover:text-sk-navy',
                   )}
                 >
-                  {/* Pill aktif yang geser — satu layoutId, tidak balapan dengan hover. */}
+                  {/* Pill aktif yang tenang */}
                   {active && (
                     <motion.span
                       layoutId="cardchase-active-pill"
-                      className="absolute inset-0 rounded-full bg-white shadow-[0_2px_10px_rgba(15,23,42,0.10)] ring-1 ring-black/[0.04]"
+                      className="absolute inset-0 rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.04]"
                       transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                     />
                   )}
-
-                  {/* Goyang halus ajakan klik: mati total setelah 1 menu diklik. */}
-                  <motion.span
-                    animate={guiding ? { rotate: [0, -3, 3, -1.5, 0] } : { rotate: 0 }}
-                    transition={
-                      guiding
-                        ? { duration: 1.1, repeat: Infinity, repeatDelay: 2, delay: i * 0.35 }
-                        : { duration: 0.15 }
-                    }
-                    className="relative z-10"
-                  >
-                    {link.label}
-                  </motion.span>
-
-                  {/* Titik penanda belum diklik. */}
-                  {guiding && (
-                    <span className="absolute right-2.5 top-1.5 z-10 flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#026bf4] opacity-60" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#026bf4]" />
-                    </span>
-                  )}
+                  <span className="relative z-10">{link.label}</span>
                 </NavAnchor>
               );
             })}
           </div>
-
-          {promos.map((link) => (
-            <motion.div
-              key={link.href}
-              whileHover={{ scale: 1.04, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className="my-auto ml-2"
-            >
-              <NavAnchor
-                link={link}
-                onClick={markNavSeen}
-                className={cn(
-                  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full pl-3.5 pr-1.5 text-[13px] font-bold transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
-                  TOOLS_BUTTON,
-                )}
-              >
-                {link.label}
-                <NewBadge tone="blue" />
-              </NavAnchor>
-            </motion.div>
-          ))}
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3" ref={menuRef}>
-          <motion.div
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          >
-            <Link
-              href={REWARDS_PATH}
-              aria-label={balance === null ? 'Poin kamu' : `Poin tersedia: ${balance.toLocaleString('id-ID')}`}
-              className="group inline-flex h-10 items-center gap-2 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-3.5 text-[#0F172A] shadow-xs transition-all hover:border-[#FCD399] hover:bg-[#FFF4DD] hover:shadow-[0_4px_14px_rgba(245,158,11,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:px-4"
+          {promos.map((link) => (
+            <NavAnchor
+              key={link.href}
+              link={link}
+              className={cn(
+                'hidden lg:inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full pl-3.5 pr-2 text-[13px] font-bold transition-all hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
+                TOOLS_BUTTON,
+              )}
             >
-              <motion.div
-                whileHover={{ rotate: 20 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B]/15 text-[#D97706]"
-              >
-                <Coins size={13} strokeWidth={2.4} aria-hidden />
-              </motion.div>
-              <span className="font-mono text-[13px] font-bold tabular-nums tracking-tight">
-                {balance === null ? '—' : balance.toLocaleString('id-ID')}
-                <span className="font-sans font-semibold text-slate-700 max-sm:hidden"> poin</span>
-              </span>
-            </Link>
-          </motion.div>
+              {link.label}
+              <NewBadge tone="blue" />
+            </NavAnchor>
+          ))}
 
-          <motion.div
-            whileHover={{ scale: 1.06, y: -1 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="relative"
+          <Link
+            href={REWARDS_PATH}
+            aria-label={balance === null ? 'Poin kamu' : `Poin tersedia: ${balance.toLocaleString('id-ID')}`}
+            className="group inline-flex h-10 items-center gap-2 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-3.5 text-[#0F172A] shadow-xs transition-all hover:border-[#FCD399] hover:bg-[#FFF4DD] hover:shadow-[0_4px_14px_rgba(245,158,11,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:px-4"
           >
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B]/15 text-[#D97706]">
+              <Coins size={13} strokeWidth={2.4} aria-hidden />
+            </div>
+            <span className="font-mono text-[13px] font-bold tabular-nums tracking-tight">
+              {balance === null ? '—' : balance.toLocaleString('id-ID')}
+              <span className="font-sans font-semibold text-slate-700 max-sm:hidden"> poin</span>
+            </span>
+          </Link>
+
+          <div className="relative">
             <Link
               href="/app/notifications"
               title="Notifikasi"
               aria-label={`Notifikasi, ${unread} belum dibaca`}
-              onMouseEnter={() => setBellHovered(true)}
-              onMouseLeave={() => setBellHovered(false)}
               className="relative grid h-10 w-10 place-items-center rounded-full border border-[#E2E8F0] bg-white text-[#2563EB] shadow-xs transition-colors hover:border-[#CBD5E1] hover:bg-[#F8FAFC] focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2"
             >
-              <motion.div
-                animate={bellHovered ? { rotate: [0, -16, 14, -10, 6, 0] } : { rotate: 0 }}
-                transition={{ duration: 0.5, ease: 'easeInOut' }}
-              >
-                <Bell size={18} strokeWidth={2.1} aria-hidden />
-              </motion.div>
+              <Bell size={18} strokeWidth={2.1} aria-hidden />
               {unread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-sk-error px-1 text-center font-mono text-[10px] font-bold leading-none text-white ring-2 ring-white">
                   {unread > 99 ? '99+' : unread}
                 </span>
               )}
             </Link>
-          </motion.div>
+          </div>
 
-          <motion.button
-            whileHover={{ scale: 1.03, y: -1 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
@@ -298,7 +227,7 @@ export function AppNavbar() {
               aria-hidden
               className={cn('text-slate-500 transition-transform duration-200', menuOpen && 'rotate-180')}
             />
-          </motion.button>
+          </button>
         </div>
       </nav>
 
@@ -322,10 +251,32 @@ export function AppNavbar() {
             </div>
             <div className="my-1 h-px bg-sk-border" />
 
-            {/* Sections the bar hides on this screen still need a way in, so the
-                menu carries the whole list below `md`. */}
+            {/* Tools entry for screens smaller than lg (tablet & mobile) */}
+            <div className="lg:hidden">
+              {promos.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <NavAnchor
+                    key={link.href}
+                    link={link}
+                    onClick={() => setMenuOpen(false)}
+                    role="menuitem"
+                    className={cn(
+                      'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-semibold transition-colors mb-1',
+                      TOOLS_BUTTON,
+                    )}
+                  >
+                    <Icon size={15} strokeWidth={2.1} aria-hidden /> {link.label}
+                    <NewBadge tone="blue" className="ml-auto" />
+                    {link.external && <ExternalMark />}
+                  </NavAnchor>
+                );
+              })}
+            </div>
+
+            {/* Sections the bar hides on mobile (below md) */}
             <div className="md:hidden">
-              {links.map((link) => {
+              {sections.map((link) => {
                 const Icon = link.icon;
                 const active = isNavActive(link.href, pathname);
                 return (
@@ -336,16 +287,11 @@ export function AppNavbar() {
                     role="menuitem"
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] transition-colors',
-                      link.highlight
-                        ? cn('font-semibold duration-200', TOOLS_BUTTON)
-                        : 'font-medium text-sk-body hover:bg-sk-bg',
-                      !link.highlight && active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
+                      'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg',
+                      active && 'bg-sk-blue-tint font-semibold text-sk-blue-700',
                     )}
                   >
                     <Icon size={15} strokeWidth={2.1} aria-hidden /> {link.label}
-                    {link.highlight && <NewBadge tone="blue" className="ml-auto" />}
-                    {link.external && <ExternalMark />}
                   </NavAnchor>
                 );
               })}
