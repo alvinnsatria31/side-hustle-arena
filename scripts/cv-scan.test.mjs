@@ -163,6 +163,13 @@ test('the client key reads the first forwarded address, not the whole chain', ()
   assert.equal(clientKey(new Request('https://arena.example.test/api/cv-scan')), 'unknown');
 });
 
+test('the client key prioritizes x-real-ip over spoofed x-forwarded-for prefixes', () => {
+  const request = new Request('https://arena.example.test/api/cv-scan', {
+    headers: { 'x-forwarded-for': '198.51.100.1, 70.41.3.18', 'x-real-ip': '70.41.3.18' },
+  });
+  assert.equal(clientKey(request), '70.41.3.18');
+});
+
 // --- Extraction: the one link the offline suite could not previously prove ---
 //
 // These run the real extractor (officeparser -> pdfjs / OOXML) against fixtures
@@ -605,6 +612,25 @@ test('the scan provider must be HTTPS', () => {
 // request that reaches neither has spent nothing, and charging it locked people
 // out of an hour of scanning over a mistake the endpoint answered for free.
 
+test('a cross-origin or missing origin POST to /api/cv-scan is rejected with 403', async () => {
+  process.env.NEXT_PUBLIC_CV_SCANNER_ENABLED = 'true';
+  const { POST } = await import('../src/app/api/cv-scan/route.ts');
+  const body = new FormData();
+  body.append('notAFile', '1');
+
+  const noOrigin = new Request('https://arena.sekolahkarir.id/api/cv-scan', { method: 'POST', body });
+  const noOriginRes = await POST(noOrigin);
+  assert.equal(noOriginRes.status, 403);
+
+  const foreignOrigin = new Request('https://arena.sekolahkarir.id/api/cv-scan', {
+    method: 'POST',
+    body,
+    headers: { origin: 'https://attacker.com' },
+  });
+  const foreignOriginRes = await POST(foreignOrigin);
+  assert.equal(foreignOriginRes.status, 403);
+});
+
 test('a request that never reaches extraction does not spend the caller allowance', async () => {
   resetRateLimit();
   process.env.NEXT_PUBLIC_CV_SCANNER_ENABLED = 'true';
@@ -616,7 +642,10 @@ test('a request that never reaches extraction does not spend the caller allowanc
     return new Request('https://arena.test/api/cv-scan', {
       method: 'POST',
       body,
-      headers: { 'x-forwarded-for': '203.0.113.9' },
+      headers: {
+        'x-forwarded-for': '203.0.113.9',
+        origin: 'https://arena.sekolahkarir.id',
+      },
     });
   };
 

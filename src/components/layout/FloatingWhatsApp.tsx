@@ -18,8 +18,8 @@ export function FloatingWhatsApp() {
       className={cn(
         'group fixed right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sk-lg transition duration-200 hover:-translate-y-1 hover:shadow-xl focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#25D366] motion-reduce:transform-none motion-reduce:transition-none',
         hasBottomNav
-          ? 'bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-[max(1.5rem,env(safe-area-inset-bottom))]'
-          : 'bottom-[max(1.5rem,env(safe-area-inset-bottom))]',
+          ? 'bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] md:bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))]'
+          : 'bottom-[max(1.5rem,env(safe-area-inset-bottom,0px))]',
       )}
     >
       <span role="tooltip" aria-hidden="true" className="pointer-events-none absolute right-0 bottom-full mb-3 w-max max-w-[calc(100vw-3rem)] rounded-md bg-sk-navy px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">

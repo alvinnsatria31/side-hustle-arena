@@ -51,11 +51,18 @@ export interface RateLimitDecision {
   scope?: "caller" | "global";
 }
 
-/** Best-effort client identity. Vercel sets x-forwarded-for; nothing else is trusted. */
+/**
+ * Best-effort client identity.
+ * Reverse proxies (Caddy, Nginx) set x-real-ip to the connecting peer's address.
+ * Prioritizing x-real-ip prevents rate-limit bypass via client-spoofed x-forwarded-for prefixes.
+ * Fallback to x-forwarded-for first hop if x-real-ip is not present (e.g. Vercel edge).
+ */
 export function clientKey(request: Request): string {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
   const forwarded = request.headers.get("x-forwarded-for") ?? "";
   const first = forwarded.split(",")[0]?.trim();
-  return first || request.headers.get("x-real-ip") || "unknown";
+  return first || "unknown";
 }
 
 /** The window a moment belongs to, so every instance agrees on the boundary. */

@@ -22,6 +22,7 @@ function Block({ value, unit }: { value: number; unit: string }) {
             animate={{ y: 0, opacity: 1 }}
             exit={reduce ? undefined : { y: -10, opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
+            suppressHydrationWarning
           >
             {padded}
           </motion.span>
@@ -82,7 +83,7 @@ export function DeadlineCard({
         <p className="mt-4 text-[15px] font-bold text-sk-error">Waktu pengumpulan sudah habis.</p>
       ) : (
         <>
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2" suppressHydrationWarning>
             <Block value={parts.days} unit="hari" />
             <Block value={parts.hours} unit="jam" />
             <Block value={parts.minutes} unit="menit" />

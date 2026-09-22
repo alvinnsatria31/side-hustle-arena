@@ -37,6 +37,9 @@ export async function POST(request: Request) {
   if (!isCvScannerEnabled()) {
     return fail("CV Scanner belum dibuka.", 404);
   }
+  if (!hasAllowedMutationOrigin(request)) {
+    return fail("Asal permintaan tidak diizinkan.", 403);
+  }
 
   let file: File;
   let saveRequested = false;
@@ -44,7 +47,6 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     saveRequested = form.get("saveHistory") === "true";
-    if (saveRequested && !hasAllowedMutationOrigin(request)) return fail("Asal permintaan tidak diizinkan.", 403);
     const candidate = form.get("file");
     if (!(candidate instanceof File)) return fail("Tidak ada file yang dikirim.", 400);
     file = candidate;
