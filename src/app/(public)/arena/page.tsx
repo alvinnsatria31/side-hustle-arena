@@ -76,7 +76,7 @@ export default async function ArenaLandingPage() {
                   Cara Kerjanya
                 </ButtonLink>
                 <ButtonLink
-                  href="/arena?tur=1"
+                  href="/cara-kerja"
                   variant="ghost"
                   size="md"
                   data-tour-trigger

@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronDown, Gift, PenLine, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Gift, PenLine, Play, Sparkles } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Card } from '@/components/primitives/Card';
 import { Entrance, Reveal } from '@/components/motion/Reveal';
@@ -114,11 +114,11 @@ export default async function LandingPage() {
                 {ARENA_ENTRY_LABEL}
               </ButtonLink>
               <ButtonLink
-                href="#cara-ikut"
+                href="/cara-kerja"
                 variant="ghost"
                 size="lg"
                 className="rounded-full"
-                iconRight={<ChevronDown size={14} strokeWidth={2.4} aria-hidden />}
+                iconRight={<Play size={14} strokeWidth={2.4} aria-hidden />}
               >
                 Lihat cara kerja
               </ButtonLink>
