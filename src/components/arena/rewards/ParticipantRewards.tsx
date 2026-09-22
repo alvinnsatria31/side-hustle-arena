@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, BarChart3, Coins, Crown, Gift, Quote } from 'lucide-react';
+import { BarChart3, Coins, Crown, Gift, Quote } from 'lucide-react';
 import { Badge } from '@/components/primitives/Badge';
 import { Button } from '@/components/primitives/Button';
 import { RewardIcon } from '@/components/arena/MilestoneRoadmap';
@@ -152,13 +152,12 @@ function NextRewardCard({
             disabled={short > 0 || pending !== null}
             loading={pending === step.slug}
             onClick={() => onClaim(step.slug, step.retryOf)}
-            iconRight={<ArrowRight size={15} aria-hidden />}
           >
             {short > 0 ? `Saldo kurang ${formatPoints(short)} poin` : 'Klaim sekarang'}
           </Button>
         ) : (
           <Link href="/app/arena/projects" className="group inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border border-sk-border bg-white text-[13px] font-bold text-sk-navy transition-colors hover:border-sk-blue/40 hover:text-sk-blue">
-            Kumpulkan poin dari proyek <ArrowRight size={15} aria-hidden className="transition-transform group-hover:translate-x-[3px]" />
+            Kumpulkan poin dari proyek
           </Link>
         )}
         </div>
@@ -373,7 +372,7 @@ export default function ParticipantRewards() {
         subtitle="Tukarkan poinmu dengan produk digital dan hadiah lain."
         action={isStoreEnabled() ? (
           <Link href="/app/store" className="inline-flex h-11 items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline">
-            Produk saya <ArrowRight size={15} aria-hidden />
+            Produk saya
           </Link>
         ) : undefined}
       >

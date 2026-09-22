@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Compass, FolderOpen, LoaderCircle, LogOut, RefreshCw } from 'lucide-react';
+import { Compass, FolderOpen, LoaderCircle, LogOut, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import { useParticipant } from '@/features/arena/participant';
 import { SignInButton } from '@/components/auth/SignInButton';
@@ -229,7 +229,6 @@ function SectionHead({
         className="inline-flex h-11 items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue"
       >
         {link.label}
-        <ArrowRight size={15} aria-hidden />
       </Link>
     </div>
   );

@@ -32,19 +32,25 @@ test.describe("avatar on arrival", () => {
     await page.keyboard.press("Escape");
     await expect(picker).toBeVisible();
 
-    await picker.getByRole("radio", { name: "Api" }).click();
-    await expect(picker.getByRole("radio", { name: "Api" })).toHaveAttribute("aria-checked", "true");
+    await picker.getByRole("radio", { name: "Avatar 15" }).click();
+    await expect(picker.getByRole("radio", { name: "Avatar 15" })).toHaveAttribute("aria-checked", "true");
     await picker.getByRole("button", { name: "Masuk Arena" }).click();
 
     await expect(picker).toBeHidden();
     const [saved] = await db`select avatar_id from identity.users where auth_subject = ${AUTH_SUBJECT}`;
-    expect(saved.avatar_id).toBe("fire");
+    expect(saved.avatar_id).toBe("a015");
 
     // The choice shows up in the navbar without a reload, then survives one.
-    await expect(page.getByTitle("Api").first()).toBeVisible();
+    // AvatarBadge is decorative (alt="" and no title), so assert on the navbar
+    // avatar image source instead of a title.
+    const navbarAvatar = page.locator('button[aria-label^="Menu pengguna"] img').first();
+    await expect(navbarAvatar).toBeVisible();
+    await expect(navbarAvatar).toHaveAttribute("src", /a015/);
     await page.reload();
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByTitle("Api").first()).toBeVisible();
+    const navbarAvatarAfterReload = page.locator('button[aria-label^="Menu pengguna"] img').first();
+    await expect(navbarAvatarAfterReload).toBeVisible();
+    await expect(navbarAvatarAfterReload).toHaveAttribute("src", /a015/);
   });
 
   test("a signed-in participant is never asked to sign in again", async ({ page }) => {

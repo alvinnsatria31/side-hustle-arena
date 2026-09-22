@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, type LucideIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /**
@@ -45,7 +45,6 @@ export function EmptyState({
           className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[var(--radius-sk-md)] bg-white px-4 text-[13px] font-bold text-sk-blue shadow-sk-xs transition-colors hover:bg-sk-blue hover:text-white"
         >
           {action.label}
-          <ArrowRight size={15} aria-hidden />
         </Link>
       )}
     </div>

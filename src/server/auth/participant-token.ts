@@ -37,12 +37,29 @@ export class ParticipantSecretMissingError extends Error {
   }
 }
 
-function secretKey(): Uint8Array {
-  const secret = process.env.SESSION_SECRET;
+export class ParticipantSecretWeakError extends Error {
+  constructor() {
+    // No length, no value, no hash of the secret: this message is logged from
+    // request paths, so it must be safe to print anywhere.
+    super("SESSION_SECRET is too short for production use: set a secret of at least 32 characters.");
+    this.name = "ParticipantSecretWeakError";
+  }
+}
+
+function secretKey(env: NodeJS.ProcessEnv = process.env): Uint8Array {
+  const secret = env.SESSION_SECRET;
   // Fail loudly rather than returning "not signed in": a missing secret is a
   // misconfigured deployment, not an anonymous visitor, and silently treating
   // every participant as logged out would look like a mass logout instead.
   if (!secret) throw new ParticipantSecretMissingError();
+  // HS256 is only as strong as its key: under 256 bits a production cookie can
+  // be brute-forced offline, so a short production secret fails closed at first
+  // use — there is no boot hook in Next, this is the earliest reachable point —
+  // instead of minting sessions nobody can trust. Only APP_ENV=production is
+  // gated (mirroring getStorageEnvironment in src/server/storage/config.ts), so
+  // CI (APP_ENV=test with its 32+ char placeholder), the Dockerfile build, and
+  // the local sandbox keep working untouched.
+  if (env.APP_ENV === "production" && secret.length < 32) throw new ParticipantSecretWeakError();
   return new TextEncoder().encode(secret);
 }
 

@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarOff } from 'lucide-react';
+import { CalendarOff } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Reveal } from '@/components/motion/Reveal';
 import { ProjectPreviewCard, type LandingProject } from '@/components/landing/ProjectPreviewCard';
@@ -51,7 +51,6 @@ export function LandingProjectRail({
               href={entryHref}
               size="lg"
               className="rounded-full"
-              iconRight={<ArrowRight size={16} strokeWidth={2.4} aria-hidden />}
             >
               {ARENA_ENTRY_LABEL}
             </ButtonLink>

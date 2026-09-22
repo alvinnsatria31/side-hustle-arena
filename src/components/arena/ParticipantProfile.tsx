@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Gift } from 'lucide-react';
+import { Gift } from 'lucide-react';
 import { useParticipant } from '@/features/arena/participant';
 import { Badge } from '@/components/primitives/Badge';
 import { AvatarChooser } from '@/components/arena/AvatarChooser';
@@ -36,7 +36,7 @@ export default function ParticipantProfile() {
           <span className="block text-[16px] font-bold text-sk-navy">Poin &amp; hadiah</span>
           <span className="mt-0.5 block text-[13px] text-sk-muted">Klaim hadiah tangga, tukar poin di katalog, dan lihat riwayat hadiahmu.</span>
         </span>
-        <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sk-blue">Buka <ArrowRight size={15} aria-hidden className="transition-transform group-hover:translate-x-[3px]" /></span>
+        <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sk-blue">Buka</span>
       </Link>
     </section>
     {data && !resource.loading && <>

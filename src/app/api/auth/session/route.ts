@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { PARTICIPANT_COOKIE, ParticipantSecretMissingError, verifyParticipantToken } from "@/server/auth/participant-token";
+import { PARTICIPANT_COOKIE, ParticipantSecretMissingError, ParticipantSecretWeakError, verifyParticipantToken } from "@/server/auth/participant-token";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +25,10 @@ export async function GET() {
     const token = (await cookies()).get(PARTICIPANT_COOKIE)?.value;
     return Response.json({ data: { signedIn: (await verifyParticipantToken(token)) !== null } }, { headers: noStore });
   } catch (error) {
-    // A missing secret means nobody can ever sign in. Reporting that as "not
+    // A missing or too-short secret means nobody can ever sign in. Reporting that as "not
     // signed in" would leave the popup polling a loop that cannot terminate, so
     // fail loudly enough for the client to stop and say so.
-    if (error instanceof ParticipantSecretMissingError) {
+    if (error instanceof ParticipantSecretMissingError || error instanceof ParticipantSecretWeakError) {
       return Response.json({ error: { code: "INTERNAL_ERROR", message: "Sign-in is unavailable." } }, { status: 503, headers: noStore });
     }
     return Response.json({ error: { code: "INTERNAL_ERROR", message: "Sign-in is unavailable." } }, { status: 500, headers: noStore });

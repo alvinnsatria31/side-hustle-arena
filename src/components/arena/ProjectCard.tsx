@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { ArrowRight, Timer } from 'lucide-react';
+import { Timer } from 'lucide-react';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { FOLDER_LIFT, FOLDER_WRAP, FolderSheets } from '@/components/motion/FolderStack';
 import { Badge } from '@/components/primitives/Badge';
@@ -131,7 +131,6 @@ export function ProjectCard({ project, recommended, href, hrefPrefix = '/arena/p
             className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-[var(--radius-sk-md)] bg-sk-blue px-3 text-[12.5px] font-bold text-white shadow-sk-btn transition-all hover:-translate-y-px hover:bg-sk-blue-700"
           >
             Lihat proyek
-            <ArrowRight size={14} aria-hidden className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
         </div>
       </article>

@@ -294,6 +294,16 @@ is the entire safety net:
 - mirrored to COS under `db-backups/`, because a dump that only exists on this
   box dies with this box
 - 14 days retained locally
+- **encrypted before it leaves the box when configured:** set
+  `BACKUP_AGE_RECIPIENT` (age public key, preferred — `age-keygen` once,
+  offline) or `BACKUP_GPG_RECIPIENT` (gpg fallback) in `arena.env` and only the
+  `*.age` / `*.gpg` ciphertext is mirrored; the local copy stays plaintext so
+  verification and local restores are untouched. With neither set the mirror
+  stays plaintext with a warning. A failed COS mirror now fails the cron job
+  (exit 1, after the local dump and retention are safe) instead of passing
+  silently — decrypt with `age --decrypt -i key.txt -o v.dump <file>.age`
+  (or `gpg --decrypt -o v.dump <file>.gpg`) before the `pg_restore --list`
+  check below.
 
 The storage key can write and read objects but not `ListBucket`, so `mc ls` and
 `mc stat` answer *Access Denied* even for objects that uploaded fine. Verify by

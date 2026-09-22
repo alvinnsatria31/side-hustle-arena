@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, FileText, Sparkles } from 'lucide-react';
+import { FileText, Sparkles } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
@@ -169,9 +169,6 @@ export function SprintHero({ name, week, active, focus }: SprintHeroProps) {
               size="md"
               variant="primary"
               className="group rounded-full"
-              iconRight={
-                <ArrowRight size={16} aria-hidden className="transition-transform duration-200 group-hover:translate-x-[3px]" />
-              }
             >
               {focus?.label ?? 'Jelajahi proyek'}
             </ButtonLink>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, Medal, Sparkles } from 'lucide-react';
+import { CalendarClock, Medal, Sparkles } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
 import {
@@ -162,7 +162,6 @@ export function EnrollmentCard({
             <ButtonLink
               size="sm"
               href={`/app/arena/result/${slug}`}
-              iconRight={<ArrowRight size={14} aria-hidden />}
             >
               Lihat hasil
             </ButtonLink>
@@ -170,7 +169,6 @@ export function EnrollmentCard({
             <ButtonLink
               size="sm"
               href={`/app/arena/submission/${slug}`}
-              iconRight={<ArrowRight size={14} aria-hidden />}
             >
               Lihat kiriman
             </ButtonLink>
@@ -178,7 +176,6 @@ export function EnrollmentCard({
             <ButtonLink
               size="sm"
               href={`/app/arena/workspace/${slug}`}
-              iconRight={<ArrowRight size={14} aria-hidden />}
             >
               Lanjutkan
             </ButtonLink>

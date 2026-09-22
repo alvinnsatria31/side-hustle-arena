@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Bookmark, Check, Clock, Coins, Download, KeyRound, LayoutGrid, PackageOpen } from 'lucide-react';
+import { Bookmark, Check, Clock, Coins, Download, KeyRound, LayoutGrid, PackageOpen } from 'lucide-react';
 import { FOLDER_LIFT, FOLDER_WRAP, FolderSheets } from '@/components/motion/FolderStack';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { getStoreCatalog, type StoreListItem } from '@/lib/store-client';
@@ -137,7 +137,6 @@ function CatalogCard({
               )}
             >
               {owned ? 'Buka produk' : short > 0 ? `Kurang ${formatPoints(short)} poin` : 'Tukar poin'}
-              <ArrowRight size={14} aria-hidden className="transition-transform duration-200 group-hover/cta:translate-x-[3px]" />
             </Link>
           )}
           <button

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { ArrowRight, Check, Clock, Download, KeyRound } from 'lucide-react';
+import { Check, Clock, Download, KeyRound } from 'lucide-react';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { Badge } from '@/components/primitives/Badge';
 import { formatIdrMinor, type StoreListItem } from '@/lib/store-client';
@@ -58,7 +58,7 @@ export function ProductCard({ product, owned, href }: { product: StoreListItem; 
         <PriceLine product={product} comingSoon={comingSoon} />
         {!comingSoon && (
           <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-sk-blue">
-            Lihat <ArrowRight size={14} aria-hidden />
+            Lihat
           </span>
         )}
       </div>

@@ -29,9 +29,6 @@ async function fixture(t, patch = {}) {
     insert into identity.users (auth_subject, email_cache)
     values (${`outbox-admin-${randomUUID()}`}, 'fixture@example.invalid') returning id`;
   t.after(async () => {
-    await sql`delete from audit.logs where actor_subject = ${ACTOR} and entity_id in (
-      select d.id::text from notifications.deliveries d
-      join notifications.events e on e.id = d.event_id where e.user_id = ${user.id})`;
     await sql`delete from notifications.deliveries where event_id in (select id from notifications.events where user_id = ${user.id})`;
     await sql`delete from notifications.events where user_id = ${user.id}`;
     await sql`delete from identity.users where id = ${user.id}`;

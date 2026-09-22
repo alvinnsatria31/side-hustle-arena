@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, RefreshCw, Trophy } from 'lucide-react';
+import { RefreshCw, Trophy } from 'lucide-react';
 import { AvatarBadge } from '../AvatarBadge';
 import { DivisionBadge } from '../leaderboard/DivisionBadge';
 import { Podium } from '../leaderboard/Podium';
@@ -94,7 +94,7 @@ export function LeaderboardPreview({ history }: { history: ParticipantOverview['
             href="/app/arena/leaderboard"
             className="mt-3 inline-flex h-11 items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue"
           >
-            Lihat halaman peringkat <ArrowRight size={15} aria-hidden />
+            Lihat halaman peringkat
           </Link>
         </div>
       </section>
@@ -122,7 +122,7 @@ export function LeaderboardPreview({ history }: { history: ParticipantOverview['
           href="/app/arena/leaderboard"
           className="inline-flex h-11 items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue"
         >
-          Lihat lengkap <ArrowRight size={15} aria-hidden />
+          Lihat lengkap
         </Link>
       </div>
 

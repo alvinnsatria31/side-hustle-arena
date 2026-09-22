@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Clock3, Users } from 'lucide-react';
+import { Clock3, Users } from 'lucide-react';
 import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
 import type { PublicArenaHome } from '@/lib/arena-view';
 
@@ -45,11 +45,6 @@ export function ProjectPeekCard({ project }: { project: Project }) {
 
         <span className="mt-4 inline-flex items-center gap-1 border-t border-sk-border pt-3.5 text-[12.5px] font-bold text-sk-blue">
           Lihat brief
-          <ArrowRight
-            size={13}
-            aria-hidden
-            className="transition-transform group-hover:translate-x-0.5"
-          />
         </span>
       </div>
     </Link>

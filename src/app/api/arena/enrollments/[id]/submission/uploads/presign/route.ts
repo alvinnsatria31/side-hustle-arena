@@ -13,6 +13,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     return arenaData(await createArenaUploadIntent({ userId: user.id, enrollmentId: (await params).id, input: await request.json() }), 201);
   } catch (error) {
+    // Same 429 shape as the CV scanner (src/app/api/cv-scan/route.ts): the
+    // envelope's arenaError carries no headers, and a limiter without a
+    // Retry-After leaves the client guessing when to come back.
+    if (error instanceof ArenaDomainError && error.code === "RATE_LIMITED") {
+      const retryAfter = typeof error.details?.retryAfterSeconds === "number" ? error.details.retryAfterSeconds : 60;
+      return Response.json(
+        { error: { code: "RATE_LIMITED", message: error.message } },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": String(retryAfter) } },
+      );
+    }
     return arenaError(error instanceof SyntaxError ? new ArenaDomainError("VALIDATION_ERROR", "Invalid JSON request body.") : error);
   }
 }

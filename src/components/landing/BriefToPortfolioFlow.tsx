@@ -1,4 +1,3 @@
-import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /**
@@ -47,7 +46,7 @@ function Connector() {
       aria-hidden
       className="grid flex-none place-items-center self-center text-sk-blue-tint-border max-md:rotate-90"
     >
-      <ArrowRight size={20} strokeWidth={2.4} />
+      <span className="block h-px w-5 bg-current max-md:h-5 max-md:w-px" />
     </span>
   );
 }

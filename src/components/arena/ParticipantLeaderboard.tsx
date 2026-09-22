@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { useParticipant } from '@/features/arena/participant';
 import { ArenaApiError, getAllTimeLeaderboard, getLeaderboard, type AllTimeLeaderboardResponse, type LeaderboardResponse } from '@/lib/arena-client';
 import { getParticipantOverview, getParticipantPoints, useParticipantResource } from '@/lib/participant-client';
@@ -89,7 +89,7 @@ function EmptyBoard({ weekly }: { weekly: boolean }) {
         Papan diisi setelah minggu difinalisasi. Selesaikan kirimanmu dulu, posisimu muncul di sini.
       </p>
       <Link href="/app/arena/projects" className="inline-flex h-11 items-center gap-1.5 text-[13px] font-bold text-sk-blue hover:underline">
-        Jelajahi proyek <ArrowRight size={15} aria-hidden />
+        Jelajahi proyek
       </Link>
     </div>
   );

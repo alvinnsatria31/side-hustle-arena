@@ -7,7 +7,7 @@ export const WHATSAPP_SUPPORT_URL = 'https://wa.me/6285117304579?text=Halo%20Adm
 
 export function FloatingWhatsApp() {
   const pathname = usePathname();
-  const hasBottomNav = Boolean(pathname?.startsWith('/app') && !pathname.startsWith('/app/admin'));
+  const hasBottomNav = Boolean(pathname?.startsWith('/app') && !pathname?.startsWith('/app/admin'));
 
   return (
     <a
@@ -22,7 +22,7 @@ export function FloatingWhatsApp() {
           : 'bottom-[max(1.5rem,env(safe-area-inset-bottom))]',
       )}
     >
-      <span role="tooltip" className="pointer-events-none absolute right-0 bottom-full mb-3 w-max max-w-[calc(100vw-3rem)] rounded-md bg-sk-navy px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">
+      <span role="tooltip" aria-hidden="true" className="pointer-events-none absolute right-0 bottom-full mb-3 w-max max-w-[calc(100vw-3rem)] rounded-md bg-sk-navy px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">
         Butuh bantuan? Chat kami di WhatsApp
       </span>
       <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" fill="currentColor">

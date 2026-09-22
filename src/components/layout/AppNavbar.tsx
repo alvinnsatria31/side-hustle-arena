@@ -48,9 +48,6 @@ function usePointBalance(pathname: string) {
  * the active page. Hover is pure CSS on purpose: the old hover pill used its
  * own layoutId and got stuck when the pointer moved fast between links.
  *
- * First-visit nudge: links the user has never clicked gently wiggle with a
- * blue dot. Any single click sets `sha-nav-seen-v1` and kills it for good.
- *
  * Section links show from `md`; below that the bottom tab bar is the
  * navigation and the avatar menu carries the full list. The link row scrolls
  * sideways rather than wrapping when a tablet is too narrow for all of it.
@@ -59,7 +56,7 @@ export function AppNavbar() {
   const pathname = usePathname();
   const user = useParticipant();
   const isAdmin = useIsAdmin();
-  const [unread, setUnread] = useState(0);
+  const [unread, setUnread] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const balance = usePointBalance(pathname);
@@ -196,11 +193,11 @@ export function AppNavbar() {
             <Link
               href="/app/notifications"
               title="Notifikasi"
-              aria-label={`Notifikasi, ${unread} belum dibaca`}
+              aria-label={unread === null ? 'Notifikasi' : `Notifikasi, ${unread} belum dibaca`}
               className="relative grid h-10 w-10 place-items-center rounded-full border border-[#E2E8F0] bg-white text-[#2563EB] shadow-xs transition-colors hover:border-[#CBD5E1] hover:bg-[#F8FAFC] focus-visible:outline-2 focus-visible:outline-sk-blue focus-visible:outline-offset-2"
             >
               <Bell size={18} strokeWidth={2.1} aria-hidden />
-              {unread > 0 && (
+              {unread !== null && unread > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-sk-error px-1 text-center font-mono text-[10px] font-bold leading-none text-white ring-2 ring-white">
                   {unread > 99 ? '99+' : unread}
                 </span>

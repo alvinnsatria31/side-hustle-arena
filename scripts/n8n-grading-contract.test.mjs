@@ -98,16 +98,12 @@ async function cleanup(ids) {
           await sql`delete from arena.skill_evidence where review_id = ${review.id}`;
           await sql`delete from arena.review_scores where review_id = ${review.id}`;
           await sql`delete from arena.review_overrides where review_id = ${review.id}`;
-          await sql`delete from audit.logs where entity_id = ${review.id}`;
         }
         await sql`delete from arena.reviews where submission_version_id = ${version.id}`;
-        const jobs = await sql`select id from arena.review_jobs where submission_version_id = ${version.id}`;
-        for (const job of jobs) await sql`delete from audit.logs where entity_id = ${job.id}`;
         await sql`delete from arena.review_jobs where submission_version_id = ${version.id}`;
         // Migration 0007 hangs artifacts off the VERSION, not the review — the
         // finalization suite once deadlocked on exactly this.
         await sql`delete from arena.review_artifacts where submission_version_id = ${version.id}`;
-        await sql`delete from audit.logs where entity_id = ${version.id}`;
         await sql`delete from arena.submission_version_items where submission_version_id = ${version.id}`;
       }
       await sql`delete from arena.submission_versions where submission_id = ${submission.id}`;

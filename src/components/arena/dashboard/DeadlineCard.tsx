@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, CalendarClock } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { useSettledReducedMotion } from '@/components/motion/Reveal';
 import { sprintRemainingParts } from '@/lib/dashboard-view';
@@ -74,7 +74,7 @@ export function DeadlineCard({
           href={href}
           className="inline-flex items-center gap-1 text-[12px] font-bold text-sk-blue hover:underline"
         >
-          Detail <ArrowRight size={12} aria-hidden />
+          Detail
         </Link>
       </div>
 

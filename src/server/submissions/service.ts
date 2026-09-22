@@ -23,6 +23,7 @@ import { overfilledRequirements, unmetRequirements } from "@/lib/submission-requ
 import { checkExternalUrlAccess } from "./url-access";
 import { planVersionSnapshots, resolveVersionItemStorage, type FrozenArtifact } from "./version-core";
 import { draftLinkSchema, draftSubmissionSchema, supportedFileMimeTypes, uploadPresignSchema } from "./schemas";
+import { checkUploadRateLimit, uploadRateLimitSubject, type UploadRateLimitKind } from "./upload-rate-limit";
 
 const MAX_FILES = 5;
 const MAX_LINKS = 5;
@@ -166,6 +167,26 @@ function mapStorageError(error: unknown): never {
   throw new ArenaDomainError("STORAGE_NOT_CONFIGURED", "Private development storage is not configured.");
 }
 
+/**
+ * Volume guard for uploads, checked after the request is known-valid.
+ *
+ * Invalid requests (wrong type, too big, over the file cap, unknown intent)
+ * are refused before this, so a mistake the endpoint answers for free never
+ * spends the caller's hourly allowance — the same rule the CV scanner applies
+ * by counting only requests that reach extraction.
+ */
+async function assertUploadAllowance(kind: UploadRateLimitKind, userId: string) {
+  const decision = await checkUploadRateLimit(kind, uploadRateLimitSubject(userId));
+  if (decision.degraded) {
+    // The shared counter is unreachable, so this instance is guarding upload
+    // volume on its own. Worth knowing about before abuse says so.
+    console.warn(`upload ${kind} rate limiter fell back to in-memory counting; the shared counter is unavailable.`);
+  }
+  if (!decision.allowed) {
+    throw new ArenaDomainError("RATE_LIMITED", "Too many upload requests. Try again later.", { retryAfterSeconds: decision.retryAfterSeconds });
+  }
+}
+
 export async function getArenaSubmission({ userId, enrollmentId }: { userId: string; enrollmentId: string }) {
   const db = getDb();
   const context = await ownedContext(db, userId, enrollmentId);
@@ -222,6 +243,7 @@ export async function createArenaUploadIntent({ userId, enrollmentId, input, now
   if (existingFiles.filter((item) => item.itemType === "FILE").length >= MAX_FILES || existingFiles.filter((item) => item.requirementId === requirement.id).length >= limitFor(requirement, "FILE")) {
     throw new ArenaDomainError("FILE_LIMIT_EXCEEDED", "The file limit for this submission requirement has been reached.");
   }
+  await assertUploadAllowance("presign", userId);
 
   const storageKey = createSubmissionObjectKey(getStorageEnvironment());
   const expiresAt = new Date(now.getTime() + UPLOAD_INTENT_TTL_MS);
@@ -246,6 +268,10 @@ export async function finalizeArenaUpload({ userId, enrollmentId, intentId, now 
   const intent = (await db.select().from(uploadIntents).where(and(eq(uploadIntents.id, intentId), eq(uploadIntents.userId, userId), eq(uploadIntents.enrollmentId, enrollmentId), isNull(uploadIntents.consumedAt))))[0];
   if (!intent) throw new ArenaDomainError("UPLOAD_INTENT_NOT_FOUND", "Upload intent not found.");
   if (intent.expiresAt <= now) throw new ArenaDomainError("UPLOAD_INTENT_EXPIRED", "Upload intent has expired.");
+  // After ownership and expiry are established but before the storage reads:
+  // a forged or expired intentId fails lookup above and spends nothing, while
+  // every attempt that reaches the download below is counted.
+  await assertUploadAllowance("finalize", userId);
 
   let object: Awaited<ReturnType<typeof headPrivateObject>>;
   try {

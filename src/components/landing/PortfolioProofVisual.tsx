@@ -1,4 +1,4 @@
-import { ArrowRight, FileText } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /** An illustrative, non-interactive example of entering Arena work into a profile. */
@@ -8,7 +8,6 @@ export function PortfolioProofVisual({ className }: { className?: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sk-border bg-[#f8faff] px-5 py-4">
         <div className="flex items-center gap-2 text-[11px] font-bold text-sk-navy">
           <span className="rounded-full bg-sk-blue-tint px-2.5 py-1 text-sk-blue-700">Hasil Arena</span>
-          <ArrowRight size={14} aria-hidden className="text-sk-blue" />
           <span>Projects di LinkedIn</span>
         </div>
         <span className="rounded-full border border-sk-border bg-white px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">Ilustrasi</span>

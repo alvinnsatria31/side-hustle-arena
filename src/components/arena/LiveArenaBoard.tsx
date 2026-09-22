@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Clock3 } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 import { DeadlineCountdown } from '@/components/arena/DeadlineCountdown';
 
 export interface LiveArenaPoints {
@@ -108,7 +108,6 @@ export function LiveArenaBoard({
               className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md bg-sk-blue px-4 text-[13.5px] font-extrabold text-white shadow-sk-btn transition-colors hover:bg-sk-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sk-blue focus-visible:ring-offset-2"
             >
               Pilih proyek pekan ini
-              <ArrowRight size={16} aria-hidden />
             </Link>
           </>
         )}

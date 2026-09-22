@@ -134,6 +134,13 @@
       "when": 1789658380536,
       "tag": "0018_numerous_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790091242498,
+      "tag": "0019_audit_logs_append_only",
+      "breakpoints": true
     }
   ]
 }

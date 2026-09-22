@@ -49,17 +49,23 @@ test.describe('signed out', () => {
 });
 
 test.describe('signed in', () => {
-  test('the sidebar rail carries it', async ({ page }) => {
+  test('the desktop capsule navbar carries it', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto('/app/arena');
-    const rail = page.getByRole('navigation', { name: 'Navigasi Arena' });
-    const tools = rail.getByRole('link', { name: /Tools/ });
+    // The sidebar rail ("Navigasi Arena") is gone; on lg and up the app bar's
+    // capsule ("Navigasi aplikasi") carries Tools as a promo pill on the right.
+    const bar = page.getByRole('navigation', { name: 'Navigasi aplikasi' });
+    const tools = bar.getByRole('link', { name: /Tools/ });
     await expect(tools).toBeVisible();
     await expect(tools).toHaveAttribute('href', TOOLS_URL);
     await expect(tools).toHaveAttribute('target', '_blank');
+    // Without noopener the opened tab can reach back through window.opener.
+    await expect(tools).toHaveAttribute('rel', /noopener/);
   });
 
   test('so does the small-screen menu', async ({ page }) => {
+    // Below lg the capsule promo is hidden, so Tools moves into the user menu
+    // (the bottom bar "Navigasi bawah" carries section tabs only).
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/app/arena');
     const button = page.getByRole('button', { name: /Menu pengguna/ });

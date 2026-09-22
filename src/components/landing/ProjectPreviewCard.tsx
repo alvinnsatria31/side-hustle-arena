@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, FileCheck2, Sparkles } from 'lucide-react';
+import { CalendarClock, FileCheck2, Sparkles } from 'lucide-react';
 import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
 
 export interface LandingProject {
@@ -97,12 +97,6 @@ export function ProjectPreviewCard({
           )}
           <span className="ml-auto inline-flex items-center gap-1.5 text-sk-blue">
             Ambil brief
-            <ArrowRight
-              size={14}
-              strokeWidth={2.6}
-              aria-hidden
-              className="transition-transform duration-300 ease-out group-hover:translate-x-1"
-            />
           </span>
         </div>
       </div>

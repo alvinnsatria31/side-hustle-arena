@@ -94,14 +94,12 @@ async function cleanup() {
           // skills, but a void-less run on a skilled project would leave rows
           // that block the reviews delete below.
           await sql`delete from arena.skill_evidence where review_id = ${review.id}`;
-          await sql`delete from audit.logs where entity_id = ${review.id}`;
         }
         await sql`delete from arena.reviews where submission_version_id = ${version.id}`;
         await sql`delete from arena.review_jobs where submission_version_id = ${version.id}`;
         // Extracted artifacts hang off the version, not the review (0007), so
         // they outlive the reviews and block the submission_versions delete.
         await sql`delete from arena.review_artifacts where submission_version_id = ${version.id}`;
-        await sql`delete from audit.logs where entity_id = ${version.id}`;
         await sql`delete from arena.submission_version_items where submission_version_id = ${version.id}`;
       }
       await sql`delete from arena.submission_versions where submission_id = ${submission.id}`;
@@ -110,10 +108,8 @@ async function cleanup() {
       await sql`delete from arena.submissions where id = ${submission.id}`;
     }
     await sql`delete from arena.workspace_progress where enrollment_id = ${enrollment.id}`;
-    await sql`delete from audit.logs where entity_id = ${enrollment.id}`;
     await sql`delete from arena.enrollments where id = ${enrollment.id}`;
   }
-  await sql`delete from audit.logs where entity_id = ${weekId}`;
   await sql`delete from arena.project_submission_requirements where project_id = ${projectId}`;
   await sql`delete from arena.project_rubric_criteria where project_id = ${projectId}`;
   await sql`delete from arena.projects where id = ${projectId}`;
