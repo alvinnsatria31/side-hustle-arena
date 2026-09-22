@@ -336,6 +336,7 @@ export function ArenaDashboardMockup() {
       const clamped = Math.max(0, Math.min(index, TOUR_STEPS.length - 1));
       setCurrentStepIndex(clamped);
       setTourActive(true);
+      setLinkedinModalOpen(false);
 
       const step = TOUR_STEPS[clamped];
       document.body.classList.add('tour-active');
@@ -357,20 +358,26 @@ export function ArenaDashboardMockup() {
   }, [goToStep, clearSpotlight]);
 
   useEffect(() => {
-    if (!tourActive) return;
+    if (!tourActive && !linkedinModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (linkedinModalOpen) {
+          setLinkedinModalOpen(false);
+          return;
+        }
         setTourActive(false);
         clearSpotlight();
-      } else if (e.key === 'ArrowRight' && currentStepIndex < TOUR_STEPS.length - 1) {
-        goToStep(currentStepIndex + 1);
-      } else if (e.key === 'ArrowLeft' && currentStepIndex > 0) {
-        goToStep(currentStepIndex - 1);
+      } else if (!linkedinModalOpen) {
+        if (e.key === 'ArrowRight' && currentStepIndex < TOUR_STEPS.length - 1) {
+          goToStep(currentStepIndex + 1);
+        } else if (e.key === 'ArrowLeft' && currentStepIndex > 0) {
+          goToStep(currentStepIndex - 1);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tourActive, currentStepIndex, goToStep, clearSpotlight]);
+  }, [tourActive, linkedinModalOpen, currentStepIndex, goToStep, clearSpotlight]);
 
   const activeEnrollment = mockOverview.history[0];
   const pastEnrollment = mockOverview.history[1];
@@ -793,13 +800,18 @@ export function ArenaDashboardMockup() {
         {/* LINKEDIN SHOWCASE & PREVIEW MODAL */}
         <AnimatePresence>
           {linkedinModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 bg-slate-900/70 backdrop-blur-sm overflow-y-auto"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setLinkedinModalOpen(false);
+              }}
+            >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ duration: 0.2 }}
-                className="relative w-full max-w-lg rounded-[var(--radius-sk-2xl)] border border-slate-200 bg-white p-6 shadow-2xl"
+                className="relative my-auto w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[var(--radius-sk-2xl)] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl"
               >
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2">
@@ -873,14 +885,24 @@ export function ArenaDashboardMockup() {
                   <strong>💡 Alur Otomatisasi (Next):</strong> Setelah integrasi LinkedIn API aktif, peserta cukup otorisasi akun 1 kali dan setiap sertifikat selesai akan langsung dipublikasikan ke profil & feed tanpa perlu copy-paste manual.
                 </div>
 
-                <div className="mt-5 flex justify-end">
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setLinkedinModalOpen(false)}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                   >
                     Tutup Preview
                   </button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setLinkedinModalOpen(false);
+                      goToStep(5);
+                    }}
+                    iconRight={<ArrowRight size={14} strokeWidth={2.4} />}
+                  >
+                    Lanjut ke Langkah CV Scanner
+                  </Button>
                 </div>
               </motion.div>
             </div>
@@ -888,7 +910,7 @@ export function ArenaDashboardMockup() {
         </AnimatePresence>
 
         {/* SPOTLIGHT TUTORIAL FLOATING CALLOUT CARD */}
-        {tourActive && (
+        {tourActive && !linkedinModalOpen && (
           <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 sm:bottom-6 sm:left-1/2 sm:right-auto sm:w-[min(580px,calc(100vw-2rem))] sm:translate-x-[-50%] sm:px-0 sm:pb-0">
             <motion.div
               role="dialog"
@@ -961,45 +983,47 @@ export function ArenaDashboardMockup() {
                   ))}
                 </div>
 
-                {currentStepIndex === 4 && (
-                  <button
-                    type="button"
-                    onClick={() => setLinkedinModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition"
-                  >
-                    <Linkedin size={13} />
-                    Preview LinkedIn
-                  </button>
-                )}
-
-                {currentStepIndex === TOUR_STEPS.length - 1 ? (
-                  <div className="flex items-center gap-2">
-                    <a
-                      href="https://tools.sekolahkarir.id/cv-scanner"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                <div className="flex items-center gap-2">
+                  {currentStepIndex === 4 && (
+                    <button
+                      type="button"
+                      onClick={() => setLinkedinModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition"
                     >
-                      Buka CV Scanner
-                      <ExternalLink size={12} />
-                    </a>
-                    <ButtonLink
-                      href="/arena/projects"
+                      <Linkedin size={13} />
+                      Preview
+                    </button>
+                  )}
+
+                  {currentStepIndex === TOUR_STEPS.length - 1 ? (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href="https://tools.sekolahkarir.id/cv-scanner"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                      >
+                        Buka CV Scanner
+                        <ExternalLink size={12} />
+                      </a>
+                      <ButtonLink
+                        href="/arena/projects"
+                        size="md"
+                        iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
+                      >
+                        Mulai Bertanding
+                      </ButtonLink>
+                    </div>
+                  ) : (
+                    <Button
                       size="md"
+                      onClick={() => goToStep(currentStepIndex + 1)}
                       iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
                     >
-                      Mulai Bertanding
-                    </ButtonLink>
-                  </div>
-                ) : (
-                  <Button
-                    size="md"
-                    onClick={() => goToStep(currentStepIndex + 1)}
-                    iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
-                  >
-                    Lanjut
-                  </Button>
-                )}
+                      Lanjut
+                    </Button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>
