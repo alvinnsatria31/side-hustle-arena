@@ -1,13 +1,26 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/cn';
+
 export const WHATSAPP_SUPPORT_URL = 'https://wa.me/6285117304579?text=Halo%20Admin%20Sekolah%20Karir,%20saya%20butuh%20bantuan%20terkait%20Side%20Hustle%20Arena';
 
 export function FloatingWhatsApp() {
+  const pathname = usePathname();
+  const hasBottomNav = Boolean(pathname?.startsWith('/app') && !pathname.startsWith('/app/admin'));
+
   return (
     <a
       href={WHATSAPP_SUPPORT_URL}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Butuh bantuan? Chat kami di WhatsApp"
-      className="group fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sk-lg transition duration-200 hover:-translate-y-1 hover:shadow-xl focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#25D366] motion-reduce:transform-none motion-reduce:transition-none"
+      className={cn(
+        'group fixed right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sk-lg transition duration-200 hover:-translate-y-1 hover:shadow-xl focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#25D366] motion-reduce:transform-none motion-reduce:transition-none',
+        hasBottomNav
+          ? 'bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-[max(1.5rem,env(safe-area-inset-bottom))]'
+          : 'bottom-[max(1.5rem,env(safe-area-inset-bottom))]',
+      )}
     >
       <span role="tooltip" className="pointer-events-none absolute right-0 bottom-full mb-3 w-max max-w-[calc(100vw-3rem)] rounded-md bg-sk-navy px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">
         Butuh bantuan? Chat kami di WhatsApp
