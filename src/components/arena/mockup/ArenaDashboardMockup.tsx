@@ -264,12 +264,21 @@ function NextRewardCard({
   if (!step) return null;
   const percent = Math.min(100, Math.floor((lifetime / step.pointsRequired) * 100));
   return (
-    <div className="grid gap-5 rounded-[var(--radius-sk-2xl)] bg-white/90 p-5 shadow-sk-md ring-1 ring-white md:grid-cols-[auto_minmax(0,1fr)_280px] md:items-center md:p-6">
-      <span className="relative grid h-20 w-20 place-items-center rounded-3xl bg-[linear-gradient(145deg,#8a6bfc,#246bfd)] text-white shadow-[0_16px_30px_-14px_rgba(109,77,224,0.95)]">
-        <span aria-hidden className="absolute inset-1 rounded-[20px] ring-1 ring-white/30" />
-        <RewardIcon slug={step.slug} size={34} strokeWidth={1.9} aria-hidden />
-      </span>
-      <div className="min-w-0">
+    <div className="grid gap-4 rounded-2xl sm:rounded-[var(--radius-sk-2xl)] bg-white/90 p-4 sm:p-5 shadow-sk-md ring-1 ring-white md:grid-cols-[auto_minmax(0,1fr)_280px] md:items-center md:p-6">
+      <div className="flex items-center gap-3 md:block">
+        <span className="relative grid h-14 w-14 sm:h-20 sm:w-20 shrink-0 place-items-center rounded-2xl sm:rounded-3xl bg-[linear-gradient(145deg,#8a6bfc,#246bfd)] text-white shadow-[0_16px_30px_-14px_rgba(109,77,224,0.95)]">
+          <span aria-hidden className="absolute inset-1 rounded-[14px] sm:rounded-[20px] ring-1 ring-white/30" />
+          <RewardIcon slug={step.slug} size={26} strokeWidth={1.9} aria-hidden className="sm:hidden" />
+          <RewardIcon slug={step.slug} size={34} strokeWidth={1.9} aria-hidden className="hidden sm:block" />
+        </span>
+        <div className="min-w-0 md:hidden">
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#fff3cf] px-2 py-0.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#9a6a07]">
+            <Crown size={11} aria-hidden /> Reward berikutnya
+          </span>
+          <p className="mt-1 text-sm font-extrabold leading-snug tracking-[-0.02em] text-sk-navy">{step.title}</p>
+        </div>
+      </div>
+      <div className="hidden min-w-0 md:block">
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#fff3cf] px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#9a6a07]">
           <Crown size={12} aria-hidden /> Reward berikutnya
         </span>
@@ -277,25 +286,25 @@ function NextRewardCard({
         <p className="mt-1 line-clamp-2 max-w-[60ch] text-[12.5px] leading-relaxed text-sk-muted">{description}</p>
       </div>
       <div>
-        <p className="flex items-center gap-1.5 font-mono text-[15px] font-bold text-sk-warning-ink">
-          <Coins size={16} aria-hidden /> {formatPoints(step.pointsRequired)} poin
+        <p className="flex items-center gap-1.5 font-mono text-sm sm:text-[15px] font-bold text-sk-warning-ink">
+          <Coins size={15} aria-hidden /> {formatPoints(step.pointsRequired)} poin
         </p>
-        <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-sk-track">
+        <div className="mt-2 h-2 sm:mt-2.5 sm:h-2.5 overflow-hidden rounded-full bg-sk-track">
           <div
             className="h-full rounded-full bg-[linear-gradient(90deg,#8a6bfc,#6d4de0)] transition-all duration-700"
             style={{ width: `${percent}%` }}
           />
         </div>
-        <div className="mt-1.5 flex justify-between text-[12px]">
+        <div className="mt-1.5 flex justify-between text-[11px] sm:text-[12px]">
           <span className="font-mono text-sk-muted">
             {formatPoints(Math.min(lifetime, step.pointsRequired))} / {formatPoints(step.pointsRequired)}
           </span>
           <span className="font-bold text-sk-violet-600">{formatPoints(step.deficit)} poin lagi</span>
         </div>
-        <div className="mt-4">
+        <div className="mt-3 sm:mt-4">
           <Link
             href="/app/arena"
-            className="group inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border border-sk-border bg-white text-[13px] font-bold text-sk-navy transition-colors hover:border-sk-blue/40 hover:text-sk-blue"
+            className="group inline-flex h-10 sm:h-11 w-full items-center justify-center gap-1.5 rounded-full border border-sk-border bg-white text-xs sm:text-[13px] font-bold text-sk-navy transition-colors hover:border-sk-blue/40 hover:text-sk-blue"
           >
             Kumpulkan poin dari proyek
           </Link>
@@ -345,7 +354,8 @@ export function ArenaDashboardMockup() {
       }
       const target = document.querySelector<HTMLElement>(`[data-tour="${step.id}"]`);
       if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        target.scrollIntoView({ behavior: 'smooth', block: isMobile ? 'start' : 'center' });
       }
       headingRef.current?.focus({ preventScroll: true });
     },
@@ -394,42 +404,42 @@ export function ArenaDashboardMockup() {
         isAdmin: false,
       }}
     >
-      <div className="min-h-screen bg-sk-bg text-sk-navy pb-32">
+      <div className="min-h-screen bg-sk-bg text-sk-navy pb-44 sm:pb-36">
         {/* Banner Simulasi 1:1 */}
-        <div className="sticky top-0 z-50 flex items-center justify-between border-b border-sk-blue/20 bg-gradient-to-r from-sk-navy via-sk-navy-2 to-sk-blue px-4 py-2.5 text-white shadow-md sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-6 items-center gap-1.5 rounded-full bg-sk-blue px-2.5 text-[11px] font-bold tracking-wide uppercase">
-              <Sparkles size={12} aria-hidden />
+        <div className="sticky top-0 z-50 flex items-center justify-between border-b border-sk-blue/20 bg-gradient-to-r from-sk-navy via-sk-navy-2 to-sk-blue px-3 py-2 text-white shadow-md sm:px-6 sm:py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-5 sm:h-6 shrink-0 items-center gap-1 rounded-full bg-sk-blue px-2 sm:px-2.5 text-[10px] sm:text-[11px] font-bold tracking-wide uppercase">
+              <Sparkles size={11} aria-hidden />
               Simulasi 1:1
             </span>
-            <p className="text-[12.5px] font-medium text-slate-200">
+            <p className="hidden md:block truncate text-xs font-medium text-slate-200">
               Ini adalah pratinjau tampilan nyata <span className="font-bold text-white">Dashboard Peserta Arena</span> saat kamu bertanding.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {!tourActive && (
               <button
                 type="button"
                 onClick={() => goToStep(0)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20 transition-colors"
+                className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-white/20 transition-colors"
               >
-                <Play size={12} fill="currentColor" />
-                Mulai Tur Lagi
+                <Play size={10} fill="currentColor" />
+                Tur
               </button>
             )}
             <Link
               href="/app/arena"
-              className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1 text-xs font-bold text-sk-blue shadow-xs hover:bg-sk-blue-wash transition-colors"
+              className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-sk-blue shadow-xs hover:bg-sk-blue-wash transition-colors sm:px-3.5 sm:text-xs"
             >
               Mulai Bertanding
-              <ArrowUpRight size={13} strokeWidth={2.5} />
+              <ArrowUpRight size={12} strokeWidth={2.5} />
             </Link>
           </div>
         </div>
 
         {/* 1:1 CardChase Header Navigation */}
-        <header className="sticky top-[45px] z-40 border-b border-[#F0F2F5] bg-white/95 backdrop-blur-md shadow-[0_1px_8px_rgba(15,23,42,0.03)]">
-          <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-[37px] sm:top-[45px] z-40 border-b border-[#F0F2F5] bg-white/95 backdrop-blur-md shadow-[0_1px_8px_rgba(15,23,42,0.03)]">
+          <div className="mx-auto flex h-14 sm:h-[72px] max-w-6xl items-center justify-between px-3 sm:px-6 lg:px-8">
             {/* Logo */}
             <div className="flex shrink-0 items-center gap-2">
               <Image
@@ -438,7 +448,7 @@ export function ArenaDashboardMockup() {
                 width={160}
                 height={33}
                 priority
-                className="h-8 w-auto object-contain"
+                className="h-6 sm:h-8 w-auto object-contain"
               />
             </div>
 
@@ -461,18 +471,18 @@ export function ArenaDashboardMockup() {
             </div>
 
             {/* Sisi Kanan: Poin Pill, Bell, Avatar */}
-            <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
-              <div className="flex h-9 items-center gap-1.5 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-3 text-[13px] font-bold text-sk-navy shadow-xs">
-                <Coins size={14} className="text-amber-500" />
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <div className="flex h-8 sm:h-9 items-center gap-1 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-2.5 sm:px-3 text-xs sm:text-[13px] font-bold text-sk-navy shadow-xs">
+                <Coins size={13} className="text-amber-500" />
                 <span className="font-mono tabular-nums">450</span>
-                <span className="text-[11px] font-semibold text-amber-700">poin</span>
+                <span className="text-[10px] sm:text-[11px] font-semibold text-amber-700">poin</span>
               </div>
-              <div className="relative grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-sk-muted">
-                <Bell size={16} />
+              <div className="relative grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-full border border-slate-200 bg-white text-sk-muted">
+                <Bell size={15} />
                 <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-sk-blue ring-2 ring-white" />
               </div>
-              <div className="flex items-center gap-2 pl-1">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-tr from-sk-blue to-sk-blue-400 font-bold text-white text-xs ring-2 ring-white shadow-xs">
+              <div className="flex items-center gap-2 pl-0.5 sm:pl-1">
+                <div className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-full bg-gradient-to-tr from-sk-blue to-sk-blue-400 font-bold text-white text-xs ring-2 ring-white shadow-xs">
                   AP
                 </div>
                 <span className="hidden sm:inline text-xs font-bold text-sk-navy">Alvin Pratama</span>
@@ -482,7 +492,7 @@ export function ArenaDashboardMockup() {
         </header>
 
         {/* Dashboard 1:1 Body Container */}
-        <main className="mx-auto max-w-6xl px-4 pt-6 sm:px-6 md:pt-8 lg:px-8">
+        <main className="mx-auto max-w-6xl px-3 sm:px-6 pt-4 sm:pt-6 md:pt-8 lg:px-8">
           <div className="min-w-0">
             {/* Row 1: Sprint Hero & Deadline Widget */}
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -540,7 +550,7 @@ export function ArenaDashboardMockup() {
               data-tour="tangga-hadiah"
               data-tour-target
               aria-labelledby="tangga-hadiah-title"
-              className="relative mt-10 overflow-hidden rounded-[28px] border border-[#e3dcff] bg-[linear-gradient(135deg,#f6f2ff_0%,#eef4ff_52%,#fff8e8_100%)] p-5 sm:p-7 shadow-sm"
+              className="relative mt-8 sm:mt-10 overflow-hidden rounded-[24px] sm:rounded-[28px] border border-[#e3dcff] bg-[linear-gradient(135deg,#f6f2ff_0%,#eef4ff_52%,#fff8e8_100%)] p-4 sm:p-7 shadow-sm"
             >
               <div aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-sk-violet/15 blur-3xl" />
               <div aria-hidden className="pointer-events-none absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-[#ffd65c]/25 blur-3xl" />
@@ -550,21 +560,21 @@ export function ArenaDashboardMockup() {
                   <span className="font-mono text-[10.5px] font-bold uppercase tracking-[0.16em] text-sk-violet-600">
                     Tangga hadiah
                   </span>
-                  <h2 id="tangga-hadiah-title" className="mt-1.5 text-[22px] font-extrabold tracking-[-0.03em] text-sk-navy sm:text-[26px]">
+                  <h2 id="tangga-hadiah-title" className="mt-1 text-[20px] font-extrabold tracking-[-0.03em] text-sk-navy sm:mt-1.5 sm:text-[26px]">
                     Kumpulkan poin, buka hadiahnya
                   </h2>
-                  <p className="mt-1 max-w-[60ch] text-[13px] leading-relaxed text-sk-muted">
+                  <p className="mt-1 max-w-[60ch] text-xs sm:text-[13px] leading-relaxed text-sk-muted">
                     Poin yang terkumpul membuka anak tangga berikutnya. Tiap hadiah diklaim satu kali memakai saldo poinmu.
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3.5 py-2 font-mono text-[12px] font-bold text-sk-navy shadow-sk-xs">
+                <span className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/85 px-3 py-1.5 sm:px-3.5 sm:py-2 font-mono text-[11px] sm:text-[12px] font-bold text-sk-navy shadow-sk-xs">
                   <Coins size={14} aria-hidden className="text-sk-warning-ink" />
                   0 poin terkumpul
                 </span>
               </div>
 
-              <div className="relative mt-6 space-y-5">
-                <div className="min-w-0 rounded-[var(--radius-sk-2xl)] bg-white/55 px-2 py-5 ring-1 ring-white/80 sm:px-4">
+              <div className="relative mt-5 sm:mt-6 space-y-4 sm:space-y-5">
+                <div className="min-w-0 rounded-[var(--radius-sk-2xl)] bg-white/55 px-2 py-4 sm:py-5 ring-1 ring-white/80 sm:px-4">
                   <RewardLadder ladder={mockLadder} balance={0} pending={null} onClaim={() => {}} />
                 </div>
                 <NextRewardCard
@@ -576,21 +586,21 @@ export function ArenaDashboardMockup() {
             </section>
 
             {/* Row 2: Leaderboard & Proyek Lain */}
-            <div className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            <div className="mt-8 sm:mt-10 grid gap-5 sm:gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               {/* TARGET 4: LEADERBOARD PREVIEW */}
               <section
                 data-tour="leaderboard"
                 data-tour-target
                 aria-labelledby="leaderboard-title"
-                className="rounded-[var(--radius-sk-3xl)] border border-sk-border bg-white p-6 shadow-xs"
+                className="rounded-[var(--radius-sk-2xl)] sm:rounded-[var(--radius-sk-3xl)] border border-sk-border bg-white p-4 sm:p-6 shadow-xs"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="flex items-center gap-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wider text-sk-blue">
+                    <p className="flex items-center gap-1.5 font-mono text-[10px] sm:text-[10.5px] font-bold uppercase tracking-wider text-sk-blue">
                       <Trophy size={13} className="text-amber-500" />
                       Papan peringkat · MINGGU 38
                     </p>
-                    <h2 id="leaderboard-title" className="mt-1 text-[20px] font-extrabold tracking-[-0.03em] text-sk-navy">
+                    <h2 id="leaderboard-title" className="mt-1 text-[18px] sm:text-[20px] font-extrabold tracking-[-0.03em] text-sk-navy">
                       Peringkat minggu ini
                     </h2>
                   </div>
@@ -599,39 +609,39 @@ export function ArenaDashboardMockup() {
                   </span>
                 </div>
 
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <Podium entries={mockPodium} size="md" label="Papan peringkat minggu 38" />
                 </div>
 
-                <div className="mt-6 border-t border-sk-border pt-4">
-                  <div className="flex items-center justify-between rounded-xl bg-sk-blue-wash px-4 py-3 border border-sk-blue-tint-border">
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-sk-blue text-xs font-bold text-white">
+                <div className="mt-5 sm:mt-6 border-t border-sk-border pt-3.5 sm:pt-4">
+                  <div className="flex items-center justify-between rounded-xl bg-sk-blue-wash px-3 sm:px-4 py-2.5 sm:py-3 border border-sk-blue-tint-border">
+                    <div className="flex items-center gap-2.5 sm:gap-3">
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-sk-blue text-xs font-bold text-white shrink-0">
                         2
                       </span>
-                      <div>
-                        <p className="text-xs font-bold text-sk-navy">Alvin Pratama (Kamu)</p>
-                        <p className="text-[11px] text-sk-muted">Desain Produk · Submisi Terverifikasi</p>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-sk-navy truncate">Alvin Pratama (Kamu)</p>
+                        <p className="text-[10.5px] sm:text-[11px] text-sk-muted truncate">Desain Produk · Submisi Terverifikasi</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-bold text-sk-blue">92.0 Poin</p>
-                      <p className="text-[10.5px] font-semibold text-emerald-600">+100 Bonus Poin</p>
+                    <div className="text-right shrink-0 pl-2">
+                      <p className="font-mono text-xs sm:text-sm font-bold text-sk-blue">92.0 Poin</p>
+                      <p className="text-[10px] sm:text-[10.5px] font-semibold text-emerald-600">+100 Bonus Poin</p>
                     </div>
                   </div>
                 </div>
               </section>
 
               {/* Info Divisi & Arena Lain */}
-              <section className="flex flex-col justify-between rounded-[var(--radius-sk-3xl)] border border-sk-border bg-white p-6 shadow-xs">
+              <section className="flex flex-col justify-between rounded-[var(--radius-sk-2xl)] sm:rounded-[var(--radius-sk-3xl)] border border-sk-border bg-white p-4 sm:p-6 shadow-xs">
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-sk-blue">
+                    <span className="font-mono text-[10px] sm:text-[10.5px] font-bold uppercase tracking-wider text-sk-blue">
                       Katalog Aktif
                     </span>
                     <span className="text-xs font-bold text-sk-blue">Lihat Semua</span>
                   </div>
-                  <h3 className="mt-1 text-[20px] font-extrabold text-sk-navy">Pilihan Arena Lainnya</h3>
+                  <h3 className="mt-1 text-[18px] sm:text-[20px] font-extrabold text-sk-navy">Pilihan Arena Lainnya</h3>
                   <p className="mt-1 text-xs text-sk-muted leading-relaxed">
                     Setiap minggu ada 6 divisi yang membuka brief simulasi kerja nyata.
                   </p>
@@ -699,21 +709,21 @@ export function ArenaDashboardMockup() {
               <div
                 data-tour="linkedin"
                 data-tour-target
-                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-sky-300 bg-gradient-to-br from-sky-50 via-white to-blue-50/60 p-5 sm:p-6 shadow-sm"
+                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-sky-300 bg-gradient-to-br from-sky-50 via-white to-blue-50/60 p-4 sm:p-6 shadow-sm"
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-start gap-3.5">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#0077B5] text-white shadow-md shadow-[#0077b5]/25">
-                      <Linkedin size={24} />
+                  <div className="flex items-start gap-3 sm:gap-3.5">
+                    <div className="grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-2xl bg-[#0077B5] text-white shadow-md shadow-[#0077b5]/25">
+                      <Linkedin size={22} className="sm:h-6 sm:w-6" />
                     </div>
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#0077B5]/10 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-[#0077B5] uppercase">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#0077B5]/10 px-2 sm:px-2.5 py-0.5 font-mono text-[10px] sm:text-[10.5px] font-bold text-[#0077B5] uppercase">
                           <Sparkles size={11} /> Portofolio Siap Pamer
                         </span>
-                        <span className="font-mono text-xs font-semibold text-slate-500">ID: SK-ARENA-9204-DATA</span>
+                        <span className="font-mono text-[11px] sm:text-xs font-semibold text-slate-500">ID: SK-ARENA-9204-DATA</span>
                       </div>
-                      <h3 className="mt-1 text-[17px] font-extrabold text-sk-navy">
+                      <h3 className="mt-1 text-base sm:text-[17px] font-extrabold text-sk-navy">
                         Proyek Ini Siap Kamu Pamerkan ke LinkedIn
                       </h3>
                       <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-sk-muted">
@@ -722,11 +732,11 @@ export function ArenaDashboardMockup() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 lg:shrink-0">
                     <button
                       type="button"
                       onClick={() => setLinkedinModalOpen(true)}
-                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0077B5] px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#006097] active:scale-[0.98]"
+                      className="inline-flex h-9 sm:h-10 items-center justify-center gap-2 rounded-xl bg-[#0077B5] px-3.5 sm:px-4 text-xs font-bold text-white shadow-sm transition hover:bg-[#006097] active:scale-[0.98]"
                     >
                       <Share2 size={14} />
                       Lihat Contoh Tampilan
@@ -734,7 +744,7 @@ export function ArenaDashboardMockup() {
                     <button
                       type="button"
                       onClick={copyToClipboard}
-                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
+                      className="inline-flex h-9 sm:h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
                     >
                       {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                       {copied ? 'Teks Tersalin!' : 'Salin Draf Post'}
@@ -747,21 +757,21 @@ export function ArenaDashboardMockup() {
               <div
                 data-tour="cv-scanner"
                 data-tour-target
-                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-teal-50/60 p-5 sm:p-6 shadow-sm"
+                className="mt-6 rounded-[var(--radius-sk-2xl)] border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-teal-50/60 p-4 sm:p-6 shadow-sm"
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-start gap-3.5">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
-                      <FileSearch size={24} />
+                  <div className="flex items-start gap-3 sm:gap-3.5">
+                    <div className="grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
+                      <FileSearch size={22} className="sm:h-6 sm:w-6" />
                     </div>
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-emerald-800 uppercase">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 sm:px-2.5 py-0.5 font-mono text-[10px] sm:text-[10.5px] font-bold text-emerald-800 uppercase">
                           <CheckCircle2 size={11} /> Langkah Berikutnya
                         </span>
-                        <span className="font-mono text-xs font-semibold text-emerald-700">tools.sekolahkarir.id</span>
+                        <span className="font-mono text-[11px] sm:text-xs font-semibold text-emerald-700">tools.sekolahkarir.id</span>
                       </div>
-                      <h3 className="mt-1 text-[17px] font-extrabold text-sk-navy">
+                      <h3 className="mt-1 text-base sm:text-[17px] font-extrabold text-sk-navy">
                         Uji Format & Skor ATS Portofolio Barumu di CV Scanner
                       </h3>
                       <p className="mt-1 max-w-[620px] text-xs leading-relaxed text-sk-muted">
@@ -770,12 +780,12 @@ export function ArenaDashboardMockup() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5 lg:shrink-0">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 lg:shrink-0">
                     <a
                       href="https://tools.sekolahkarir.id/cv-scanner"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
+                      className="inline-flex h-9 sm:h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3.5 sm:px-4 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
                     >
                       <FileSearch size={15} />
                       Buka CV Scanner (Tools)
@@ -785,7 +795,7 @@ export function ArenaDashboardMockup() {
                       href="https://tools.sekolahkarir.id/store"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
+                      className="inline-flex h-9 sm:h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-3.5 text-xs font-bold text-sk-navy shadow-xs transition hover:bg-slate-50 active:scale-[0.98]"
                     >
                       Toko Template CV
                       <ExternalLink size={12} className="text-slate-400" />
@@ -906,7 +916,7 @@ export function ArenaDashboardMockup() {
 
         {/* SPOTLIGHT TUTORIAL FLOATING CALLOUT CARD */}
         {tourActive && !linkedinModalOpen && (
-          <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 sm:bottom-6 sm:left-1/2 sm:right-auto sm:w-[min(580px,calc(100vw-2rem))] sm:translate-x-[-50%] sm:px-0 sm:pb-0">
+          <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:bottom-6 sm:left-1/2 sm:right-auto sm:w-[min(580px,calc(100vw-2rem))] sm:translate-x-[-50%] sm:p-0">
             <motion.div
               role="dialog"
               aria-modal="false"
@@ -914,10 +924,10 @@ export function ArenaDashboardMockup() {
               initial={{ opacity: 0, y: 16, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="rounded-[var(--radius-sk-2xl)] border-2 border-sk-blue bg-white p-5 shadow-[0_26px_70px_rgba(7,21,45,0.4)] sm:p-6"
+              className="rounded-[var(--radius-sk-2xl)] border-2 border-sk-blue bg-white p-3.5 sm:p-6 shadow-[0_26px_70px_rgba(7,21,45,0.4)]"
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-sk-blue-tint px-2.5 py-0.5 font-mono text-[10.5px] font-bold text-sk-blue-700 uppercase tracking-wide">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sk-blue-tint px-2.5 py-0.5 font-mono text-[10px] sm:text-[10.5px] font-bold text-sk-blue-700 uppercase tracking-wide">
                   <Info size={12} strokeWidth={2.5} />
                   {activeStep.badge} · {currentStepIndex + 1}/{TOUR_STEPS.length}
                 </span>
@@ -927,9 +937,9 @@ export function ArenaDashboardMockup() {
                     setTourActive(false);
                     clearSpotlight();
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-sk-muted hover:text-sk-navy transition-colors"
+                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-sk-muted hover:text-sk-navy transition-colors"
                 >
-                  <X size={14} strokeWidth={2.4} />
+                  <X size={13} strokeWidth={2.4} />
                   Tutup Tur
                 </button>
               </div>
@@ -938,19 +948,20 @@ export function ArenaDashboardMockup() {
                 id="mockup-tour-title"
                 ref={headingRef}
                 tabIndex={-1}
-                className="mt-3 text-[19px] font-extrabold tracking-[-0.025em] text-sk-navy focus-visible:outline-none sm:text-[21px]"
+                className="mt-2 text-[16px] font-extrabold tracking-[-0.025em] text-sk-navy focus-visible:outline-none sm:mt-3 sm:text-[21px]"
               >
                 {activeStep.title}
               </h2>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-sk-muted">{activeStep.body}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-sk-muted sm:mt-2 sm:text-[13.5px]">{activeStep.body}</p>
 
-              <div className="mt-5 flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+              <div className="mt-3.5 sm:mt-5 flex items-center justify-between gap-1.5 sm:gap-3 pt-2.5 border-t border-slate-100">
                 {currentStepIndex > 0 ? (
                   <Button
                     variant="ghost"
-                    size="md"
+                    size="sm"
                     onClick={() => goToStep(currentStepIndex - 1)}
-                    iconLeft={<ArrowLeft size={15} strokeWidth={2.4} />}
+                    className="px-2.5 text-xs font-bold sm:px-4 sm:text-sm"
+                    iconLeft={<ArrowLeft size={14} strokeWidth={2.4} />}
                   >
                     Kembali
                   </Button>
@@ -959,61 +970,62 @@ export function ArenaDashboardMockup() {
                 )}
 
                 {/* Dots step indicator */}
-                <div className="flex items-center gap-1.5" role="group" aria-label="Langkah tur">
+                <div className="flex items-center gap-1 sm:gap-1.5" role="group" aria-label="Langkah tur">
                   {TOUR_STEPS.map((s, idx) => (
                     <button
                       key={s.id}
                       type="button"
                       onClick={() => goToStep(idx)}
                       aria-label={`Langkah ${idx + 1}`}
-                      className="grid min-h-8 min-w-8 place-items-center focus-visible:outline-none"
+                      className="grid h-6 w-5 sm:min-h-8 sm:min-w-8 place-items-center focus-visible:outline-none p-0.5"
                     >
                       <span
                         className={cn(
-                          'h-2 rounded-full transition-all duration-200',
-                          idx === currentStepIndex ? 'w-6 bg-sk-blue' : 'w-2 bg-slate-200 hover:bg-slate-300',
+                          'h-1.5 sm:h-2 rounded-full transition-all duration-200',
+                          idx === currentStepIndex ? 'w-4 sm:w-6 bg-sk-blue' : 'w-1.5 sm:w-2 bg-slate-200 hover:bg-slate-300',
                         )}
                       />
                     </button>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   {currentStepIndex === 4 && (
                     <button
                       type="button"
                       onClick={() => setLinkedinModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 transition"
+                      className="hidden xs:inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-800 hover:bg-sky-100 transition sm:px-3 sm:py-1.5 sm:text-xs"
                     >
-                      <Linkedin size={13} />
-                      Lihat Contoh
+                      <Linkedin size={12} />
+                      Contoh
                     </button>
                   )}
 
                   {currentStepIndex === TOUR_STEPS.length - 1 ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <a
                         href="https://tools.sekolahkarir.id/cv-scanner"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                        className="hidden sm:inline-flex h-9 sm:h-10 items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
                       >
-                        Buka CV Scanner
-                        <ExternalLink size={12} />
+                        CV Scanner ↗
                       </a>
                       <ButtonLink
                         href="/app/arena"
-                        size="md"
-                        iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
+                        size="sm"
+                        className="px-3 text-xs font-bold sm:px-4 sm:text-sm"
+                        iconRight={<ArrowRight size={14} strokeWidth={2.4} />}
                       >
                         Mulai Bertanding
                       </ButtonLink>
                     </div>
                   ) : (
                     <Button
-                      size="md"
+                      size="sm"
                       onClick={() => goToStep(currentStepIndex + 1)}
-                      iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
+                      className="px-3.5 text-xs font-bold sm:px-5 sm:text-sm"
+                      iconRight={<ArrowRight size={14} strokeWidth={2.4} />}
                     >
                       Lanjut
                     </Button>

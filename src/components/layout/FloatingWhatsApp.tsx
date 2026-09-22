@@ -7,6 +7,7 @@ export const WHATSAPP_SUPPORT_URL = 'https://wa.me/6285117304579?text=Halo%20Adm
 
 export function FloatingWhatsApp() {
   const pathname = usePathname();
+  if (pathname === '/cara-kerja') return null;
   const hasBottomNav = Boolean(pathname?.startsWith('/app') && !pathname?.startsWith('/app/admin'));
 
   return (
