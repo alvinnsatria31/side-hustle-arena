@@ -74,10 +74,6 @@ const TOUR_STEPS: ReadonlyArray<TourStep> = [
     body: 'Hasil kerjamu dinilai oleh sistem AI dan reviewer berbasis rubrik transparan. Tiga peringkat teratas setiap minggu berhak atas bonus poin ekstra (+200, +100, dan +50 poin).',
   },
   {
-    id: 'history',
-    badge: '5. PORTOFOLIO & REKAM JEJAK',
-    title: 'Bukti kerja nyata yang siap dipamerkan ke HR.',
-    body: 'Semua proyek yang telah selesai tercatat permanen di riwayat pertandingan dan Career Report kamu. Lengkap dengan skor, feedback rubrik, dan skill yang terbukti untuk melamar kerja.',
     id: 'linkedin',
     badge: '5. 1-KLIK PASANG KE LINKEDIN',
     title: 'Generate sertifikat & pasang langsung ke LinkedIn.',
@@ -977,13 +973,6 @@ export function ArenaDashboardMockup() {
                 )}
 
                 {currentStepIndex === TOUR_STEPS.length - 1 ? (
-                  <ButtonLink
-                    href="/arena/projects"
-                    size="md"
-                    iconRight={<ArrowRight size={15} strokeWidth={2.4} />}
-                  >
-                    Mulai Bertanding
-                  </ButtonLink>
                   <div className="flex items-center gap-2">
                     <a
                       href="https://tools.sekolahkarir.id/cv-scanner"
