@@ -25,19 +25,28 @@ const STEPS: ReadonlyArray<StepDefinition> = [
     icon: FolderGit2,
     title: 'Pilih proyek',
     body: 'Buka Arena, baca brief-brief yang dibuka minggu ini, lalu ambil satu yang paling dekat dengan arah kariermu.',
-    image: null,
+    image: {
+      src: '/landing/cara-ikut-01.png',
+      alt: 'Pilih proyek mingguan di Side Hustle Arena',
+    },
   },
   {
     icon: Upload,
     title: 'Kerjakan dan unggah',
     body: 'Workspace-nya memandu dari membaca brief sampai mengunggah hasil, sebelum batas pengumpulan minggu itu.',
-    image: null,
+    image: {
+      src: '/landing/cara-ikut-02.png',
+      alt: 'Kerjakan project brief dan unggah hasil proyek di workspace',
+    },
   },
   {
     icon: Trophy,
     title: 'Dapat penilaian dan manfaatnya',
     body: 'Hasilmu dinilai per kriteria yang sudah terbuka sejak awal. Skornya jadi poin, hasilnya jadi bukti kerja.',
-    image: null,
+    image: {
+      src: '/landing/cara-ikut-03.png',
+      alt: 'Penilaian proyek terperinci, raih poin dan bangun portofolio',
+    },
   },
 ];
 
@@ -45,13 +54,14 @@ const STEPS: ReadonlyArray<StepDefinition> = [
 function StepImage({ image, step }: { image: StepDefinition['image']; step: number }) {
   if (image) {
     return (
-      <div className="relative mt-6 aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-sk-lg)] border border-sk-border bg-sk-blue-wash">
+      <div className="relative mt-6 aspect-[16/10] w-full overflow-hidden rounded-[var(--radius-sk-lg)] border border-sk-border bg-sk-blue-wash shadow-xs">
         <Image
           src={image.src}
           alt={image.alt}
           fill
           sizes="(min-width: 768px) 640px, 100vw"
           className="object-cover"
+          priority={step === 1}
         />
       </div>
     );

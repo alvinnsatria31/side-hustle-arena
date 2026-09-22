@@ -15,6 +15,8 @@ import { getNotifications } from '@/lib/arena-client';
 import { POINTS_CHANGED_EVENT, getParticipantPoints } from '@/lib/participant-client';
 import { cn } from '@/lib/cn';
 
+const NAV_SEEN_KEY = 'sha-nav-seen-v1';
+
 /** Spendable balance for the points pill; re-read on navigation, focus and after a spend. */
 function usePointBalance(pathname: string) {
   const [balance, setBalance] = useState<number | null>(null);
@@ -39,12 +41,15 @@ function usePointBalance(pathname: string) {
 }
 
 /**
- * The participant's top bar: brand, the Arena sections, the Tools promo, then
- * points, notifications and identity.
+ * The participant's top bar: brand left, CardChase-style segmented sections in
+ * the middle, the Tools promo, then points, notifications and identity.
  *
- * It replaced the dark sidebar on 2026-09-22 at the owner's request. The
- * current page is an underline under its label rather than a filled pill,
- * which is what frees the Tools button to be solid brand blue.
+ * Desktop center is a capsule (`bg-[#EEF2F7]`) with one sliding white pill for
+ * the active page. Hover is pure CSS on purpose: the old hover pill used its
+ * own layoutId and got stuck when the pointer moved fast between links.
+ *
+ * First-visit nudge: links the user has never clicked gently wiggle with a
+ * blue dot. Any single click sets `sha-nav-seen-v1` and kills it for good.
  *
  * Section links show from `md`; below that the bottom tab bar is the
  * navigation and the avatar menu carries the full list. The link row scrolls
@@ -96,8 +101,25 @@ export function AppNavbar() {
 
   const name = user.displayName ?? 'Peserta';
 
-  const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [bellHovered, setBellHovered] = useState(false);
+  // Panduan klik pertama: goyang halus + titik. Mati total setelah 1 klik.
+  const [hasInteracted, setHasInteracted] = useState(true);
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem(NAV_SEEN_KEY)) setHasInteracted(false);
+    } catch {
+      setHasInteracted(false);
+    }
+  }, []);
+  const markNavSeen = () => {
+    if (hasInteracted) return;
+    setHasInteracted(true);
+    try {
+      window.localStorage.setItem(NAV_SEEN_KEY, '1');
+    } catch {
+      /* abaikan: animasi hanya mati sesi ini */
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#F0F2F5] bg-white/95 shadow-[0_1px_8px_rgba(15,23,42,0.03)] backdrop-blur-md">
@@ -121,54 +143,62 @@ export function AppNavbar() {
           />
         </Link>
 
-        <div
-          onMouseLeave={() => setHoveredHref(null)}
-          className="no-scrollbar hidden min-w-0 flex-1 items-stretch justify-center gap-1 self-stretch overflow-x-auto md:flex lg:gap-2"
-        >
-          {sections.map((link) => {
-            const active = isNavActive(link.href, pathname);
-            const isHovered = hoveredHref === link.href;
+        {/* Tengah desktop ala CardChase: segmented pill di dalam kapsul.
+            Logo tetap di kiri (link di atas tidak diubah). Bug hover nyangkut
+            diperbaiki dengan menghapus hover pill layoutId — hover kini murni
+            CSS, yang sliding hanya pill aktif. */}
+        <div className="no-scrollbar hidden min-w-0 flex-1 items-center justify-center overflow-x-auto md:flex">
+          <div className="flex items-center gap-0.5 rounded-full border border-[#E6EBF2] bg-[#EEF2F7] p-1 shadow-[inset_0_1px_2px_rgba(15,23,42,0.05)]">
+            {sections.map((link, i) => {
+              const active = isNavActive(link.href, pathname);
+              const guiding = !hasInteracted && !active;
 
-            return (
-              <NavAnchor
-                key={link.href}
-                link={link}
-                aria-current={active ? 'page' : undefined}
-                onMouseEnter={() => setHoveredHref(link.href)}
-                className={cn(
-                  'group relative flex shrink-0 items-center whitespace-nowrap px-3.5 text-[14px] transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-sk-blue',
-                  active ? 'font-bold text-sk-navy' : 'font-semibold text-slate-500 hover:text-sk-navy',
-                )}
-              >
-                {/* Pre-click floating backdrop pill */}
-                {isHovered && (
-                  <motion.div
-                    layoutId="navbar-hover-pill"
-                    className="absolute inset-x-1 inset-y-3 -z-10 rounded-full bg-slate-100/90"
-                    transition={{ type: 'spring', stiffness: 450, damping: 35 }}
-                  />
-                )}
-
-                {/* Subtle text lift before click */}
-                <motion.span
-                  animate={{ y: isHovered ? -1 : 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="relative z-10"
+              return (
+                <NavAnchor
+                  key={link.href}
+                  link={link}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={markNavSeen}
+                  className={cn(
+                    'relative flex shrink-0 items-center whitespace-nowrap rounded-full px-4 py-2 text-[13.5px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
+                    active
+                      ? 'font-bold text-sk-navy'
+                      : 'font-semibold text-slate-500 hover:bg-white/70 hover:text-sk-navy',
+                  )}
                 >
-                  {link.label}
-                </motion.span>
+                  {/* Pill aktif yang geser — satu layoutId, tidak balapan dengan hover. */}
+                  {active && (
+                    <motion.span
+                      layoutId="cardchase-active-pill"
+                      className="absolute inset-0 rounded-full bg-white shadow-[0_2px_10px_rgba(15,23,42,0.10)] ring-1 ring-black/[0.04]"
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    />
+                  )}
 
-                {/* Active CardChase bottom indicator */}
-                {active && (
+                  {/* Goyang halus ajakan klik: mati total setelah 1 menu diklik. */}
                   <motion.span
-                    layoutId="active-nav-indicator"
-                    className="absolute inset-x-2.5 bottom-0 h-[3px] rounded-full bg-[#026bf4]"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-              </NavAnchor>
-            );
-          })}
+                    animate={guiding ? { rotate: [0, -3, 3, -1.5, 0] } : { rotate: 0 }}
+                    transition={
+                      guiding
+                        ? { duration: 1.1, repeat: Infinity, repeatDelay: 2, delay: i * 0.35 }
+                        : { duration: 0.15 }
+                    }
+                    className="relative z-10"
+                  >
+                    {link.label}
+                  </motion.span>
+
+                  {/* Titik penanda belum diklik. */}
+                  {guiding && (
+                    <span className="absolute right-2.5 top-1.5 z-10 flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#026bf4] opacity-60" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#026bf4]" />
+                    </span>
+                  )}
+                </NavAnchor>
+              );
+            })}
+          </div>
 
           {promos.map((link) => (
             <motion.div
@@ -176,10 +206,11 @@ export function AppNavbar() {
               whileHover={{ scale: 1.04, y: -1 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className="my-auto ml-1"
+              className="my-auto ml-2"
             >
               <NavAnchor
                 link={link}
+                onClick={markNavSeen}
                 className={cn(
                   'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full pl-3.5 pr-1.5 text-[13px] font-bold transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue',
                   TOOLS_BUTTON,

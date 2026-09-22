@@ -1,3 +1,4 @@
+import { Smile } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 type CoverKind = 'data' | 'product' | 'design' | 'ml' | 'growth' | 'systems' | 'default';
@@ -63,7 +64,7 @@ function Fallback({ kind, label }: { kind: CoverKind; label: string }) {
         <div className="rounded-md border border-sk-border bg-white px-2.5 py-2">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-sk-navy">
             <span>Mood Check-in:</span>
-            <span aria-hidden>😊</span>
+            <Smile size={14} aria-hidden className="shrink-0 text-sk-blue" />
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-sk-border">
               <span className="block h-full w-[78%] rounded-full bg-sk-blue" />
             </span>
