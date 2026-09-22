@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { Play } from 'lucide-react';
 import { ButtonLink } from '@/components/primitives/Button';
 import { Badge } from '@/components/primitives/Badge';
 import { Entrance, Reveal } from '@/components/motion/Reveal';
 import { StatCard } from '@/components/primitives/StatCard';
+import { ArenaTour } from '@/components/arena/ArenaTour';
 import { HowItWorks } from '@/components/arena/HowItWorks';
 import { LiveArenaBoard } from '@/components/arena/LiveArenaBoard';
 import { MilestoneRoadmap } from '@/components/arena/MilestoneRoadmap';
@@ -46,7 +48,7 @@ export default async function ArenaLandingPage() {
       <div className="ambient" aria-hidden />
 
       <div className="relative z-[2] mx-auto max-w-[1500px] px-6 pb-16 pt-28 md:pt-32">
-        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,900px)] xl:gap-12">
+        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,900px)] xl:gap-12" data-tour="hero" data-tour-target>
           {/* Left: hero */}
           <div className="pt-2 md:pt-6">
             <Entrance>
@@ -72,6 +74,15 @@ export default async function ArenaLandingPage() {
                 </ButtonLink>
                 <ButtonLink href="#cara-kerja" variant="ghost" size="md">
                   Cara Kerjanya
+                </ButtonLink>
+                <ButtonLink
+                  href="/arena?tur=1"
+                  variant="ghost"
+                  size="md"
+                  data-tour-trigger
+                  iconRight={<Play size={14} strokeWidth={2.4} aria-hidden />}
+                >
+                  Pelajari Arena
                 </ButtonLink>
               </div>
             </Entrance>
@@ -103,7 +114,7 @@ export default async function ArenaLandingPage() {
         </div>
 
         {/* Available projects: the actual catalog, not a pitch for it. */}
-        <div id="proyek" className="mt-20 scroll-mt-24 md:mt-24">
+        <div id="proyek" className="mt-20 scroll-mt-24 md:mt-24" data-tour="proyek" data-tour-target>
           <Reveal className="mb-7 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div className="max-w-xl">
               <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
@@ -150,7 +161,7 @@ export default async function ArenaLandingPage() {
         </div>
 
         {/* How it works */}
-        <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32">
+        <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32" data-tour="cara-kerja" data-tour-target>
           <Reveal className="mb-8 max-w-xl">
             <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
             <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
@@ -165,7 +176,7 @@ export default async function ArenaLandingPage() {
 
         {/* Reward ladder: what the points from each week's result add up to. */}
         {rewardSteps.length > 0 && (
-          <div id="hadiah" className="mt-24 scroll-mt-24 md:mt-28">
+          <div id="hadiah" className="mt-24 scroll-mt-24 md:mt-28" data-tour="hadiah" data-tour-target>
             <Reveal className="mb-8 max-w-2xl">
               <Badge variant="slate">HADIAH</Badge>
               <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
@@ -184,7 +195,7 @@ export default async function ArenaLandingPage() {
 
         {/* Closing CTA */}
         <Reveal className="mt-20" y={16}>
-          <div className="relative overflow-hidden rounded-[var(--radius-sk-3xl)] bg-gradient-to-br from-[#0B1933] via-[#1a2f5a] to-sk-blue p-8 text-white md:px-12 md:py-12">
+          <div id="mulai" data-tour="mulai" data-tour-target className="relative overflow-hidden rounded-[var(--radius-sk-3xl)] bg-gradient-to-br from-[#0B1933] via-[#1a2f5a] to-sk-blue p-8 text-white md:px-12 md:py-12">
             <span
               aria-hidden
               className="pointer-events-none absolute -right-24 -top-32 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(80,180,255,0.22),transparent_70%)]"
@@ -203,6 +214,7 @@ export default async function ArenaLandingPage() {
           </div>
         </Reveal>
       </div>
+      <ArenaTour />
     </div>
   );
 }

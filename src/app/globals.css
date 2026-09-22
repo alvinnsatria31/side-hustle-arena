@@ -434,6 +434,31 @@ select {
   }
 }
 
+/* ---------- Pelajari Arena: tur spotlight ----------
+   The tour runs on the real /arena sections. The section being taught keeps
+   full clarity and gets the ring; every other tour target blurs, fades, and
+   goes inert. No overlay element and no measured coordinates — each target is
+   just raised by class, so the tour survives layout redesigns. */
+[data-tour-target] {
+  transition:
+    filter 300ms ease,
+    opacity 300ms ease,
+    box-shadow 300ms ease;
+}
+body.tour-active [data-tour-target]:not(.tour-spotlight) {
+  filter: blur(2px);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+body.tour-active .tour-spotlight {
+  position: relative;
+  box-shadow:
+    0 0 0 3px var(--color-sk-blue),
+    0 0 0 11px rgba(36, 107, 253, 0.22),
+    0 26px 70px rgba(7, 21, 45, 0.35);
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,
