@@ -440,6 +440,8 @@ select {
    goes inert. No overlay element and no measured coordinates — each target is
    just raised by class, so the tour survives layout redesigns. */
 [data-tour-target] {
+  scroll-margin-top: 100px;
+  scroll-margin-bottom: 260px;
   transition:
     filter 300ms ease,
     opacity 300ms ease,
@@ -453,6 +455,11 @@ body.tour-active [data-tour-target]:not(.tour-spotlight) {
 }
 body.tour-active .tour-spotlight {
   position: relative;
+  z-index: 30;
+  filter: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  user-select: auto !important;
   box-shadow:
     0 0 0 3px var(--color-sk-blue),
     0 0 0 11px rgba(36, 107, 253, 0.22),
