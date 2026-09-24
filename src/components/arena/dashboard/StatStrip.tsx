@@ -36,9 +36,8 @@ interface Tile {
  * itself the link to the page that explains it.
  */
 function StatTile({ label, value, caption, href, icon: Icon, accent }: Tile) {
-  const reduce = useSettledReducedMotion();
   return (
-    <motion.li className="flex" variants={reduce ? undefined : tileVariants}>
+    <motion.li className="flex" variants={tileVariants}>
       <Link
         href={href}
         className="card-rise group relative flex w-full min-h-[104px] flex-col justify-between gap-3 rounded-[var(--radius-sk-xl)] border border-sk-border bg-white p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:p-5"
@@ -128,13 +127,18 @@ export function StatStrip({ data }: { data: ParticipantOverview }) {
 
 function StatList({ tiles }: { tiles: Tile[] }) {
   const reduce = useSettledReducedMotion();
+  // Dropping the variants when the reduced-motion preference settled left the
+  // tiles parked on the `hidden` variant they had already been given at
+  // hydration: four invisible tiles for exactly those participants. Remount once
+  // with `initial={false}` instead, which starts them where they end.
   return (
     <motion.ul
+      key={reduce ? 'settled' : 'animated'}
       aria-label="Ringkasan capaian"
       className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"
-      variants={reduce ? undefined : listVariants}
-      initial={reduce ? undefined : 'hidden'}
-      whileInView={reduce ? undefined : 'show'}
+      variants={listVariants}
+      initial={reduce ? false : 'hidden'}
+      whileInView="show"
       viewport={{ once: true, margin: '-40px' }}
     >
       {tiles.map((tile) => (

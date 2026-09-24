@@ -61,3 +61,31 @@ for (const target of PAGES) {
     expect(complaints, `hydration warnings on ${target.path}:\n${complaints.join("\n")}`).toEqual([]);
   });
 }
+
+/**
+ * Reduced motion must also mean no motion, not only "ends visible".
+ *
+ * The checks above pass once the entrance has finished, so they could not see
+ * that Reveal/Entrance still played the full fade: the first client render has
+ * to match the server (animate), and changing only `transition` afterwards does
+ * not re-target a tween already in flight. This samples the landing headline's
+ * wrapper while the page settles: under reduced motion it may be hidden (server
+ * markup, before hydration) or shown, but never somewhere in between.
+ */
+test("the landing headline appears without a fade under reduced motion", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const samples = await page.evaluate(async () => {
+    const seen: number[] = [];
+    const start = performance.now();
+    while (performance.now() - start < 2_000) {
+      const heading = document.querySelector("h1");
+      const wrapper = heading?.closest("[style]") ?? heading;
+      if (wrapper) seen.push(Number(getComputedStyle(wrapper).opacity));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    return seen;
+  });
+  const between = samples.filter((opacity) => opacity > 0.01 && opacity < 0.99);
+  expect(between, `opacity mid-fade: ${between.join(", ")}`).toEqual([]);
+  expect(samples.at(-1)).toBe(1);
+});

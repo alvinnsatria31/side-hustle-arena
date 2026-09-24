@@ -63,6 +63,24 @@ function settleTransition(reduce: boolean, transition: Record<string, unknown>) 
   return reduce ? { duration: 0 } : transition;
 }
 
+/**
+ * Key for the motion element: changes exactly once, when a reduced-motion
+ * preference settles.
+ *
+ * A zero-duration `transition` alone was not enough. The first client render
+ * has to match the server (animate), so the entrance tween had already started
+ * by the time the layout effect reported the real preference, and a new
+ * `transition` never re-targets an animation in flight: reduced-motion visitors
+ * still watched the full 0.5–0.8s fade (measured on the landing h1 — every
+ * sample between 0 and 1, same curve as no-preference). Remounting under a new
+ * key, with `initial={false}`, lands the element on its end state before the
+ * first paint. It happens once, only for those visitors, and before any child
+ * has had a frame to build state worth keeping.
+ */
+function motionKey(reduce: boolean) {
+  return reduce ? 'settled' : 'animated';
+}
+
 /** Viewport-triggered entrance: opacity 0→1, y 12→0, 500ms ease-out. */
 export function Reveal({
   children,
@@ -76,8 +94,9 @@ export function Reveal({
   const reduce = useSettledReducedMotion();
   return (
     <motion.div
+      key={motionKey(reduce)}
       className={className}
-      initial={{ opacity: 0, y }}
+      initial={reduce ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once, margin: '-48px', amount: reduce ? 0 : 'some' }}
       transition={settleTransition(reduce, { duration, ease, delay })}
@@ -99,8 +118,9 @@ export function Entrance({
   const reduce = useSettledReducedMotion();
   return (
     <motion.div
+      key={motionKey(reduce)}
       className={className}
-      initial={{ opacity: 0, y }}
+      initial={reduce ? false : { opacity: 0, y }}
       animate={{ opacity: 1, y: 0 }}
       transition={settleTransition(reduce, { duration, ease, delay })}
     >
@@ -132,9 +152,10 @@ export function StaggerGroup({
   const reduce = useSettledReducedMotion();
   return (
     <motion.div
+      key={motionKey(reduce)}
       className={className}
       variants={groupVariants}
-      initial="hidden"
+      initial={reduce ? false : 'hidden'}
       transition={reduce ? { duration: 0, staggerChildren: 0 } : undefined}
       {...(animate === 'whileInView'
         ? { whileInView: 'show' as const, viewport: { once: true, margin: '-48px', amount: reduce ? 0 : ('some' as const) } }
