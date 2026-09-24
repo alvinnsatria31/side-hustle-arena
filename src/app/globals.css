@@ -93,48 +93,55 @@
   --font-mono: var(--font-jetbrains), ui-monospace, Menlo, monospace;
 }
 
-/* Base */
-html {
-  /* In-page anchors (the landing header's "Kontak", the hero's "Lihat cara
-     kerja") land under a fixed navbar without this. Smooth scrolling is
-     switched back off in the reduced-motion block at the foot of this file. */
-  scroll-behavior: smooth;
-  scroll-padding-top: 96px;
-}
+/* Base — kept inside `@layer base` on purpose. Tailwind v4 puts every utility
+   in `@layer utilities`, and an unlayered rule beats any layered one no matter
+   how specific the utility is. Left unlayered, `* { border-color }` painted
+   every `border-sk-blue` / `border-emerald-*` / `border-white/10` on the site
+   the same grey, and `:focus-visible` forced a 6px radius onto every focused
+   pill and could not be turned off with `focus-visible:outline-none`. */
+@layer base {
+  html {
+    /* In-page anchors (the landing header's "Kontak", the hero's "Lihat cara
+       kerja") land under a fixed navbar without this. Smooth scrolling is
+       switched back off in the reduced-motion block at the foot of this file. */
+    scroll-behavior: smooth;
+    scroll-padding-top: 96px;
+  }
 
-html,
-body {
-  background-color: var(--color-sk-bg);
-  color: var(--color-sk-navy);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+  html,
+  body {
+    background-color: var(--color-sk-bg);
+    color: var(--color-sk-navy);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-* {
-  border-color: var(--color-sk-border);
-}
+  * {
+    border-color: var(--color-sk-border);
+  }
 
-::selection {
-  background-color: var(--color-sk-blue-tint);
-  color: var(--color-sk-blue-700);
-}
+  ::selection {
+    background-color: var(--color-sk-blue-tint);
+    color: var(--color-sk-blue-700);
+  }
 
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
 
-input,
-textarea,
-select {
-  font-family: inherit;
-}
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--color-sk-blue);
-  outline-offset: 2px;
-  border-radius: 6px;
+  :focus-visible {
+    outline: 2px solid var(--color-sk-blue);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
 }
 
 /* ---------- Utilities ---------- */
@@ -464,6 +471,33 @@ body.tour-active .tour-spotlight {
     0 0 0 3px var(--color-sk-blue),
     0 0 0 11px rgba(36, 107, 253, 0.22),
     0 26px 70px rgba(7, 21, 45, 0.35);
+}
+/* A bare section (no card of its own) gets its breathing room from a ring of
+   page colour first, so its text does not sit flush against the blue line.
+   Shadows are ink overflow: they never widen the page on a phone. */
+body.tour-active .tour-spotlight[data-tour-bare] {
+  border-radius: 28px;
+  background-color: var(--color-sk-bg);
+  box-shadow:
+    0 0 0 16px var(--color-sk-bg),
+    0 0 0 19px var(--color-sk-blue),
+    0 0 0 27px rgba(36, 107, 253, 0.2),
+    0 30px 80px rgba(7, 21, 45, 0.35);
+}
+/* The /cara-kerja simulation dims the whole page with one scrim instead, so
+   everything that is not being taught — tour target or not — recedes by the
+   same amount. Per-target blur on top of the scrim only muddied it. */
+body.tour-dimmed [data-tour-target]:not(.tour-spotlight) {
+  filter: none;
+  opacity: 1;
+}
+/* The floating WhatsApp button sits in the same bottom-right corner as the
+   tour's "Lanjut" button on a phone and covered it. It steps aside while a
+   tour runs and comes back the moment the tour closes. */
+body.tour-active [data-floating-wa] {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* ---------- Reduced motion ---------- */

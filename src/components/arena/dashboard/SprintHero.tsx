@@ -27,8 +27,11 @@ function MissionStepper({ current }: { current: (typeof STEP_ORDER)[number] }) {
       {STEP_ORDER.map((step, i) => {
         const done = i < index;
         const now = i === index;
+        // On a phone five labels do not fit in a row ("RENCAN", "KERJAK"): the
+        // current step keeps its label and extra room, the others show only
+        // their number or tick until there is space for all of them.
         return (
-          <li key={step} className="flex min-w-0 flex-1 flex-col gap-2">
+          <li key={step} className={cn('flex min-w-0 flex-col gap-2', now ? 'flex-[2] sm:flex-1' : 'flex-1')}>
             <span
               aria-hidden
               className={cn(
@@ -60,7 +63,7 @@ function MissionStepper({ current }: { current: (typeof STEP_ORDER)[number] }) {
               >
                 {done ? '✓' : i + 1}
               </motion.span>
-              {STEP_SHORT[step]}
+              <span className={cn('truncate', !now && 'sr-only sm:not-sr-only')}>{STEP_SHORT[step]}</span>
             </span>
           </li>
         );

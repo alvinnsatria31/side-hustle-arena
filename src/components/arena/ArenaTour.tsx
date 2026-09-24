@@ -218,7 +218,9 @@ function ArenaTourInner() {
           ) : (
             <span className="flex-1" aria-hidden />
           )}
-          <span className="flex items-center gap-1.5" role="group" aria-label="Langkah tur">
+          {/* The "n/5" label above already says where you are; on a phone five
+              44px dots plus both buttons pushed "Lanjut" out of the card. */}
+          <span className="hidden items-center gap-1.5 sm:flex" role="group" aria-label="Langkah tur">
             {stepIds.map((id, dot) => (
               <button
                 key={id}

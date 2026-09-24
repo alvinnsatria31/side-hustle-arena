@@ -16,6 +16,7 @@ export function FloatingWhatsApp() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Butuh bantuan? Chat kami di WhatsApp"
+      data-floating-wa
       className={cn(
         'group fixed right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-sk-lg transition duration-200 hover:-translate-y-1 hover:shadow-xl focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#25D366] motion-reduce:transform-none motion-reduce:transition-none',
         hasBottomNav
