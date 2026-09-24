@@ -44,7 +44,9 @@ export function Footer() {
                             'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold duration-200',
                             PROMO_PILL,
                           )
-                        : 'hover:text-sk-blue',
+                        : // inline-flex keeps the ↗ (a block svg under preflight)
+                          // on the same line as "Scan CV" / "Toko".
+                          'inline-flex items-center gap-1 hover:text-sk-blue',
                     )}
                   >
                     {link.label}
