@@ -29,6 +29,9 @@ export interface RankedFinalist extends Finalist {
   points: number;
 }
 
+/** Most points a score alone can earn — a perfect 100. */
+export const SCORE_POINTS_MAX = 100;
+
 export function rankBonus(rank: number): number {
   if (rank === 1) return 200;
   if (rank === 2) return 100;
@@ -39,7 +42,7 @@ export function rankBonus(rank: number): number {
 /** The score's own points: clamped to 0–100 and rounded half up. */
 export function scorePoints(finalScore: number): number {
   if (!Number.isFinite(finalScore)) return 0;
-  return Math.round(Math.min(100, Math.max(0, finalScore)));
+  return Math.round(Math.min(SCORE_POINTS_MAX, Math.max(0, finalScore)));
 }
 
 export function pointsForResult(rank: number, finalScore: number): number {

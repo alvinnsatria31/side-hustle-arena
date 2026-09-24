@@ -2,7 +2,8 @@ import "server-only";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db/client";
-import { enrollments, projectSkills, projectSubmissionRequirements, skills, weekRules } from "@/server/db/schema";
+import { enrollments, projectSkills, projectSubmissionRequirements, skills } from "@/server/db/schema";
+import { SCORE_POINTS_MAX, rankBonus } from "@/server/finalization/ranking";
 import { getCurrentArenaWeek, getVisibleArenaProject, listActiveArenaDivisions, listVisibleArenaProjects } from "@/server/arena";
 import { ArenaDomainError } from "@/server/arena/errors";
 import { deadlineLabel } from "@/lib/deadline";
@@ -98,25 +99,38 @@ function toBaseProject(project: Summary, weekNo: number, deadline: string): Aren
 }
 
 /**
- * The point ladder a participant can actually earn this week.
+ * What a result pays, exactly as finalization computes it
+ * (`src/server/finalization/ranking.ts`): the rounded final score, up to 100,
+ * plus a podium bonus.
  *
- * Read from `arena.week_rules`, never assumed: the columns carry defaults, but
- * a week is free to run a different ladder and the landing page promises what
- * that week pays. Absent when the row has not been written, which is the only
- * honest way to render "no points announced yet".
+ * These used to be read from `arena.week_rules`. Its point columns still hold
+ * the retired flat ladder (100 for a graded project, 300/200/150 for the
+ * podium) and nothing awards from them any more, so the landing page and the
+ * /arena board promised numbers no participant ever received.
  */
 export interface PublicWeekPoints {
-  completion: number;
+  /** The most the score alone can earn (a final score of 100). */
+  scoreMax: number;
+  /** Podium bonuses added on top of the score. */
   rank1: number;
   rank2: number;
   rank3: number;
 }
+
+const PUBLIC_WEEK_POINTS: PublicWeekPoints = {
+  scoreMax: SCORE_POINTS_MAX,
+  rank1: rankBonus(1),
+  rank2: rankBonus(2),
+  rank3: rankBonus(3),
+};
 
 export interface PublicArenaHome {
   weekNo: number;
   weekLabel: string;
   deadline: string;
   deadlineAt: string;
+  /** "Senin · 08.00" — when picking opens; matters while the week is still PREVIEW. */
+  opensLabel: string;
   canSelect: boolean;
   status: string;
   projectCount: number;
@@ -191,17 +205,6 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
           .orderBy(asc(projectSubmissionRequirements.sortOrder)),
       ])
     : [[], []];
-  // The week's own ladder. A week with no rules row pays nothing this reader
-  // knows about, so `points` stays null and the page says nothing about points.
-  const [rules] = await getDb()
-    .select({
-      completion: weekRules.completionPoints,
-      rank1: weekRules.rank1Points,
-      rank2: weekRules.rank2Points,
-      rank3: weekRules.rank3Points,
-    })
-    .from(weekRules)
-    .where(eq(weekRules.weekId, week.id));
   const participantsByProject = new Map(participantRows.map((row) => [row.projectId, row.participantCount]));
   const deliverableByProject = new Map<string, string>();
   for (const row of deliverableRows) {
@@ -213,11 +216,12 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
     weekLabel: `WEEK ${weekNo} · ${monthDayLabel(opensAt)}`,
     deadline: deadlineLabel(deadlineAt),
     deadlineAt: deadlineAt.toISOString(),
+    opensLabel: deadlineLabel(opensAt),
     canSelect: week.selection.canSelect,
     status: week.status,
     projectCount: projects.length,
     divisionCount: divisions.length,
-    points: rules ?? null,
+    points: PUBLIC_WEEK_POINTS,
     projects: projects.slice(0, 3).map((project) => ({
       slug: project.slug,
       title: project.title,
@@ -231,7 +235,7 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
   };
 }
 
-export const getPublicArenaHome = unstable_cache(fetchPublicArenaHome, ["arena-public-home"], {
+export const getPublicArenaHome = unstable_cache(fetchPublicArenaHome, ["arena-public-home-v2"], {
   revalidate: PUBLIC_TTL_SECONDS,
 });
 
@@ -282,7 +286,9 @@ async function fetchPublicProjects(): Promise<PublicProjectList> {
     skills: skillsByProject.get(project.id) ?? [],
     participants: participantsByProject.get(project.id) ?? 0,
   }));
-  return { groups: divisions.map((division) => division.name), projects: mapped };
+  // Division names are not unique in the schema (only slugs are); a repeated
+  // name used to render twice as a filter chip under the same React key.
+  return { groups: [...new Set(divisions.map((division) => division.name))], projects: mapped };
 }
 
 export const getPublicProjects = unstable_cache(fetchPublicProjects, ["arena-public-projects"], {

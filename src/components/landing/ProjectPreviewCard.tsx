@@ -30,14 +30,14 @@ export function ProjectPreviewCard({
   project,
   href,
   deadline,
-  completionPoints,
+  maxPoints,
 }: {
   project: LandingProject;
   href: string;
   /** The week's submission deadline, already worded. */
   deadline: string | null;
-  /** Points for finishing, when the week's rules declare any. */
-  completionPoints: number | null;
+  /** The most one project can earn: a perfect score plus the rank-1 bonus. */
+  maxPoints: number | null;
 }) {
   const motif = motifForDivision(project.categorySlug, project.category);
 
@@ -63,10 +63,10 @@ export function ProjectPreviewCard({
           {project.category}
         </span>
 
-        {completionPoints !== null && (
+        {maxPoints !== null && (
           <span className="absolute right-3.5 top-3.5 inline-flex items-center gap-1 rounded-full border border-sk-warning-tint bg-white/90 px-2.5 py-1 text-[11px] font-bold text-sk-warning-ink backdrop-blur">
             <Sparkles size={11} strokeWidth={2.6} aria-hidden />
-            {completionPoints} poin
+            hingga {maxPoints} poin
           </span>
         )}
       </div>

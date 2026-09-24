@@ -48,7 +48,7 @@ export default async function ArenaLandingPage() {
       <div className="ambient" aria-hidden />
 
       <div className="relative z-[2] mx-auto max-w-[1500px] px-6 pb-16 pt-28 md:pt-32">
-        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,900px)] xl:gap-12" data-tour="hero" data-tour-target>
+        <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(0,900px)] xl:gap-12" data-tour="hero" data-tour-target data-tour-bare>
           {/* Left: hero */}
           <div className="pt-2 md:pt-6">
             <Entrance>
@@ -104,6 +104,9 @@ export default async function ArenaLandingPage() {
               deadlineAt={home?.deadlineAt}
               participantCount={participantTotal}
               points={home?.points}
+              canSelect={home?.canSelect ?? false}
+              status={home?.status}
+              opensLabel={home?.opensLabel}
             />
             <div className="mt-4 text-center">
               <Link href="/arena/showcase" className="text-[13px] font-semibold text-sk-blue transition-colors hover:text-sk-blue-700">
@@ -114,7 +117,7 @@ export default async function ArenaLandingPage() {
         </div>
 
         {/* Available projects: the actual catalog, not a pitch for it. */}
-        <div id="proyek" className="mt-20 scroll-mt-24 md:mt-24" data-tour="proyek" data-tour-target>
+        <div id="proyek" className="mt-20 scroll-mt-24 md:mt-24" data-tour="proyek" data-tour-target data-tour-bare>
           <Reveal className="mb-7 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
             <div className="max-w-xl">
               <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
@@ -161,7 +164,7 @@ export default async function ArenaLandingPage() {
         </div>
 
         {/* How it works */}
-        <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32" data-tour="cara-kerja" data-tour-target>
+        <div id="cara-kerja" className="mt-24 scroll-mt-24 md:mt-32" data-tour="cara-kerja" data-tour-target data-tour-bare>
           <Reveal className="mb-8 max-w-xl">
             <Badge variant="slate">{home ? `MINGGU ${home.weekNo}` : 'SEGERA'}</Badge>
             <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">
@@ -176,7 +179,7 @@ export default async function ArenaLandingPage() {
 
         {/* Reward ladder: what the points from each week's result add up to. */}
         {rewardSteps.length > 0 && (
-          <div id="hadiah" className="mt-24 scroll-mt-24 md:mt-28" data-tour="hadiah" data-tour-target>
+          <div id="hadiah" className="mt-24 scroll-mt-24 md:mt-28" data-tour="hadiah" data-tour-target data-tour-bare>
             <Reveal className="mb-8 max-w-2xl">
               <Badge variant="slate">HADIAH</Badge>
               <h2 className="mt-3 text-[26px] font-extrabold tracking-[-0.02em] text-sk-navy md:text-[30px]">

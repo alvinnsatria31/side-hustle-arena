@@ -20,13 +20,13 @@ export function LandingProjectRail({
   projects,
   entryHref,
   deadline,
-  completionPoints,
+  maxPoints,
   projectCount,
 }: {
   projects: LandingProject[];
   entryHref: string;
   deadline: string | null;
-  completionPoints: number | null;
+  maxPoints: number | null;
   projectCount: number;
 }) {
   if (projects.length === 0) {
@@ -98,7 +98,7 @@ export function LandingProjectRail({
               project={project}
               href={entryHref}
               deadline={deadline}
-              completionPoints={completionPoints}
+              maxPoints={maxPoints}
             />
           </Reveal>
         ))}

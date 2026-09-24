@@ -13,7 +13,8 @@ import { getPublicArenaHome } from '@/lib/arena-view';
 import { getCurrentUser } from '@/server/auth';
 import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
 
-export const metadata = { title: 'Sekolah Karir — Side Hustle Arena' };
+// Absolute: the root template appends " · Sekolah Karir", which doubled the brand.
+export const metadata = { title: { absolute: 'Side Hustle Arena · Sekolah Karir' } };
 export const dynamic = 'force-dynamic';
 
 /**
@@ -149,7 +150,7 @@ export default async function LandingPage() {
             projects={projects}
             entryHref={entryHref}
             deadline={home?.deadline ?? null}
-            completionPoints={points?.completion ?? null}
+            maxPoints={points ? points.scoreMax + points.rank1 : null}
             projectCount={home?.projectCount ?? 0}
           />
         </section>
@@ -245,22 +246,25 @@ export default async function LandingPage() {
                           {home.weekLabel}
                         </p>
                       )}
-                      <dl className="mt-5 grid grid-cols-2 gap-2.5">
+                      <p className="mt-3 text-[13px] leading-relaxed text-sk-muted">
+                        Poinmu = skor akhir, ditambah bonus kalau kamu masuk tiga besar minggu itu.
+                      </p>
+                      <dl className="mt-4 grid grid-cols-2 gap-2.5">
                         {[
-                          ['Selesai dinilai', points.completion],
-                          ['Peringkat 1', points.rank1],
-                          ['Peringkat 2', points.rank2],
-                          ['Peringkat 3', points.rank3],
+                          ['Skor akhir', `0–${points.scoreMax}`],
+                          ['Bonus peringkat 1', `+${points.rank1}`],
+                          ['Bonus peringkat 2', `+${points.rank2}`],
+                          ['Bonus peringkat 3', `+${points.rank3}`],
                         ].map(([label, value]) => (
                           <div
-                            key={label as string}
+                            key={label}
                             className="rounded-[var(--radius-sk-md)] border border-sk-border bg-sk-bg px-4 py-3"
                           >
                             <dt className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.13em] text-sk-faint">
-                              {label as string}
+                              {label}
                             </dt>
                             <dd className="mt-1.5 font-mono text-[20px] font-bold leading-none tracking-[-0.03em] text-sk-navy">
-                              +{value as number}
+                              {value}
                             </dd>
                           </div>
                         ))}
