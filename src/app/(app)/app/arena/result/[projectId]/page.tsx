@@ -257,6 +257,11 @@ export default function ProjectResultPage() {
       >
         <Card className="p-6">
           <PanelHeading pin="g">Kekuatan</PanelHeading>
+          {/* A review can close without notes (a resolved or manual grade);
+              an empty list used to leave a titled card with nothing in it. */}
+          {result.strengths.length === 0 && (
+            <p className="text-[13.5px] leading-relaxed text-sk-muted">Penilai tidak menambahkan catatan kekuatan untuk kiriman ini.</p>
+          )}
           <ul className="flex flex-col gap-3">
             {result.strengths.map((s, i) => (
               <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
@@ -270,6 +275,9 @@ export default function ProjectResultPage() {
         </Card>
         <Card className="p-6">
           <PanelHeading pin="a">Perlu ditingkatkan</PanelHeading>
+          {result.improvements.length === 0 && (
+            <p className="text-[13.5px] leading-relaxed text-sk-muted">Penilai tidak menambahkan catatan perbaikan untuk kiriman ini.</p>
+          )}
           <ul className="flex flex-col gap-3">
             {result.improvements.map((s, i) => (
               <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-sk-text">
@@ -292,6 +300,9 @@ export default function ProjectResultPage() {
       >
         <div>
           <div className="mb-4 font-mono text-[11px] tracking-[0.15em] text-sk-blue">KEMAMPUAN YANG TERBUKTI</div>
+          {result.skillsProven.length === 0 && (
+            <p className="text-[13.5px] text-sk-muted">Belum ada skill yang tercatat dari kiriman ini.</p>
+          )}
           <div className="flex flex-wrap gap-2.5">
             {result.skillsProven.map((skill, i) => (
               <motion.span
