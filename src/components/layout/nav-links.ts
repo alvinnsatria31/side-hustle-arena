@@ -67,6 +67,10 @@ function enabled(link: NavLink): boolean {
   return true;
 }
 
+/** Scan CV and the shop live on the Tools host; `/cv-scanner` and `/store` here only redirect there. */
+const TOOLS_CV_SCANNER: NavLink = { label: 'Scan CV', href: `${TOOLS_URL}/cv-scanner`, icon: FileSearch, external: true };
+const TOOLS_STORE: NavLink = { label: 'Toko', href: `${TOOLS_URL}/store`, icon: Store, external: true };
+
 /**
  * Public nav, in the order a first-time visitor needs it: what this is, what
  * is open now, who has won.
@@ -76,16 +80,18 @@ function enabled(link: NavLink): boolean {
  * live week and those sections stopped existing. A nav link to a hash with
  * nothing behind it does not 404, it silently does nothing, which is the one
  * kind of broken link a visitor blames themselves for.
+ *
+ * One entry per destination, too. This list once drew "Cara kerja" twice (for
+ * /arena and for /cara-kerja), and flag-gated local "Scan CV"/"Toko" entries
+ * beside the Tools ones doubled those whenever a build baked the flags on.
  */
 const PUBLIC_ALL: NavLink[] = [
-  { label: 'Cara kerja', href: '/arena', icon: Sparkles },
+  { label: 'Arena', href: '/arena', icon: Home },
   { label: 'Cara kerja', href: '/cara-kerja', icon: Sparkles },
   { label: 'Proyek', href: '/arena/projects', icon: LayoutGrid },
   { label: 'Sorotan', href: '/arena/showcase', icon: Trophy },
-  { label: 'Scan CV', href: '/cv-scanner', icon: FileSearch, flag: 'cv-scanner' },
-  { label: 'Toko', href: '/store', icon: Store, flag: 'store' },
-  { label: 'Scan CV', href: `${TOOLS_URL}/cv-scanner`, icon: FileSearch, external: true },
-  { label: 'Toko', href: `${TOOLS_URL}/store`, icon: Store, external: true },
+  TOOLS_CV_SCANNER,
+  TOOLS_STORE,
   TOOLS,
 ];
 
@@ -126,15 +132,14 @@ export function footerColumns(): Array<{ heading: string; links: NavLink[] }> {
   return [
     {
       heading: 'Arena',
-      links: publicNavLinks().filter((l) => l.href.startsWith('/arena') || l.href.startsWith('/#')),
+      links: publicNavLinks().filter((l) => !l.external),
     },
     {
       heading: 'Lainnya',
       links: [
         TOOLS,
-        ...PUBLIC_ALL.filter((l) => l.flag).filter(enabled),
-        { label: 'Scan CV', href: `${TOOLS_URL}/cv-scanner`, icon: FileSearch, external: true },
-        { label: 'Toko', href: `${TOOLS_URL}/store`, icon: Store, external: true },
+        TOOLS_CV_SCANNER,
+        TOOLS_STORE,
         { label: 'Career Report', href: '/app/career-report', icon: Award },
         { label: 'Masuk', href: '/login', icon: UserRound },
       ],
@@ -154,7 +159,9 @@ export function isNavActive(href: string, pathname: string): boolean {
   if (/^https?:\/\//.test(href)) return false;
   if (href.startsWith('/#')) return false;
   const target = href.split('#')[0];
-  if (target === '/app' || target === '/app/arena' || href.includes('#'))
+  // Section roots whose children have their own entries: "Arena" must not
+  // stay lit on /arena/projects, where "Proyek" is the active one.
+  if (target === '/app' || target === '/app/arena' || target === '/arena' || href.includes('#'))
     return pathname === target;
   return pathname === target || pathname.startsWith(target + '/');
 }

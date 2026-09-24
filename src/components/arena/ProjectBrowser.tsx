@@ -122,7 +122,9 @@ export function ProjectBrowser({
       aria-expanded={openPanel === key}
       onClick={() => setOpenPanel(openPanel === key ? null : key)}
       className={cn(
-        'inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sk-md)] border px-4 text-[13.5px] font-semibold transition-all duration-200 sm:flex-none',
+        // px-2.5 + min-w-0 below sm: "Tingkat · Kemampuan · Waktu" with px-4
+        // pushed the row 8px past a 360px screen.
+        'inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[var(--radius-sk-md)] border px-2.5 text-[13px] font-semibold transition-all duration-200 sm:flex-none sm:px-4 sm:text-[13.5px]',
         active
           ? 'border-sk-blue bg-sk-blue-tint text-sk-blue'
           : 'border-sk-navy/12 bg-transparent text-sk-navy hover:bg-white',
@@ -144,7 +146,7 @@ export function ProjectBrowser({
           placeholder="Cari proyek atau kemampuan (misalnya SQL, dashboard, desain)"
           label="Cari proyek"
         />
-        <div className="flex gap-2.5">
+        <div className="flex gap-2 sm:gap-2.5">
           {panelButton('difficulty', 'Tingkat', Boolean(difficulty))}
           {panelButton('skill', 'Kemampuan', Boolean(skill))}
           {panelButton('time', 'Waktu', Boolean(timeBucket))}

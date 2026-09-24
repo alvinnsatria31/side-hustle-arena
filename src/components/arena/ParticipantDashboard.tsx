@@ -125,7 +125,9 @@ export function RefreshButton({ refresh, loading }: { refresh: () => void; loadi
       aria-label="Perbarui data"
       disabled={loading}
       onClick={refresh}
-      className="h-11 w-11 px-0"
+      // `cn` only joins classes, so a plain `px-0` lost to the size's px-3.5
+      // and the icon was squeezed to a 6px sliver; `!` makes these win.
+      className="h-11! w-11 gap-0! px-0!"
       iconLeft={<RefreshCw size={16} aria-hidden className={cn(loading && 'anim-spin')} />}
     />
   );
@@ -279,7 +281,7 @@ export default function ParticipantDashboard({
           aria-busy={resource.loading}
           className={cn('transition-opacity duration-200', resource.loading && 'opacity-60')}
         >
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <SprintHero name={user.displayName ?? 'Peserta'} week={data.currentWeek} active={active} focus={focus} />
             <div className="flex flex-col gap-5">
               {deadline && (
@@ -298,7 +300,9 @@ export default function ParticipantDashboard({
             <StatStrip data={data} />
           </div>
 
-          <Reveal className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+          {/* minmax(0,1fr): an `auto` column let the podium's min-content widen the
+              page past a 360px screen. */}
+          <Reveal className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
             <LeaderboardPreview history={data.history} />
 
             <section aria-labelledby="dashboard-projects-title">

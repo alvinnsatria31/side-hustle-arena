@@ -63,7 +63,9 @@ export function PublicNavbar({ user }: { user: PublicNavUser | null }) {
                 link={link}
                 aria-current={isNavActive(link.href, pathname) ? 'page' : undefined}
                 className={cn(
-                  'whitespace-nowrap transition-colors',
+                  // inline-flex: preflight makes the ↗ svg a block, which
+                  // otherwise drops it onto a second line under "Scan CV".
+                  'inline-flex items-center gap-1 whitespace-nowrap transition-colors',
                   link.highlight
                     ? cn(
                         'inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 font-semibold duration-200',

@@ -103,7 +103,7 @@ export function AppNavbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-[#F0F2F5] bg-white/95 shadow-[0_1px_8px_rgba(15,23,42,0.03)] backdrop-blur-md">
       <nav
-        className="mx-auto flex h-[72px] max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 md:gap-6 lg:px-8"
+        className="mx-auto flex h-[72px] max-w-6xl items-center justify-between gap-3 px-3 min-[380px]:px-4 sm:px-6 md:gap-6 lg:px-8"
         aria-label="Navigasi aplikasi"
       >
         <Link
@@ -116,7 +116,7 @@ export function AppNavbar() {
             alt="Side Hustle Arena by SekolahKarir"
             width={195}
             height={40}
-            className="h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02] sm:h-10"
+            className="h-7 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02] min-[380px]:h-8 min-[400px]:h-9 sm:h-10"
             priority
             unoptimized
           />
@@ -160,7 +160,7 @@ export function AppNavbar() {
           </div>
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3" ref={menuRef}>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 min-[380px]:gap-2 sm:gap-3" ref={menuRef}>
           {promos.map((link) => (
             <NavAnchor
               key={link.href}
@@ -178,7 +178,7 @@ export function AppNavbar() {
           <Link
             href={REWARDS_PATH}
             aria-label={balance === null ? 'Poin kamu' : `Poin tersedia: ${balance.toLocaleString('id-ID')}`}
-            className="group inline-flex h-10 items-center gap-2 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-3.5 text-[#0F172A] shadow-xs transition-all hover:border-[#FCD399] hover:bg-[#FFF4DD] hover:shadow-[0_4px_14px_rgba(245,158,11,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:px-4"
+            className="group inline-flex h-10 items-center gap-2 rounded-full border border-[#FDE6C8] bg-[#FFF9EE] px-2.5 text-[#0F172A] min-[380px]:px-3.5 shadow-xs transition-all hover:border-[#FCD399] hover:bg-[#FFF4DD] hover:shadow-[0_4px_14px_rgba(245,158,11,0.14)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue sm:px-4"
           >
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F59E0B]/15 text-[#D97706]">
               <Coins size={13} strokeWidth={2.4} aria-hidden />
@@ -222,7 +222,9 @@ export function AppNavbar() {
               size={14}
               strokeWidth={2.4}
               aria-hidden
-              className={cn('text-slate-500 transition-transform duration-200', menuOpen && 'rotate-180')}
+              // At 390px the logo, points, bell and this chevron overflowed the
+              // bar by 6px; the avatar alone still reads as the menu button.
+              className={cn('text-slate-500 transition-transform duration-200 max-sm:hidden', menuOpen && 'rotate-180')}
             />
           </button>
         </div>
