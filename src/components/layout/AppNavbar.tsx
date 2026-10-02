@@ -304,7 +304,7 @@ export function AppNavbar() {
                 role="menuitem"
                 className="flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium text-sk-body transition-colors hover:bg-sk-bg"
               >
-                <ShieldCheck size={15} aria-hidden /> Admin
+                <ShieldCheck size={15} aria-hidden /> Admin terpadu
               </Link>
             )}
             <Link

@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, lt, or } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { entitlements, orders, pointLedger, products, users } from "@/server/db/schema";
 import { ArenaDomainError } from "@/server/arena/errors";
@@ -476,8 +476,14 @@ export async function listUserOrders(userId: string, db: Db = getDb()): Promise<
 }
 
 /** Console view: recent orders across everybody, newest first. */
-export async function listAllOrders(input: { status?: Order["status"]; limit?: number } = {}, db: Db = getDb()) {
+export async function listAllOrders(input: { status?: Order["status"]; limit?: number; offset?: number; q?: string } = {}, db: Db = getDb()) {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const offset = input.offset ?? 0;
+  const q = input.q?.trim() ?? "";
+  if (!Number.isInteger(offset) || offset < 0 || offset > 100000 || q.length > 200) {
+    throw new ArenaDomainError("VALIDATION_ERROR", "Invalid order query.");
+  }
+  const pattern = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
   const rows = await db
     .select({
       id: orders.id,
@@ -498,9 +504,14 @@ export async function listAllOrders(input: { status?: Order["status"]; limit?: n
     .from(orders)
     .leftJoin(products, eq(products.id, orders.productId))
     .leftJoin(users, eq(users.id, orders.userId))
-    .where(input.status ? eq(orders.status, input.status) : undefined)
-    .orderBy(desc(orders.createdAt))
-    .limit(limit);
+    .where(and(
+      input.status ? eq(orders.status, input.status) : undefined,
+      q ? or(ilike(orders.productTitle, pattern), ilike(users.displayNameCache, pattern),
+        ilike(users.emailCache, pattern), ilike(orders.providerOrderId, pattern)) : undefined,
+    ))
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(limit)
+    .offset(offset);
   return rows.map((row) => ({
     ...row,
     createdAt: row.createdAt.toISOString(),

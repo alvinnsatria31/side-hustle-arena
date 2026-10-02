@@ -1,6 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // The legacy console is retired; its services and internal APIs remain in Arena.
+  async redirects() {
+    const origin = new URL(process.env.SK_AUTH_ORIGIN?.trim() || 'https://www.sekolahkarir.id');
+    const loopback = ['localhost','127.0.0.1','[::1]'].includes(origin.hostname);
+    const local = loopback && (process.env.NODE_ENV !== 'production' || process.env.APP_ENV === 'test');
+    if (origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash ||
+        !(origin.protocol === 'https:' || local && origin.protocol === 'http:') ||
+        origin.origin === (process.env.ARENA_ORIGIN || 'https://arena.sekolahkarir.id')) {
+      throw new Error('SK_AUTH_ORIGIN must be the central website origin, not the Arena.');
+    }
+    const destination = `${origin.origin}/admin/integrations/arena`;
+    return ['/app/admin/:path*','/admin/:path*'].map(source=>({source,destination,permanent:false}));
+  },
   // The isolated browser fixture can run alongside a developer's normal
   // server without contending for Next's dev lock or build artifacts.
   ...(process.env.ARENA_LOCAL_SANDBOX === '1' ? { distDir: '.next-arena-local' } : {}),
