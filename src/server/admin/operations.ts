@@ -19,7 +19,9 @@ type Query = z.infer<typeof listQuery>;
 
 export async function listAdminUsers(query: Query, db: Db = getDb()) {
   const search = `%${query.q.replace(/[\\%_]/g, "\\$&")}%`;
-  return db.select({ id: users.id, authSubject: users.authSubject, name: users.displayNameCache, email: users.emailCache, status: users.status })
+  // `createdAt` is what the list is ordered by and what the unified admin's
+  // "Terdaftar" column renders; without it that column was blank on every row.
+  return db.select({ id: users.id, authSubject: users.authSubject, name: users.displayNameCache, email: users.emailCache, status: users.status, createdAt: users.createdAt })
     .from(users).where(query.q ? or(ilike(users.authSubject, search), ilike(users.displayNameCache, search), ilike(users.emailCache, search)) : undefined)
     .orderBy(desc(users.createdAt), users.id).limit(query.limit).offset(query.offset);
 }

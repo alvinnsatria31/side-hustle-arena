@@ -45,6 +45,9 @@ No environment files, packages, or schemas were changed.
 | `INTERNAL_ADMIN_TOKEN` | Optional separate bearer secret for operator integrations. Never reuse `INTERNAL_AUTOMATION_TOKEN`; equal values deny token access. No default or fallback token. |
 | `INTERNAL_ADMIN_SUBJECT` | Required nonempty server-configured audit subject for admin bearer requests, e.g. `service:arena-ops`. |
 | `INTERNAL_ADMIN_SCOPES` | Required comma/whitespace-separated scopes for the admin bearer token. No implicit all-scopes access. |
+| `CENTRAL_ADMIN_TOKEN` | Optional second bearer, for the unified admin on the main website only. At least 32 characters; a value equal to `INTERNAL_AUTOMATION_TOKEN` or `INTERNAL_ADMIN_TOKEN` is ignored. See `docs/UNIFIED-ADMIN-HANDOFF.md`. |
+| `CENTRAL_ADMIN_SUBJECT` | Required with the token: the audit subject for everything the panel does. |
+| `CENTRAL_ADMIN_SCOPES` | Required with the token: its own scope list, independent of `INTERNAL_ADMIN_SCOPES`. |
 
 Keep every variable server-only. Browser operations use the participant session; bearer credentials never authorize the console page.
 
