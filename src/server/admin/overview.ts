@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, inArray, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import {
   ARENA_FEATURES,
@@ -85,6 +85,7 @@ export async function setArenaFeatureFlag(input: {
   key: string;
   closed: boolean;
   message?: string | null;
+  reason?: string;
   actorSubject: string;
   db?: Db;
 }): Promise<{ key: ArenaFeatureKey; closed: boolean }> {
@@ -97,6 +98,8 @@ export async function setArenaFeatureFlag(input: {
   }
   const key = input.key as ArenaFeatureKey;
   return db.transaction(async (tx) => {
+  // What it was, so the audit row answers "who reopened this, and from what".
+  const [before] = await tx.select({ closed: featureFlags.maintenanceMode }).from(featureFlags).where(eq(featureFlags.key, key));
   await tx
     .insert(featureFlags)
     .values({ key, maintenanceMode: input.closed, message: input.message ?? null })
@@ -110,7 +113,7 @@ export async function setArenaFeatureFlag(input: {
     action: "FEATURE_FLAG_SET",
     entityType: "feature_flag",
     entityId: key,
-    metadata: { closed: input.closed, message: input.message ?? null },
+    metadata: { closed: input.closed, previousClosed: before?.closed ?? false, message: input.message ?? null, reason: input.reason?.trim() || null },
   });
   return { key, closed: input.closed };
   });

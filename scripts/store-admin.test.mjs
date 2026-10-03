@@ -135,3 +135,51 @@ test("the existing internal store route forwards the validated edit version", as
   assert.equal(saved.expectedUpdatedAt, version.toISOString());
   assert.equal(saved.actorSubject, "operator");
 });
+
+test("a taken slug is its own 409, so the panel can name the field", async () => {
+  const { db, state } = database([{ ...input, id: "product-1", updatedAt: version }, { ...input, slug: "other", id: "product-2", updatedAt: version }]);
+  const taken = error => {
+    assert.equal(error.code, "PRODUCT_SLUG_TAKEN");
+    assert.equal(errors.toArenaErrorResponse(error).status, 409);
+    assert.match(error.message, /"demo" sudah dipakai/);
+    return true;
+  };
+  await assert.rejects(service.createProduct({ product: input, actorSubject: "operator", db }), taken);
+  await assert.rejects(service.updateProduct({ productId: "product-2", product: input, actorSubject: "operator", db }), taken);
+  assert.equal(state.audits.length, 0);
+  assert.equal(state.rows.length, 2);
+});
+
+test("two creates racing past the check meet the unique index and still read as a taken slug", async () => {
+  const raced = (error) => {
+    const { db } = database();
+    const insert = db.transaction;
+    db.transaction = fn => insert(tx => fn({ ...tx, insert: () => ({ values: () => ({ returning: () => Promise.reject(error) }) }) }));
+    return service.createProduct({ product: input, actorSubject: "operator", db });
+  };
+  await assert.rejects(raced(Object.assign(new Error("duplicate"), { code: "23505", constraint: "store_products_slug_unique" })), error => error.code === "PRODUCT_SLUG_TAKEN");
+  await assert.rejects(raced({ cause: { code: "23505", constraint: "store_products_slug_unique" } }), error => error.code === "PRODUCT_SLUG_TAKEN");
+  // Any other violation is not dressed up as a slug problem.
+  const other = Object.assign(new Error("other"), { code: "23505", constraint: "store_products_pkey" });
+  await assert.rejects(raced(other), error => error === other);
+});
+
+test("validation errors name the field, so a remote form can mark it", async () => {
+  const { db } = database();
+  const field = async (product) => {
+    try { await service.createProduct({ product: { ...input, ...product }, actorSubject: "operator", db }); }
+    catch (error) {
+      assert.equal(error.code, "VALIDATION_ERROR");
+      assert.equal(errors.toArenaErrorResponse(error).body.error.details.field, error.details.field);
+      return error.details.field;
+    }
+    assert.fail("expected a validation error");
+  };
+  assert.equal(await field({ slug: "Not A Slug" }), "slug");
+  assert.equal(await field({ title: " " }), "title");
+  assert.equal(await field({ priceIdrMinor: 150 }), "priceIdrMinor");
+  assert.equal(await field({ deliveryKind: "LINK" }), "deliveryUrl");
+  assert.equal(await field({ deliveryKind: "FILE" }), "deliveryObjectKey");
+  assert.equal(await field({ status: "ACTIVE", pointsCost: 10 }), "deliveryKind");
+  assert.equal(await field({ productKind: "ACCESS", status: "ACTIVE", pointsCost: 10 }), "featureKey");
+});
