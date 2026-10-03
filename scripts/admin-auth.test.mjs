@@ -10,7 +10,7 @@ let session = null;
 let allowedOrigin = true;
 const calls = [];
 const root = process.cwd();
-const envKeys = ["ARENA_ADMIN_SUBJECTS", "ARENA_ADMIN_ROLES", "INTERNAL_ADMIN_TOKEN", "INTERNAL_ADMIN_SUBJECT", "INTERNAL_ADMIN_SCOPES", "INTERNAL_AUTOMATION_TOKEN"];
+const envKeys = ["ARENA_ADMIN_SUBJECTS", "ARENA_ADMIN_ROLES", "INTERNAL_ADMIN_TOKEN", "INTERNAL_ADMIN_SUBJECT", "INTERNAL_ADMIN_SCOPES", "INTERNAL_AUTOMATION_TOKEN", "CENTRAL_ADMIN_TOKEN", "CENTRAL_ADMIN_SUBJECT", "CENTRAL_ADMIN_SCOPES"];
 const saved = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
 const forbidden = error => error.code === "FORBIDDEN";
 
@@ -126,6 +126,90 @@ test("service token requires distinct credential, configured actor, and explicit
   assert.deepEqual(await api.requireArenaAdmin(request("admin-secret"), "reviews"), { actorSubject: "service:ops" });
   await assert.rejects(api.requireArenaAdmin(request("admin-secret"), "users"), forbidden);
   await assert.rejects(api.requireArenaAdmin(request("wrong"), "reviews"), forbidden);
+});
+
+test("the central admin has its own bearer, subject and scopes; neither credential widens the other", async () => {
+  reset();
+  const api = auth();
+  const central = "central-admin-bearer-0123456789abcdef";
+  // n8n's ad-hoc launch already holds INTERNAL_ADMIN_TOKEN with `projects`
+  // only. The unified admin needs far more, and must not get it by widening
+  // the token a workflow box carries.
+  process.env.INTERNAL_ADMIN_TOKEN = "admin-secret";
+  process.env.INTERNAL_ADMIN_SUBJECT = "service:n8n-adhoc";
+  process.env.INTERNAL_ADMIN_SCOPES = "projects";
+  process.env.CENTRAL_ADMIN_TOKEN = central;
+  process.env.CENTRAL_ADMIN_SUBJECT = " central-admin:website ";
+  process.env.CENTRAL_ADMIN_SCOPES = "overview, store users";
+
+  assert.deepEqual(await api.requireArenaAdmin(request(central), "store"), { actorSubject: "central-admin:website" });
+  assert.deepEqual(await api.requireArenaAdmin(request(central), "users"), { actorSubject: "central-admin:website" });
+  assert.deepEqual(await api.requireArenaAdmin(request("admin-secret"), "projects"), { actorSubject: "service:n8n-adhoc" });
+  await assert.rejects(api.requireArenaAdmin(request(central), "projects"), forbidden, "the central scopes are its own, not a union");
+  await assert.rejects(api.requireArenaAdmin(request("admin-secret"), "store"), forbidden, "the workflow token gains nothing");
+  await assert.rejects(api.requireArenaAdmin(request(`${central}x`), "store"), forbidden);
+  await assert.rejects(api.requireArenaAdmin(request(central.slice(0, -1)), "store"), forbidden);
+
+  // A typo in the scope list grants nothing rather than whatever parsed.
+  process.env.CENTRAL_ADMIN_SCOPES = "overview,store,everything";
+  await assert.rejects(api.requireArenaAdmin(request(central), "store"), forbidden);
+});
+
+test("a central admin credential that is not a real, separate secret is absent", async () => {
+  reset();
+  const api = auth();
+  const central = "central-admin-bearer-0123456789abcdef";
+  const configure = (values) => {
+    for (const key of envKeys) delete process.env[key];
+    Object.assign(process.env, { CENTRAL_ADMIN_TOKEN: central, CENTRAL_ADMIN_SUBJECT: "central-admin:website", CENTRAL_ADMIN_SCOPES: "overview,store", ...values });
+    for (const [key, value] of Object.entries(values)) if (value === undefined) delete process.env[key];
+  };
+
+  configure({});
+  assert.deepEqual(await api.requireArenaAdmin(request(central), "overview"), { actorSubject: "central-admin:website" });
+
+  // No subject: the audit trail would have nobody to name.
+  configure({ CENTRAL_ADMIN_SUBJECT: undefined });
+  await assert.rejects(api.requireArenaAdmin(request(central), "overview"), forbidden);
+  configure({ CENTRAL_ADMIN_SUBJECT: "   " });
+  await assert.rejects(api.requireArenaAdmin(request(central), "overview"), forbidden);
+
+  // No scopes: configured but powerless, never "all".
+  configure({ CENTRAL_ADMIN_SCOPES: undefined });
+  for (const scope of api.arenaAdminScopes) await assert.rejects(api.requireArenaAdmin(request(central), scope), forbidden);
+
+  // Too short to be a secret.
+  configure({ CENTRAL_ADMIN_TOKEN: "short-token" });
+  await assert.rejects(api.requireArenaAdmin(request("short-token"), "overview"), forbidden);
+
+  // The worker's token must never carry admin rights under another name.
+  configure({ INTERNAL_AUTOMATION_TOKEN: central });
+  for (const scope of api.arenaAdminScopes) await assert.rejects(api.requireArenaAdmin(request(central), scope), forbidden);
+
+  // Reusing the workflow token defeats the separation: the copy is ignored and
+  // the token keeps exactly the narrow rights it already had.
+  configure({ INTERNAL_ADMIN_TOKEN: central, INTERNAL_ADMIN_SUBJECT: "service:n8n-adhoc", INTERNAL_ADMIN_SCOPES: "projects" });
+  assert.deepEqual(await api.requireArenaAdmin(request(central), "projects"), { actorSubject: "service:n8n-adhoc" });
+  await assert.rejects(api.requireArenaAdmin(request(central), "store"), forbidden);
+
+  // Unset entirely: nothing about the existing bearer path changes.
+  configure({ CENTRAL_ADMIN_TOKEN: undefined, INTERNAL_ADMIN_TOKEN: "admin-secret", INTERNAL_ADMIN_SUBJECT: "service:ops", INTERNAL_ADMIN_SCOPES: "reviews" });
+  assert.deepEqual(await api.requireArenaAdmin(request("admin-secret"), "reviews"), { actorSubject: "service:ops" });
+  await assert.rejects(api.requireArenaAdmin(request(central), "overview"), forbidden);
+});
+
+test("a central bearer never falls back to a signed-in admin session", async () => {
+  reset();
+  session = { authSubject: "sk-participant:admin" };
+  process.env.ARENA_ADMIN_SUBJECTS = session.authSubject;
+  process.env.CENTRAL_ADMIN_TOKEN = "central-admin-bearer-0123456789abcdef";
+  process.env.CENTRAL_ADMIN_SUBJECT = "central-admin:website";
+  process.env.CENTRAL_ADMIN_SCOPES = "overview";
+  const api = auth();
+  await assert.rejects(api.requireArenaAdmin(request("central-admin-bearer-0123456789abcdeX"), "overview"), forbidden);
+  await assert.rejects(api.requireArenaAdmin(request("central-admin-bearer-0123456789abcdef"), "users"), forbidden, "the session's wider scopes are not borrowed");
+  const malformed = new Request("https://arena.example.test/api/internal/admin/overview", { headers: { authorization: "Basic abc" } });
+  await assert.rejects(api.requireArenaAdmin(malformed, "overview"), forbidden);
 });
 
 test("session mutations require existing origin check; bad bearer never falls back to session", async () => {

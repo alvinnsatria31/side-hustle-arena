@@ -161,7 +161,20 @@ export async function createAdminDivision(input: z.infer<typeof divisionSchema> 
  * The slug stays immutable: it is the public identifier seeds and links
  * already point at, so renaming it would break those rather than rename them.
  */
-export const divisionUpdateSchema = divisionSchema.omit({ slug: true }).partial().extend({ divisionId: z.string().uuid() });
+/*
+ * Spelled out rather than `divisionSchema.partial()`: partial() keeps the
+ * create-time defaults, so a PATCH that left `isActive` and `sortOrder` out
+ * was read as "set them to true and 0". Freezing a rubric on a parked division
+ * activated it and moved it to the top of the list.
+ */
+export const divisionUpdateSchema = z.object({
+  divisionId: z.string().uuid(),
+  name: divisionSchema.shape.name.optional(),
+  description: divisionSchema.shape.description,
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+  baseRubric: baseRubricSchema.optional(),
+});
 
 export async function updateAdminDivision(input: z.infer<typeof divisionUpdateSchema> & { actorSubject: string; db?: Db }) {
   const patch = Object.fromEntries((["name", "description", "isActive", "sortOrder"] as const)
@@ -193,6 +206,8 @@ export async function listAdminProjects(query: z.infer<typeof projectListQuery>,
     previewStatus: projects.previewStatus, difficulty: projects.difficulty, estimatedMinutes: projects.estimatedMinutes,
     scheduledPublishAt: projects.scheduledPublishAt, publishedAt: projects.publishedAt, updatedAt: projects.updatedAt,
     weekId: weeks.id, weekCode: weeks.weekCode, weekStatus: weeks.status, weekOpensAt: weeks.opensAt,
+    // Approve, veto and regenerate are refused once this has passed; the list is what decides which buttons to show.
+    weekSubmissionDeadlineAt: weeks.submissionDeadlineAt,
     divisionId: divisions.id, divisionName: divisions.name })
     .from(projects).innerJoin(weeks, eq(weeks.id, projects.weekId)).innerJoin(divisions, eq(divisions.id, projects.divisionId))
     .where(and(query.weekId ? eq(projects.weekId, query.weekId) : undefined,

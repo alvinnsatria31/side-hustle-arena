@@ -635,6 +635,9 @@ test('a request that never reaches extraction does not spend the caller allowanc
   resetRateLimit();
   process.env.NEXT_PUBLIC_CV_SCANNER_ENABLED = 'true';
   const { POST } = await import('../src/app/api/cv-scan/route.ts');
+  // Whichever origin this environment accepts: production by default, localhost in CI.
+  const { getArenaMutationOrigins } = await import('../src/server/auth/config.ts');
+  const [allowedOrigin] = getArenaMutationOrigins();
 
   const noFile = () => {
     const body = new FormData();
@@ -644,7 +647,7 @@ test('a request that never reaches extraction does not spend the caller allowanc
       body,
       headers: {
         'x-forwarded-for': '203.0.113.9',
-        origin: 'https://arena.sekolahkarir.id',
+        origin: allowedOrigin,
       },
     });
   };

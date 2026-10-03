@@ -9,6 +9,9 @@ const flagSchema = z.object({
   key: z.string().trim().min(1).max(64),
   closed: z.boolean(),
   message: z.string().trim().max(500).nullable().optional(),
+  // Optional so the legacy console keeps working; the unified admin sends it.
+  // `message` is what participants read, `reason` is what the audit keeps.
+  reason: z.string().trim().min(1).max(1000).optional(),
 });
 
 /** Flip a maintenance switch (audited). Unknown keys are rejected. */

@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // No `redirects()` for the legacy admin console, on purpose. Next evaluates
+  // this file at BUILD time, and the image is built with placeholder origins
+  // (see Dockerfile): a redirect declared here shipped pointing at
+  // http://localhost:3000 and could only be switched by rebuilding. The switch
+  // is a runtime one — src/proxy.ts, driven by ARENA_CENTRAL_ADMIN_URL.
   // The isolated browser fixture can run alongside a developer's normal
   // server without contending for Next's dev lock or build artifacts.
   ...(process.env.ARENA_LOCAL_SANDBOX === '1' ? { distDir: '.next-arena-local' } : {}),

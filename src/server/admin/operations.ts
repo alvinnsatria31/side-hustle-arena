@@ -19,7 +19,9 @@ type Query = z.infer<typeof listQuery>;
 
 export async function listAdminUsers(query: Query, db: Db = getDb()) {
   const search = `%${query.q.replace(/[\\%_]/g, "\\$&")}%`;
-  return db.select({ id: users.id, authSubject: users.authSubject, name: users.displayNameCache, email: users.emailCache, status: users.status })
+  // `createdAt` is what the list is ordered by and what the unified admin's
+  // "Terdaftar" column renders; without it that column was blank on every row.
+  return db.select({ id: users.id, authSubject: users.authSubject, name: users.displayNameCache, email: users.emailCache, status: users.status, createdAt: users.createdAt })
     .from(users).where(query.q ? or(ilike(users.authSubject, search), ilike(users.displayNameCache, search), ilike(users.emailCache, search)) : undefined)
     .orderBy(desc(users.createdAt), users.id).limit(query.limit).offset(query.offset);
 }
@@ -125,8 +127,12 @@ export async function listAdminRedemptions(query: Query, status?: typeof redempt
 }
 
 export async function listAdminInventory(query: Query, db: Db = getDb()) {
-  const rewards = await db.select().from(catalog).orderBy(catalog.title, catalog.id).limit(query.limit).offset(query.offset);
-  const periods = await db.select().from(inventoryPeriods).orderBy(desc(inventoryPeriods.periodStart)).limit(200);
+  const search = `%${query.q.replace(/[\\%_]/g, "\\$&")}%`;
+  const rewards = await db.select().from(catalog).where(query.q ? ilike(catalog.title, search) : undefined)
+    .orderBy(catalog.title, catalog.id).limit(query.limit).offset(query.offset);
+  const periods = rewards.length ? await db.select().from(inventoryPeriods)
+    .where(inArray(inventoryPeriods.rewardId, rewards.map(reward => reward.id)))
+    .orderBy(desc(inventoryPeriods.periodStart), inventoryPeriods.id) : [];
   return { rewards, periods };
 }
 

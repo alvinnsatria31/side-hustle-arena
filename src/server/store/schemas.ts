@@ -11,6 +11,7 @@ import { z } from "zod";
  */
 
 export const storeProductSchema = z.object({
+  expectedUpdatedAt: z.iso.datetime({ offset: true }).optional(),
   slug: z.string().trim().min(1).max(64),
   title: z.string().trim().min(1).max(160),
   summary: z.string().trim().max(300).nullish(),
@@ -37,6 +38,8 @@ export const storeCheckoutSchema = z.object({
 export const storeOrderQuerySchema = z.object({
   status: z.enum(["PENDING", "PAID", "FULFILLED", "FAILED", "EXPIRED", "REFUNDED"]).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).max(100000).optional(),
+  q: z.string().trim().max(200).optional(),
 });
 
 export const storeReasonSchema = z.object({ reason: z.string().trim().min(1).max(1000) });

@@ -22,6 +22,10 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === "server-only") return { url: STUB_URL, shortCircuit: true };
   if (specifier === "next/headers") return { url: NEXT_HEADERS_STUB, shortCircuit: true };
   if (specifier === "next/navigation") return { url: NEXT_NAVIGATION_STUB, shortCircuit: true };
+  // Not a stub: the real module. Next ships it without an exports map, so the
+  // bare subpath a bundler accepts is unresolvable to Node until it is spelled
+  // with its extension. The proxy needs NextResponse to be testable at all.
+  if (specifier === "next/server") return nextResolve("next/server.js", context);
 
   // `@/...` is project-rooted (tsconfig paths), never parent-relative.
   if (specifier.startsWith(SRC_PREFIX)) {

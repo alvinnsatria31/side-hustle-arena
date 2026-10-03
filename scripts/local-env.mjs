@@ -38,7 +38,7 @@ export function localEnvironment({ create = false } = {}) {
   });
   // Only generated connection/secret values are editable. A local-file service
   // token must never turn a sandbox into an external integration.
-  for (const key of ['RESEND_API_KEY', 'VPS_WEBHOOK_BASE_URL', 'VPS_WEBHOOK_TOKEN', 'MAIN_SITE_ORIGIN', 'MAIN_SITE_VOUCHER_TOKEN', 'AI_API_KEY', 'AI_API_BASE_URL', 'INTERNAL_ADMIN_TOKEN', 'INTERNAL_AUTOMATION_TOKEN', 'CRON_SECRET', 'ARENA_EVAL_TOKEN', 'ARENA_ADMIN_ROLES']) env[key] = '';
+  for (const key of ['RESEND_API_KEY', 'VPS_WEBHOOK_BASE_URL', 'VPS_WEBHOOK_TOKEN', 'MAIN_SITE_ORIGIN', 'MAIN_SITE_VOUCHER_TOKEN', 'AI_API_KEY', 'AI_API_BASE_URL', 'INTERNAL_ADMIN_TOKEN', 'CENTRAL_ADMIN_TOKEN', 'INTERNAL_AUTOMATION_TOKEN', 'CRON_SECRET', 'ARENA_EVAL_TOKEN', 'ARENA_ADMIN_ROLES']) env[key] = '';
   if (!isLocalSandboxEnvironment(env)) throw new Error('Sandbox requires a generated secret and a loopback PostgreSQL database named arena_local.');
   return env;
 }

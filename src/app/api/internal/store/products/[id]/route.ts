@@ -21,7 +21,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     if (!z.string().uuid().safeParse(id).success) return arenaData({ reason: "VALIDATION_ERROR" }, 400);
     const parsed = storeProductSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return arenaData({ reason: "VALIDATION_ERROR", issues: parsed.error.issues }, 400);
-    return arenaData({ product: await updateProduct({ productId: id, product: parsed.data, actorSubject }) });
+    return arenaData({ product: await updateProduct({ productId: id, product: parsed.data, expectedUpdatedAt: parsed.data.expectedUpdatedAt, actorSubject }) });
   } catch (error) {
     return arenaError(error);
   }
