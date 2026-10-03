@@ -61,18 +61,25 @@ The rules live in `src/server/admin/central-admin.ts`.
 
 Built-in kept sections (`LEGACY_ONLY_SECTIONS`):
 
-- no screen in the panel: `flags`, `email`, `jobs`, `workflows`, `careers`,
+- no screen in the panel: `email`, `jobs`, `workflows`, `careers`,
   `career-report`, `cv-scanner`;
-- a screen in the panel, but missing an action only this console has: `store`,
-  `users`, `rewards`, `projects`, `divisions`, `reviews` (details under
-  [Parity](#parity)).
+- a screen in the panel, but not every action: `store`, `rewards`, `projects`
+  (details under [Parity](#parity-and-feature-checklist));
+- `weeks`: every button exists in the panel, but a generation or publication
+  that succeeds has never been run from it — only their refusals have.
 
-Redirecting them would not move the work, it would remove it — refunds, the
-emergency switches and the email outbox would become unreachable mid-incident.
-Only `weeks` and `audit` are fully covered today (`CENTRAL_COVERED_SECTIONS`),
-so with the switch on the redirect applies to the console root, `/admin`,
-`weeks` and `audit`. Kept sections stay reachable by their own URL, with the
-legacy navigation; the panel should link to them until it replaces them.
+Redirecting them would not move the work, it would remove it.
+
+Redirected when the switch is on (`CENTRAL_COVERED_SECTIONS`): the console
+root, `/admin`, `audit`, `users`, `flags`, `divisions` and `reviews`. Each of
+the last four moved only after the panel's screen was run against Arena on
+3 October (see [Verification](#verification)).
+
+That default assumes the deployed website build has those screens (website
+branch `codex/unified-admin-20261002` at `b483e71` or later). If production
+runs an older panel, list the missing sections in `ARENA_LEGACY_ADMIN_KEEP`
+before turning the switch on. Kept sections stay reachable by their own URL,
+with the legacy navigation; the panel links to them as "Masih di Arena".
 
 The suite fails if a folder under `/app/admin` is in neither list, so a section
 added later has to be classified rather than silently redirected.
@@ -265,13 +272,49 @@ panel. `/app/admin`, `/admin`, `weeks` and `audit` answered `307` to the panel.
 `store`, `flags`, `users` and `divisions` stayed on Arena. The bearer API was
 unaffected.
 
+### The panel's native actions, in a browser — local only
+
+On 3 October the website's own server (real login with TOTP step-up, real
+Chrome, its gateway) drove the Arena sandbox. Every write was then matched
+against Arena's audit log: each one present, under the configured subject,
+with the reason, and nothing extra.
+
+| Panel action | Result in Arena |
+| --- | --- |
+| Suspend, then restore a user | Two `USER_STATUS_SET` rows. The step-up re-submit produced one call, not two |
+| Close and reopen a switch, with message and reason | Two `FEATURE_FLAG_SET` rows with `previousClosed` |
+| Author a rubric | `generation.rubric-frozen`; the button disappears afterwards |
+| Stock: new period, change total, catalogue off/on, delivery link set/cleared | Six rows |
+| Cancel a pending order; refund a points order | Balance back to 200, entitlement revoked |
+| Void an enrolment | `pointsRevoked: 300`, enrolment `VOIDED` |
+| Override a score 80 → 85 | `REVIEW_OVERRIDE` |
+| Re-run a review | `200`, job queued. Finalize then answered `409` until the job was cleared |
+| Close, then finalize a week | `ranked: 2`, points awarded once |
+| Reschedule a week | `WEEK_RESCHEDULED` |
+| Generate with no model configured | `200` with every division `failed`; the panel reported failure |
+| Publish a week that is not due | `200` with `held` / `skipped`; nothing published |
+| Veto and schedule a project | Two rows |
+| Approve a project | `400`: the sandbox packages are placeholders |
+| Fulfil a reward claim; reverse another | Points returned on the reversal |
+
+Never run from the panel, because the sandbox has no real generated package
+and no model: a generation that succeeds, a publication that succeeds, and a
+project approval that succeeds.
+
+Two Arena defects surfaced and are fixed on this branch:
+
+- `PATCH /api/internal/admin/divisions` applied the create-time defaults to
+  omitted keys, so freezing a rubric activated the division and reset its sort
+  order. A PATCH now changes only the keys it names.
+- The admin project list lacked the week's deadline; it now returns
+  `weekSubmissionDeadlineAt`.
+
 ### Found by the website's own pass
 
 The website gateway compared a mutation's `Origin` with `request.url`, which
 Next builds from its own bind hostname, so a genuine same-origin save from a
-browser was refused with 403. Fixed on the website side (local commit
-`0eb080e`): the `Origin` host must equal the first `x-forwarded-host`, or
-`Host`. Nothing changed in Arena.
+browser was refused with 403. Fixed on the website side: the `Origin` host must
+equal the first `x-forwarded-host`, or `Host`. Nothing changed in Arena.
 
 ### Not verified
 
@@ -281,44 +324,46 @@ happened, treat the integration as untested in the place that matters.
 
 ## Parity and feature checklist
 
-The panel does **not** replace the legacy console yet. A section may leave
+The panel does **not** replace the legacy console yet. A section leaves
 `ARENA_LEGACY_ADMIN_KEEP` only after the panel has every action it lists **and**
 that has been run against Arena, sandbox first.
 
-Arena's side of every action below exists, accepts the panel's bearer, and —
-except where marked — is verified by the write-contract suite. What remains is
-the panel's screen, or an owner decision.
+Moved to the panel (run from the panel against the sandbox, audit matched):
 
-- [x] Read tabs, product create/edit with conflict and slug codes, division
-      create, week create — in the panel, browser-tested.
-- [ ] `users` — suspend/restore. Arena ready. The panel must prevent
-      self-suspension: Arena cannot tell which operator is acting.
-- [ ] `flags` — switch view and toggle with reason. Arena ready.
-- [ ] `divisions` — rubric authoring (irreversible, needs a confirm). Arena
-      ready.
-- [ ] `reviews` — enrolment void. Arena ready; the website gateway needs an
-      allowlist entry for `/api/internal/enrollments/{id}/void`.
-- [ ] `rewards` — stock, catalogue, delivery link: Arena ready. Voucher push and
-      void retry call the main site's voucher API: **owner decision**.
-- [ ] `store` — order fulfil, cancel and points refund: Arena ready. Rupiah
-      refunds stay in Midtrans; no route moves money. Manual fulfil of an IDR
-      order declares money received: **owner decision** whether the panel
-      offers it. File upload: Arena ready, but the bucket's CORS rule must allow
-      the website origin, or the website must relay the bytes: **owner
-      decision** (production storage change).
-- [ ] `projects` — detail, attribute: Arena ready. Edit, regenerate and cover
-      can lead to model calls: **owner decision**.
+- [x] Read tabs; product create/edit with conflict, slug and field errors;
+      division create; week create.
+- [x] `users` — suspend/restore. The panel hides Suspend on the operator's own
+      account, because Arena cannot tell which operator is acting.
+- [x] `flags` — view and toggle, with reason.
+- [x] `divisions` — create, edit, rubric authoring with a typed confirmation.
+- [x] `reviews` — override, re-run (reported as queued), enrolment void.
+- [x] `audit`.
+
+Still on the legacy console:
+
+- [ ] `weeks` — reschedule, close and finalize are run and work. Generate and
+      publish have only been run to a refusal. Move it after one generation and
+      one publication succeed from the panel, on sandbox data with a model.
+- [ ] `projects` — detail, veto and schedule are run. Approve has only been
+      refused. Edit, attribute, regenerate and cover are not in the panel; the
+      last three can lead to model calls: **owner decision**.
+- [ ] `rewards` — stock, catalogue, delivery link, fulfil and reverse are run.
+      Reversing an already-fulfilled claim (points back, goods kept) and voucher
+      push / void retry (main site's voucher API) are not in the panel:
+      **owner decision** on vouchers.
+- [ ] `store` — cancel and points refund are run. Manual fulfil of an IDR order
+      declares money received: **owner decision** whether the panel offers it.
+      File upload needs the bucket's CORS rule to allow the website origin, or
+      a relay through the website: **owner decision** (production storage).
+      Rupiah refunds stay in Midtrans; no route moves money.
 - [ ] `email`, `jobs`, `workflows` — Arena ready. They send real mail, start
-      automation or call a model; the panel would also need the
-      `notifications` scope: **owner decision**.
+      automation or call a model, and the panel would need the `notifications`
+      scope: **owner decision**.
 - [ ] `careers`, `career-report`, `cv-scanner` — out of scope. `AGENTS.md`
       requires the owner's explicit approval before these modules change. Not
       changed or exercised.
 - [ ] Overview health signals — Arena returns them; the panel shows only
       "Terhubung".
-
-A new division created from the panel defaults to inactive in the panel's form
-until rubric authoring lands there. Arena's API default is unchanged.
 
 ## Release order across the three repositories
 
@@ -342,7 +387,9 @@ until rubric authoring lands there. Arena's API default is unchanged.
 4. Run the read-only live check against production, then have an operator use
    the panel for real work.
 5. Only then set `ARENA_CENTRAL_ADMIN_URL` on Arena. With the built-in kept
-   list that moves the console root, `weeks` and `audit` to the panel. Shorten
+   list that moves the console root, `audit`, `users`, `flags`, `divisions` and
+   `reviews` to the panel. The website build that is live must already have
+   those screens; otherwise keep them with `ARENA_LEGACY_ADMIN_KEEP`. Shorten
    `ARENA_LEGACY_ADMIN_KEEP` section by section as the panel gains each missing
    action; `none` is the end state, and it is not reachable yet.
 

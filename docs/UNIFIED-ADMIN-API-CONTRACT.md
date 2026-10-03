@@ -294,19 +294,45 @@ Per this repository's `AGENTS.md`, the Jobs portal, Career Report and CV
 Scanner are not modified without the owner's explicit approval. They were not
 changed or exercised here, and these sections stay on the legacy console.
 
+## Row states each action accepts
+
+Use these to decide which buttons a list row shows. Anything outside them is
+refused, as noted.
+
+| Action | Row fields | Accepted |
+| --- | --- | --- |
+| Reward fulfil | `status` | `PENDING`, `PROCESSING`. `FULFILLED` with the same reference is a no-op; a different reference is `400` |
+| Reward reverse | `status` | `PENDING`, `PROCESSING`, `FAILED`. `ADMIN_REVERSED` is a no-op. `FULFILLED` is `400` unless the body carries `fulfilledPolicy: "REFUND_POINTS_KEEP_FULFILLED_STOCK"` |
+| Project approve / veto | `status`, `previewStatus`, `weekStatus`, `weekSubmissionDeadlineAt` | `status` not `PUBLISHED`/`ARCHIVED`; `weekStatus` in `DRAFT`, `PREVIEW`, `SCHEDULED`, `OPEN`; deadline not passed. Approve also needs `previewStatus` not `REJECTED`/`REGENERATE_REQUESTED` |
+| Project schedule | `status`, `weekStatus` | `status` not `PUBLISHED`/`ARCHIVED`; `weekStatus` in `DRAFT`, `PREVIEW`, `SCHEDULED` (not `OPEN`); the time must be before the week's deadline |
+| Week reschedule | `status` | `DRAFT`, `PREVIEW`, `SCHEDULED`, `OPEN`. An `OPEN` week cannot change `opensAt` |
+| Week generate | `status` | `DRAFT`, `PREVIEW`, `SCHEDULED`, `OPEN`, before the deadline; otherwise `409 WEEK_NOT_READY` |
+| Week publish | `status` | `DRAFT`, `PREVIEW`, `SCHEDULED`, `OPEN`; otherwise `409`. After the deadline: `200` with `skipped` |
+| Week close | `status`, `submissionDeadlineAt` | Not `FINALIZED`/`ARCHIVED` (`409 WEEK_CLOSED`), and the deadline has passed (`409 WEEK_NOT_READY`). `FINALIZING` is a no-op |
+| Week finalize | `status` | `FINALIZING`. `FINALIZED` returns the stored result and writes nothing. Open review jobs or unresolved reviews answer `409 WEEK_NOT_READY` with `details.openJobs` / `details.needsResolution` |
+| Review override | `id`, `weekStatus` | `id` not null; `weekStatus` not `FINALIZED`/`ARCHIVED` (`409 WEEK_ALREADY_FINALIZED`) |
+| Review re-run | `weekStatus`, `jobStatus` | `weekStatus` not `FINALIZED`/`ARCHIVED`. `409 REVIEW_JOB_UNAVAILABLE` while a worker holds the job. `400` if the version never consumed a review attempt |
+
+Two `200` answers that do not mean "done":
+
+- **Re-run** returns `{done:{jobId, nextRunNumber}}` as soon as the job is
+  queued. A worker grades it later, and the week cannot be finalized until it
+  has.
+- **Generate** returns `{weekId, results, provider}` even when every division
+  failed. Check each `results[]` entry for `failed`; `provider: "library-only"`
+  means no model was configured.
+
 ## What the panel needs before each legacy section can retire
 
 A section leaves `ARENA_LEGACY_ADMIN_KEEP` only after the panel has every
 action below **and** it has been run against Arena (sandbox first).
 
-| Section | Needs in the panel | Arena side |
-| --- | --- | --- |
-| `users` | Suspend / restore (with a self-guard) | Ready |
-| `flags` | Switch view + toggle with reason | Ready (reason added) |
-| `divisions` | Rubric authoring with an irreversible-action confirm | Ready |
-| `reviews` | Enrolment void | Ready; needs a website allowlist entry for `enrollments/{id}/void` |
-| `rewards` | Stock / catalogue / delivery link; voucher push and void retry | Stock ready. Voucher: owner decision (external API) |
-| `store` | Order fulfil / cancel / points refund; file upload | Orders ready. Upload: bucket CORS decision |
-| `projects` | Detail, edit, attribute; regenerate and cover | Ready. Regenerate/cover/edit: owner decision (AI) |
-| `email`, `jobs`, `workflows` | Outbox, job runs, launch | Ready; owner decision (sends mail, starts automation, AI) |
-| `careers`, `career-report`, `cv-scanner` | — | Out of scope without the owner's approval |
+| Section | State |
+| --- | --- |
+| `users`, `flags`, `divisions`, `reviews`, `audit` | **Retired to the panel** on 3 October: every action run from the panel, audit matched |
+| `weeks` | Kept. Needs one successful generate and one successful publish from the panel |
+| `projects` | Kept. Needs a successful approve; edit, attribute, regenerate, cover not in the panel (owner decision for the AI-triggering ones) |
+| `rewards` | Kept. Needs reversal of a fulfilled claim; voucher push / void retry (owner decision) |
+| `store` | Kept. Needs file upload (bucket CORS decision) and a decision on manual IDR fulfil |
+| `email`, `jobs`, `workflows` | Kept. Owner decision (sends mail, starts automation, AI) |
+| `careers`, `career-report`, `cv-scanner` | Kept. Out of scope without the owner's approval |
