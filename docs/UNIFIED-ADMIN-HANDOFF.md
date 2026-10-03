@@ -1,5 +1,17 @@
 # Unified admin integration — Arena handoff
 
+## Latest release checkpoint — 3 October 2026
+
+This checkpoint supersedes the older section-coverage statements below. The owner now requests delivery through live production, but no production release has been executed yet.
+
+The reviewed runtime defaults keep `email,jobs,workflows,careers,career-report,cv-scanner,store,rewards,projects,weeks` on Arena. Covered sections are `audit,users,flags,divisions,reviews`. Weeks deliberately stays: successful generation/publication from the central panel has not been proven; refusal-only tests are not parity. Website now retains a calendar fallback link. Do not activate cutover before deployed central-panel smoke passes.
+
+Isolated verification: 9 real PostgreSQL/storage contract tests, 44 unit tests and 5 outbox tests passed. Root also ran the merged Website candidate against real local upstreams: 18 browser checks passed, including exact product draft/price persistence and correlated Arena audit, mandatory 2FA, session revoke, recovery replay refusal and phone layouts. No API intercepts, paid AI, real email or production data mutations.
+
+The rubric PATCH no longer applies create defaults to omitted activation/order values; regression preserves inactive divisions. Project lists expose the week submission deadline. These tracked changes were independently reviewed together with the redirect contract.
+
+Production inventory confirmed healthy existing VPS app/DB and readable existing backup structure; central-admin environment keys are absent. Website/Tools belong to Vercel team `senaavin` (`team_BpHh5lY66Ao6KuN7qUnAfGDL`), but current CLI account is denied 403. Owner must restore Vercel access. Release sequence remains backup/rollback verification → upstreams with redirect off → Website migrations and deployment → owner 2FA and production smoke → scoped runtime redirect. Do not deploy the obsolete build-time redirect alone.
+
 Status on 3 October 2026. `docs/UNIFIED-ADMIN-PRD.md` is the shared specification.
 
 The unified admin lives in `sekolah-karir-website` and drives Arena through

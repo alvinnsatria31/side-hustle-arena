@@ -26,21 +26,23 @@ export const LEGACY_KEEP_ENV = "ARENA_LEGACY_ADMIN_KEEP";
  * Console sections the unified admin cannot fully do yet.
  *
  * Turning the redirect on for these would not move the work, it would remove
- * it. Some have no screen in the central panel at all (the emergency flags, the
- * email outbox, the scheduler, ad-hoc launch, the careers and CV tools). The
- * rest have a screen that lists the records but lacks an action only this
- * console offers: refunding or cancelling an order and uploading a product
- * file (`store`), suspending an account (`users`), pushing a voucher and
- * adjusting stock (`rewards`), editing or regenerating a project (`projects`),
- * authoring a rubric (`divisions`), voiding an enrolment (`reviews`). An
- * operator sent away from those mid-incident has nowhere to do them.
+ * it. Some have no screen in the central panel at all (the email outbox, the
+ * scheduler, ad-hoc launch, the careers and CV tools). The rest have a screen
+ * that lacks an action only this console offers: uploading a product file and
+ * confirming a payment by hand (`store`), pushing or voiding a voucher
+ * (`rewards`), editing or regenerating a project (`projects`). `weeks` has every
+ * button in the panel, but a generation or publication that SUCCEEDS has never
+ * been run from it — only their refusals have. An operator sent away from
+ * those mid-incident has nowhere to do them.
  *
  * They stay on the legacy console until the panel has them — shrink this list
- * (or set ARENA_LEGACY_ADMIN_KEEP) as each one lands, never before.
+ * (or set ARENA_LEGACY_ADMIN_KEEP) as each one lands, never before. "Lands"
+ * means the panel's screen exists and every action on it has been run against
+ * Arena; see docs/UNIFIED-ADMIN-HANDOFF.md for the record of each move.
  */
 export const LEGACY_ONLY_SECTIONS = [
-  "flags", "email", "jobs", "workflows", "careers", "career-report", "cv-scanner",
-  "store", "users", "rewards", "projects", "divisions", "reviews",
+  "email", "jobs", "workflows", "careers", "career-report", "cv-scanner",
+  "store", "rewards", "projects", "weeks",
 ] as const;
 
 /**
@@ -49,7 +51,7 @@ export const LEGACY_ONLY_SECTIONS = [
  * two lists — a new section is a decision, not a default (see the redirect
  * suite), because the default for an unlisted path is to redirect it.
  */
-export const CENTRAL_COVERED_SECTIONS = ["weeks", "audit"] as const;
+export const CENTRAL_COVERED_SECTIONS = ["audit", "users", "flags", "divisions", "reviews"] as const;
 
 export type CentralAdminTarget =
   | { enabled: false; reason: "unset" | "invalid"; problem?: string }

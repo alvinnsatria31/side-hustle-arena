@@ -304,7 +304,7 @@ action below **and** it has been run against Arena (sandbox first).
 | `users` | Suspend / restore (with a self-guard) | Ready |
 | `flags` | Switch view + toggle with reason | Ready (reason added) |
 | `divisions` | Rubric authoring with an irreversible-action confirm | Ready |
-| `reviews` | Enrolment void; verdict reason display | Ready; needs a website allowlist entry for `enrollments/{id}/void` |
+| `reviews` | Enrolment void | Ready; needs a website allowlist entry for `enrollments/{id}/void` |
 | `rewards` | Stock / catalogue / delivery link; voucher push and void retry | Stock ready. Voucher: owner decision (external API) |
 | `store` | Order fulfil / cancel / points refund; file upload | Orders ready. Upload: bucket CORS decision |
 | `projects` | Detail, edit, attribute; regenerate and cover | Ready. Regenerate/cover/edit: owner decision (AI) |

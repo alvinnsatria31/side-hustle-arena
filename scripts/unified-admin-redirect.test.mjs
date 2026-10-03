@@ -43,7 +43,7 @@ test('shipping the API does not retire the console: the redirect is off until co
 
 test('one runtime variable turns it on, and removing it is the rollback', () => {
   withEnv({ ...production, ARENA_CENTRAL_ADMIN_URL: CENTRAL }, () => {
-    for (const path of ['/app/admin', '/app/admin/weeks', '/app/admin/audit/2026', '/admin', '/admin/store']) {
+    for (const path of ['/app/admin', '/app/admin/users', '/app/admin/audit/2026', '/admin', '/admin/store']) {
       const response = visit(path);
       assert.equal(response.status, 307, `${path} must be a temporary redirect`);
       assert.equal(response.headers.get('location'), CENTRAL);
@@ -54,19 +54,20 @@ test('one runtime variable turns it on, and removing it is the rollback', () => 
 });
 
 test('what the central panel cannot do yet stays reachable while the redirect is on', () => {
-  // The emergency flags, email outbox, scheduler and ad-hoc launch have no
-  // screen in the unified admin. Redirecting them would not move that work, it
-  // would remove it — in the middle of an incident, from the only switch.
+  // The email outbox, scheduler and ad-hoc launch have no screen in the
+  // unified admin. Redirecting them would not move that work, it would remove
+  // it — in the middle of an incident, from the only place it can be done.
   withEnv({ ...production, ARENA_CENTRAL_ADMIN_URL: CENTRAL }, () => {
-    for (const path of ['/app/admin/flags', '/app/admin/email', '/app/admin/jobs', '/app/admin/workflows', '/app/admin/careers', '/app/admin/career-report', '/app/admin/cv-scanner']) {
+    for (const path of ['/app/admin/email', '/app/admin/jobs', '/app/admin/workflows', '/app/admin/careers', '/app/admin/career-report', '/app/admin/cv-scanner']) {
       assert.equal(visit(path).headers.get('location'), null, `${path} has no central equivalent and must stay`);
     }
-    // These have a list in the panel but not the action: refund and file
-    // upload, suspend, voucher push and stock, project edit, rubric, void.
-    for (const path of ['/app/admin/store', '/app/admin/users', '/app/admin/rewards', '/app/admin/projects/abc', '/app/admin/divisions', '/app/admin/reviews']) {
+    // These have a screen in the panel but not every action: file upload and
+    // manual payment confirmation, voucher push and void, project edit.
+    for (const path of ['/app/admin/store', '/app/admin/rewards', '/app/admin/projects/abc', '/app/admin/weeks']) {
       assert.equal(visit(path).headers.get('location'), null, `${path} still does something the panel cannot`);
     }
-    for (const path of ['/app/admin', '/app/admin/weeks', '/app/admin/audit']) {
+    // Each of these was run from the panel against Arena before it moved here.
+    for (const path of ['/app/admin', '/app/admin/audit', '/app/admin/users', '/app/admin/flags', '/app/admin/divisions', '/app/admin/reviews']) {
       assert.equal(visit(path).headers.get('location'), CENTRAL, `${path} is covered by the central panel`);
     }
   });
@@ -75,12 +76,14 @@ test('what the central panel cannot do yet stays reachable while the redirect is
   // As the panel gains a screen, the operator narrows the list — and `none`
   // retires the console entirely. A typo keeps more, never less, of nothing:
   // unknown names simply match no section.
+  // The same variable is also how an operator keeps MORE than the default,
+  // if a deployed panel turns out to be older than this list assumes.
   withEnv({ ...production, ARENA_CENTRAL_ADMIN_URL: CENTRAL, ARENA_LEGACY_ADMIN_KEEP: 'Flags, email' }, () => {
     assert.equal(visit('/app/admin/flags').headers.get('location'), null);
     assert.equal(visit('/app/admin/jobs').headers.get('location'), CENTRAL);
   });
   withEnv({ ...production, ARENA_CENTRAL_ADMIN_URL: CENTRAL, ARENA_LEGACY_ADMIN_KEEP: 'none' }, () => {
-    assert.equal(visit('/app/admin/flags').headers.get('location'), CENTRAL);
+    assert.equal(visit('/app/admin/store').headers.get('location'), CENTRAL);
   });
   assert.deepEqual(legacySectionsKept({ ARENA_LEGACY_ADMIN_KEEP: 'flags;../etc, email' }), ['email']);
 

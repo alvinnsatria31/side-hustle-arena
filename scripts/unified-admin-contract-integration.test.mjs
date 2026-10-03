@@ -243,6 +243,10 @@ test("rubric authoring freezes once; a second rubric is refused", async () => {
   const frozen = await call(PATCH, "/api/internal/admin/divisions", { method: "PATCH", body: { divisionId, baseRubric: rubric } });
   assert.equal(frozen.status, 200);
   assert.equal((await auditFor(divisionId, "generation.rubric-frozen"))[0].actorSubject, SUBJECT);
+  // A PATCH changes what it names and nothing else: the division stays parked.
+  const [parked] = await db.select().from(schema.divisions).where(eq(schema.divisions.id, divisionId));
+  assert.equal(parked.isActive, false, "freezing a rubric must not activate the division");
+  assert.deepEqual((await auditFor(divisionId, "DIVISION_UPDATED"))[0].metadata.changes, {});
   const again = await call(PATCH, "/", { method: "PATCH", body: { divisionId, baseRubric: rubric } });
   assert.equal(again.status, 400);
   assert.match(again.json.error.message, /already frozen/);
