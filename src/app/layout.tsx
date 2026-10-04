@@ -3,6 +3,7 @@ import { JetBrains_Mono, Manrope } from 'next/font/google';
 import { DemoProvider } from '@/features/demo/store';
 import { ToastProvider } from '@/features/ui/toast';
 import { FloatingWhatsApp } from '@/components/layout/FloatingWhatsApp';
+import { MetaPixel } from '@/components/layout/MetaPixel';
 import './globals.css';
 
 const manrope = Manrope({
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ToastProvider>{children}</ToastProvider>
           <FloatingWhatsApp />
         </DemoProvider>
+        <MetaPixel />
       </body>
     </html>
   );
