@@ -10,7 +10,6 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -35,6 +34,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
+import { ArenaWordmark, LadderMark } from '@/components/brand/BrandLogo';
 import { Button, ButtonLink } from '@/components/primitives/Button';
 import { RewardIcon } from '@/components/arena/MilestoneRoadmap';
 import { AvatarBadge } from '@/components/arena/AvatarBadge';
@@ -870,14 +870,7 @@ export function ArenaDashboardMockup() {
           <header className="border-b border-[#F0F2F5] bg-white/95 shadow-[0_1px_8px_rgba(15,23,42,0.03)] backdrop-blur-md">
             <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-3 sm:h-[72px] sm:px-6 lg:px-8">
               <div className="flex shrink-0 items-center gap-2">
-                <Image
-                  src="/logo-arena.png"
-                  alt="Side Hustle Arena by SekolahKarir"
-                  width={160}
-                  height={33}
-                  priority
-                  className="h-6 w-auto object-contain sm:h-8"
-                />
+                <ArenaWordmark />
               </div>
 
               <div
@@ -1290,13 +1283,9 @@ export function ArenaDashboardMockup() {
                     <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500">Tampilan profil LinkedIn</span>
                     <h3 className="mt-1 text-sm font-extrabold text-sk-navy">Bagian: Proyek</h3>
                     <div className="mt-3.5 flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
-                      <Image
-                        src="/logo-arena.png"
-                        alt=""
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1 ring-1 ring-slate-200"
-                      />
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white ring-1 ring-slate-200">
+                        <LadderMark className="h-6 w-6" />
+                      </span>
                       <div className="min-w-0">
                         <p className="text-xs font-bold leading-snug text-slate-900">{FEATURED.project.title}</p>
                         <p className="text-[11px] text-slate-600">Side Hustle Arena by SekolahKarir · {demo.featuredMonth}</p>

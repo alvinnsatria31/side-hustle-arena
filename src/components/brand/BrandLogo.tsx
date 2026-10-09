@@ -1,33 +1,68 @@
-'use client';
-
 import Link from 'next/link';
-import Image from 'next/image';
-import { useState } from 'react';
 import { cn } from '@/lib/cn';
 
 /**
- * The staircase mark, drawn inline so it needs no request at all.
+ * The Sekolah Karir mark: four blue steps, the logo adopted in October 2026.
  *
- * It stands in whenever /logo.png cannot be shown — a blocked or failed
- * request, a proxy that strips static files, an offline shell — so the navbar
- * never shows a broken-image glyph or an empty corner where the brand belongs.
+ * Same path as the main site's LogoMark, so the two can never drift apart by
+ * one being re-exported at a different size. Drawn inline: there is no request
+ * to fail, so the navbar can never show a broken-image glyph.
  */
-export function StaircaseMark({ className }: { className?: string }) {
+export function LadderMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden focusable="false" className={className}>
-      <rect width="32" height="32" rx="8" fill="currentColor" />
-      <path d="M8 23.5h5.5V18H19v-5.5h5" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 -12 448 448" aria-hidden focusable="false" className={className}>
+      <path
+        fill="#006DFE"
+        d="M296 0H432A16 16 0 0 1 448 16V207A16 16 0 0 1 432 223H365V309A16 16 0 0 1 349 325H280V408A16 16 0 0 1 264 424H16A16 16 0 0 1 0 408V319A16 16 0 0 1 16 303H93V218A16 16 0 0 1 109 202H187V117A16 16 0 0 1 203 101H280V16A16 16 0 0 1 296 0Z"
+      />
     </svg>
   );
 }
 
 /**
- * Brand logo: SekolahKarir Arena official logo.
+ * The mark with "Side Hustle Arena by SekolahKarir" set in the page's own type.
  *
- * Served unoptimized and with priority since it sits above the fold on all
- * key layout surfaces. On ultra-narrow screens (< 360px) or in compact mode,
- * the mark is displayed alone to prevent overlapping adjacent navigation actions.
+ * Below 360px, or in compact mode, the mark stands alone so it cannot collide
+ * with the navigation actions next to it.
  */
+export function ArenaWordmark({
+  dark,
+  compact,
+  className,
+}: {
+  dark?: boolean;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <span className={cn('flex items-center gap-2.5', className)}>
+      <LadderMark className="h-8 w-8 shrink-0" />
+      {!compact && (
+        <span className="flex flex-col leading-none max-[359px]:hidden">
+          <span
+            className={cn(
+              'whitespace-nowrap text-[16px] font-extrabold tracking-[-0.03em]',
+              dark ? 'text-white' : 'text-sk-navy',
+            )}
+          >
+            Side Hustle <span className="text-[#006DFE]">Arena</span>
+          </span>
+          <span
+            className={cn(
+              'mt-1 whitespace-nowrap text-[10.5px] font-semibold',
+              dark ? 'text-white/70' : 'text-sk-muted',
+            )}
+          >
+            by <span className={dark ? 'text-white' : 'text-sk-navy'}>Sekolah</span>
+            <span className="text-[#006DFE]">Karir</span>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Brand logo as a link home. */
 export function BrandLogo({
   dark,
   className,
@@ -41,63 +76,13 @@ export function BrandLogo({
   showWordmark?: boolean;
   href?: string;
 }) {
-  const [failed, setFailed] = useState(false);
-
   return (
     <Link
       href={href}
       aria-label="Side Hustle Arena — beranda"
       className={cn('flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-sk-blue', className)}
     >
-      {failed ? (
-        <div className="flex items-center gap-2">
-          <StaircaseMark className="h-8 w-8 shrink-0 text-[#026bf4]" />
-          {showWordmark && !compact && (
-            <span className={cn('whitespace-nowrap font-extrabold text-[15.5px] leading-none', dark ? 'text-white' : 'text-sk-navy')}>
-              Side Hustle <span className="text-[#026bf4]">Arena</span>
-            </span>
-          )}
-        </div>
-      ) : compact || !showWordmark ? (
-        <Image
-          src="/logo-mark.png"
-          alt="Side Hustle Arena"
-          width={32}
-          height={32}
-          className="h-8 w-8 shrink-0 object-contain"
-          priority
-          unoptimized
-          onError={() => setFailed(true)}
-          ref={(img) => {
-            if (img?.complete && img.naturalWidth === 0) setFailed(true);
-          }}
-        />
-      ) : (
-        <>
-          <Image
-            src="/logo.png"
-            alt="Side Hustle Arena by SekolahKarir"
-            width={195}
-            height={40}
-            className={cn('h-9 w-auto object-contain', 'max-[359px]:hidden')}
-            priority
-            unoptimized
-            onError={() => setFailed(true)}
-            ref={(img) => {
-              if (img?.complete && img.naturalWidth === 0) setFailed(true);
-            }}
-          />
-          <Image
-            src="/logo-mark.png"
-            alt="Side Hustle Arena"
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 object-contain min-[360px]:hidden"
-            priority
-            unoptimized
-          />
-        </>
-      )}
+      <ArenaWordmark dark={dark} compact={compact || !showWordmark} />
     </Link>
   );
 }

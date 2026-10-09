@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { AnimatePresence, motion } from 'motion/react';
+import { ArenaWordmark } from '@/components/brand/BrandLogo';
 import { LogoutForm } from '@/components/auth/LogoutForm';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -111,15 +111,7 @@ export function AppNavbar() {
           aria-label="Side Hustle Arena — Ringkasan"
           className="group flex shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sk-blue"
         >
-          <Image
-            src="/logo.png"
-            alt="Side Hustle Arena by SekolahKarir"
-            width={195}
-            height={40}
-            className="h-7 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02] min-[380px]:h-8 min-[400px]:h-9 sm:h-10"
-            priority
-            unoptimized
-          />
+          <ArenaWordmark className="transition-transform duration-200 group-hover:scale-[1.02]" />
         </Link>
 
         {/* Tengah desktop ala CardChase: segmented pill di dalam kapsul.
