@@ -1,4 +1,5 @@
 import "server-only";
+import { weekPhase, type WeekPhase } from "@/lib/week-phase";
 import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { getDb } from "@/server/db/client";
@@ -132,6 +133,8 @@ export interface PublicArenaHome {
   /** "Senin · 08.00" — when picking opens; matters while the week is still PREVIEW. */
   opensLabel: string;
   canSelect: boolean;
+  /** Open, not open yet, or over. Pages word themselves from this, not from `canSelect`. */
+  phase: WeekPhase;
   status: string;
   projectCount: number;
   divisionCount: number;
@@ -218,6 +221,7 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
     deadlineAt: deadlineAt.toISOString(),
     opensLabel: deadlineLabel(opensAt),
     canSelect: week.selection.canSelect,
+    phase: weekPhase(week.selection),
     status: week.status,
     projectCount: projects.length,
     divisionCount: divisions.length,
@@ -235,27 +239,32 @@ async function fetchPublicArenaHome(): Promise<PublicArenaHome | null> {
   };
 }
 
-export const getPublicArenaHome = unstable_cache(fetchPublicArenaHome, ["arena-public-home-v2"], {
+export const getPublicArenaHome = unstable_cache(fetchPublicArenaHome, ["arena-public-home-v3"], {
   revalidate: PUBLIC_TTL_SECONDS,
 });
 
 export interface PublicProjectList {
   groups: string[];
   projects: ArenaProject[];
+  /** Null when no week exists at all. */
+  phase: WeekPhase | null;
 }
 
 async function fetchPublicProjects(): Promise<PublicProjectList> {
   const week = await currentWeekOrNull();
   // No week and "a week with nothing published yet" are the same thing to a
   // browser page: an empty list. One code path covers both.
-  if (!week) return { groups: [], projects: [] };
+  if (!week) return { groups: [], projects: [], phase: null };
   const [projects, divisions] = await Promise.all([
     listVisibleArenaProjects(),
     listActiveArenaDivisions(),
   ]);
   const opensAt = new Date(week.opensAt);
   const weekNo = isoWeekNumber(opensAt);
-  const deadline = deadlineLabel(new Date(week.submissionDeadlineAt));
+  const phase = weekPhase(week.selection);
+  // A weekday and a time with no date reads as the coming one. On a week that
+  // is over, "Batas: Senin · 23.59" promised a deadline that had passed.
+  const deadline = phase === "closed" ? "sudah lewat" : deadlineLabel(new Date(week.submissionDeadlineAt));
   // One batched skills query for the whole week (no N+1 per card).
   const skillRows = projects.length
     ? await getDb()
@@ -288,10 +297,10 @@ async function fetchPublicProjects(): Promise<PublicProjectList> {
   }));
   // Division names are not unique in the schema (only slugs are); a repeated
   // name used to render twice as a filter chip under the same React key.
-  return { groups: [...new Set(divisions.map((division) => division.name))], projects: mapped };
+  return { groups: [...new Set(divisions.map((division) => division.name))], projects: mapped, phase };
 }
 
-export const getPublicProjects = unstable_cache(fetchPublicProjects, ["arena-public-projects"], {
+export const getPublicProjects = unstable_cache(fetchPublicProjects, ["arena-public-projects-v2"], {
   revalidate: PUBLIC_TTL_SECONDS,
 });
 

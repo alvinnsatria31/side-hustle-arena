@@ -64,7 +64,7 @@ export default async function ShowcasePage() {
                   : 'Karya berperingkat akan muncul setelah minggu Arena ditutup dan penilaiannya selesai.'}
               </p>
               <ButtonLink href="/arena/projects" size="lg" className="mt-6">
-                Lihat Proyek Minggu Ini
+                Lihat Proyek Arena
               </ButtonLink>
             </Card>
           </Reveal>
@@ -200,7 +200,7 @@ export default async function ShowcasePage() {
               </h3>
             </div>
             <ButtonLink href="/arena/projects" size="lg">
-              Lihat Proyek Minggu Ini
+              Lihat Proyek Arena
             </ButtonLink>
           </div>
         </Reveal>

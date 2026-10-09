@@ -180,7 +180,7 @@ export default async function ShowcaseDetailPage({ params }: { params: Promise<{
 
           <Reveal delay={0.25}>
             <ButtonLink href="/arena/projects" size="lg" fullWidth>
-              Lihat Proyek Minggu Ini
+              Lihat Proyek Arena
             </ButtonLink>
           </Reveal>
         </div>

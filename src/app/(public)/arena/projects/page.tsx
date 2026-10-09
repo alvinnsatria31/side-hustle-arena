@@ -2,19 +2,21 @@ import { Breadcrumb } from '@/components/primitives/Breadcrumb';
 import { Entrance } from '@/components/motion/Reveal';
 import { ProjectBrowser } from '@/components/arena/ProjectBrowser';
 import { getPublicProjects } from '@/lib/arena-view';
+import { PROJECT_LIST_LEDE, PROJECT_LIST_TITLE } from '@/lib/week-phase';
 
-export const metadata = { title: 'Proyek Minggu Ini' };
+export const metadata = { title: 'Proyek Arena' };
 export const dynamic = 'force-dynamic';
 
 export default async function ArenaBrowsePage() {
-  const { groups, projects } = await getPublicProjects();
+  const { groups, projects, phase } = await getPublicProjects();
+  const title = PROJECT_LIST_TITLE[phase ?? 'open'];
   return (
     <div className="mx-auto max-w-6xl px-6 pb-24 pt-28 md:pt-32">
-      <Breadcrumb items={[{ label: 'Arena', href: '/arena' }, { label: 'Proyek Minggu Ini' }]} />
+      <Breadcrumb items={[{ label: 'Arena', href: '/arena' }, { label: title }]} />
       <Entrance className="mb-6 mt-7">
-        <h1 className="text-[30px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[36px]">Proyek Minggu Ini</h1>
+        <h1 className="text-[30px] font-extrabold tracking-[-0.02em] text-sk-navy sm:text-[36px]">{title}</h1>
         <p className="mt-2 max-w-[600px] text-[14px] leading-relaxed text-sk-muted">
-          Pilih satu proyek yang sesuai dengan kemampuan yang ingin kamu latih.
+          {PROJECT_LIST_LEDE[phase ?? 'open']}
         </p>
       </Entrance>
       {projects.length === 0 ? (

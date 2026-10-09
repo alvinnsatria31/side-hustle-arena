@@ -10,6 +10,7 @@ import { LiveArenaBoard } from '@/components/arena/LiveArenaBoard';
 import { MilestoneRoadmap } from '@/components/arena/MilestoneRoadmap';
 import { ProjectCard } from '@/components/arena/ProjectCard';
 import { getPublicArenaHome, getPublicProjects } from '@/lib/arena-view';
+import { PROJECT_LIST_TITLE } from '@/lib/week-phase';
 import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
 
 /** Cards shown on the landing; the rest stay one click away on /arena/projects. */
@@ -37,9 +38,11 @@ export default async function ArenaLandingPage() {
   const rewardSteps = await listActiveCatalogItems()
     .then((items) => items.map((item) => ({ slug: item.slug, title: item.title, pointsRequired: item.pointsCost, rewardType: item.rewardType })))
     .catch(() => []);
+  const projectsLabel = PROJECT_LIST_TITLE[home?.phase ?? 'open'];
   const stats = [
-    { key: 'projects', label: 'Proyek Minggu Ini', value: home ? String(home.projectCount) : '—' },
-    { key: 'deadline', label: 'Batas Pengumpulan', value: home ? home.deadline : 'Belum dijadwalkan', small: true },
+    { key: 'projects', label: projectsLabel, value: home ? String(home.projectCount) : '—' },
+    // A weekday with no date reads as the coming one, so a week that is over says so.
+    { key: 'deadline', label: 'Batas Pengumpulan', value: home ? (home.phase === 'closed' ? 'Sudah lewat' : home.deadline) : 'Belum dijadwalkan', small: true },
     { key: 'divisions', label: 'Divisi Aktif', value: home ? String(home.divisionCount) : '—' },
     { key: 'drop', label: 'Proyek Baru', value: 'Setiap Senin', small: true },
   ];
@@ -70,7 +73,7 @@ export default async function ArenaLandingPage() {
             <Entrance delay={0.42}>
               <div className="mb-7 flex flex-wrap gap-3">
                 <ButtonLink href="/arena/projects" size="md">
-                  Lihat Proyek Minggu Ini
+                  Lihat {projectsLabel}
                 </ButtonLink>
                 <ButtonLink href="#cara-kerja" variant="ghost" size="md">
                   Cara Kerjanya

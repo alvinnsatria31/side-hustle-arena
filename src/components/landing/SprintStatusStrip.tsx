@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatCountdown } from '@/lib/countdown';
+import { ENROLMENT_LABEL, type WeekPhase } from '@/lib/week-phase';
 
 interface Props {
   deadlineAt: string;
@@ -9,6 +10,7 @@ interface Props {
   projectCount: number;
   divisionCount: number;
   isOpen: boolean;
+  phase: WeekPhase;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * renders the deadline label alone, which is true in every state, so server
  * and client agree on the first paint.
  */
-export function SprintStatusStrip({ deadlineAt, deadlineLabel, projectCount, divisionCount, isOpen }: Props) {
+export function SprintStatusStrip({ deadlineAt, deadlineLabel, projectCount, divisionCount, isOpen, phase }: Props) {
   const deadline = new Date(deadlineAt).getTime();
   const [remaining, setRemaining] = useState<number | null>(null);
 
@@ -76,7 +78,7 @@ export function SprintStatusStrip({ deadlineAt, deadlineLabel, projectCount, div
             aria-hidden
             className={isOpen ? 'h-1.5 w-1.5 rounded-full bg-sk-success' : 'h-1.5 w-1.5 rounded-full bg-sk-faint'}
           />
-          {isOpen ? 'Pendaftaran dibuka' : 'Pendaftaran ditutup'}
+          {ENROLMENT_LABEL[phase]}
         </dd>
       </div>
     </dl>

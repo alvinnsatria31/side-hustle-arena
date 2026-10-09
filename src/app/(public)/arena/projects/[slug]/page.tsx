@@ -27,7 +27,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <Breadcrumb
         items={[
           { label: 'Arena', href: '/arena' },
-          { label: 'Proyek Minggu Ini', href: '/arena/projects' },
+          { label: 'Proyek', href: '/arena/projects' },
           { label: project.title },
         ]}
       />

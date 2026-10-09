@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { CalendarClock, FileCheck2, Sparkles } from 'lucide-react';
 import { ProjectMiniVisual, motifForDivision } from '@/components/landing/ProjectMiniVisual';
+import { ENROLMENT_LABEL, type WeekPhase } from '@/lib/week-phase';
 
 export interface LandingProject {
   slug: string;
@@ -31,6 +32,7 @@ export function ProjectPreviewCard({
   href,
   deadline,
   maxPoints,
+  phase = 'open',
 }: {
   project: LandingProject;
   href: string;
@@ -38,6 +40,8 @@ export function ProjectPreviewCard({
   deadline: string | null;
   /** The most one project can earn: a perfect score plus the rank-1 bonus. */
   maxPoints: number | null;
+  /** Outside an open week the brief can be read, not taken. */
+  phase?: WeekPhase;
 }) {
   const motif = motifForDivision(project.categorySlug, project.category);
 
@@ -87,7 +91,13 @@ export function ProjectPreviewCard({
         </div>
 
         <div className="mt-auto flex items-center gap-2 pt-5 text-[12.5px] font-semibold text-sk-muted">
-          {deadline ? (
+          {phase !== 'open' ? (
+            // A bare "Senin · 23.59" on a finished week reads as next Monday.
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarClock size={14} strokeWidth={2.2} aria-hidden className="text-sk-faint" />
+              {ENROLMENT_LABEL[phase]}
+            </span>
+          ) : deadline ? (
             <span className="inline-flex items-center gap-1.5">
               <CalendarClock size={14} strokeWidth={2.2} aria-hidden className="text-sk-faint" />
               {deadline}
@@ -96,7 +106,7 @@ export function ProjectPreviewCard({
             <span className="inline-flex items-center gap-1.5">{project.estimatedTime}</span>
           )}
           <span className="ml-auto inline-flex items-center gap-1.5 text-sk-blue">
-            Ambil brief
+            {phase === 'open' ? 'Ambil brief' : 'Lihat di Arena'}
           </span>
         </div>
       </div>

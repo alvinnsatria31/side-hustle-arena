@@ -10,6 +10,7 @@ import { BriefToPortfolioFlow } from '@/components/landing/BriefToPortfolioFlow'
 import { CaraIkutStepper } from '@/components/landing/CaraIkutStepper';
 import { ARENA_ENTRY_LABEL, arenaEntryHref } from '@/components/landing/arena-entry';
 import { getPublicArenaHome } from '@/lib/arena-view';
+import { ENROLMENT_LABEL } from '@/lib/week-phase';
 import { getCurrentUser } from '@/server/auth';
 import { listActiveCatalogItems } from '@/server/rewards/catalog-service';
 
@@ -53,6 +54,9 @@ export default async function LandingPage() {
   ]);
 
   const isOpen = Boolean(home?.canSelect);
+  // No week at all is handled by each section's own empty state; this only has
+  // to word a week that exists.
+  const phase = home?.phase ?? 'closed';
   const projects = home?.projects.slice(0, 3) ?? [];
   const points = home?.points ?? null;
   const rewardPicks = rewards.slice(0, 3);
@@ -86,7 +90,7 @@ export default async function LandingPage() {
                 className={isOpen ? 'h-1.5 w-1.5 rounded-full bg-sk-success' : 'h-1.5 w-1.5 rounded-full bg-sk-faint'}
               />
               {home ? home.weekLabel : 'Belum ada sprint terjadwal'}
-              {home ? (isOpen ? ' · Pendaftaran dibuka' : ' · Pendaftaran ditutup') : null}
+              {home ? ` · ${ENROLMENT_LABEL[phase]}` : null}
             </span>
           </Entrance>
 
@@ -135,6 +139,7 @@ export default async function LandingPage() {
                   projectCount={home.projectCount}
                   divisionCount={home.divisionCount}
                   isOpen={isOpen}
+                  phase={phase}
                 />
               </div>
             </Entrance>
@@ -152,6 +157,7 @@ export default async function LandingPage() {
             deadline={home?.deadline ?? null}
             maxPoints={points ? points.scoreMax + points.rank1 : null}
             projectCount={home?.projectCount ?? 0}
+            phase={phase}
           />
         </section>
 
@@ -239,9 +245,9 @@ export default async function LandingPage() {
                         Poin Arena
                       </span>
                       <h3 className="mt-4 text-[20px] font-bold tracking-[-0.03em] text-sk-navy">
-                        Poin yang berlaku minggu ini.
+                        {phase === 'open' ? 'Poin yang berlaku minggu ini.' : 'Cara poin dihitung.'}
                       </h3>
-                      {home && (
+                      {home && phase === 'open' && (
                         <p className="mt-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-sk-faint">
                           {home.weekLabel}
                         </p>
