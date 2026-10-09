@@ -5,7 +5,7 @@ export type { ArenaAuthConfig, ArenaSsoBridgeConfig } from "./config-core";
 
 /**
  * The main site's sign-in gate lives on `www`; the apex 308-redirects to it.
- * Defaulting to the host that actually serves `/arena` keeps the login button
+ * Defaulting to the host that actually serves `/masuk` keeps the login button
  * working when `SK_AUTH_ORIGIN` is missing and saves a redirect hop when it is
  * merely set to the apex.
  */

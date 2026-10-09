@@ -9,14 +9,19 @@ export const dynamic = "force-dynamic";
  * Send an anonymous visitor to sign in.
  *
  * The Arena has no login of its own: it verifies the Sekolah Karir participant
- * session and nothing more. So "log in" means "go to the main site's Arena
- * gate", which raises the OTP modal and, once signed in, offers the door back
- * here — the door that re-scopes the cookie to the registrable domain so this
- * subdomain receives it.
+ * session and nothing more. So "log in" means "go to the main site's sign-in
+ * gate" (`/masuk`), which signs the visitor in and then sends them on to `next`.
+ * Sessions are scoped to the registrable domain, so this subdomain receives the
+ * cookie as soon as it exists.
  *
- * `returnTo` is not forwarded: the gate on the main site decides where a
- * participant lands, and a redirect target this app accepts from a query string
- * and hands to another origin is an open-redirect waiting to be found.
+ * This used to point at the main site's `/arena` teaser page. That page was
+ * removed in October 2026; `/arena` there now only forwards to `/masuk`, and
+ * going straight to the gate saves the extra hop.
+ *
+ * `returnTo` is not forwarded: `next` is always this app's own `/app`, built
+ * here from configuration. A redirect target accepted from a query string and
+ * handed to another origin is an open-redirect waiting to be found. The gate
+ * independently refuses any destination that is not one of our own origins.
  *
  * The PKCE authorize flow this route used to build is kept in
  * src/server/auth/{pkce,authorization,sso-client}.ts for the day the main site
@@ -37,6 +42,8 @@ export async function GET(request: NextRequest) {
     // refuse to show someone the gate. Fall through and let them sign in.
   }
 
-  const gate = new URL("/arena", getAuthConfig().canonicalOrigin);
+  const { arenaOrigin, canonicalOrigin } = getAuthConfig();
+  const gate = new URL("/masuk", canonicalOrigin);
+  gate.searchParams.set("next", new URL("/app", arenaOrigin).toString());
   return NextResponse.redirect(gate, 302);
 }

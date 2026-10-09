@@ -61,10 +61,11 @@ domain, so it signs the participant out of the main site too. There is no "log
 out of the Arena only" to offer, and pretending otherwise would leave someone
 signed in where they thought they had left.
 
-**Login is a popup, not a departure.** `/auth/login` still sends the browser to
-the main site's `/arena` gate — that gate raises the OTP modal and then offers
-the door back through `/arena/enter`, the route that re-scopes a pre-split
-cookie so this subdomain receives it. What changed on 2026-09-06 is *which*
+**Login is a popup, not a departure.** `/auth/login` sends the browser to the
+main site's sign-in gate, `/masuk?next=<arena>/app`: it signs the visitor in and
+forwards them back here. (Until October 2026 this went through the main site's
+`/arena` teaser page and its `/arena/enter` door; that page was removed, and
+`/arena` there now only forwards to `/masuk`.) What changed on 2026-09-06 is *which*
 browsing context makes that trip: `signInWithPopup()` opens the gate in a popup
 window and leaves the Arena page standing behind it, so a participant who was
 reading a project brief returns to that brief rather than to a generic landing.
