@@ -20,7 +20,6 @@ import { enqueueReviewJob } from "@/server/reviews/queue-service";
 import { assertCapturedLinkSet, captureLinkArtifacts, persistLinkArtifacts } from "@/server/reviews/artifacts";
 import { deadlineSentence } from "@/lib/deadline";
 import { overfilledRequirements, unmetRequirements } from "@/lib/submission-requirements";
-import { checkExternalUrlAccess } from "./url-access";
 import { planVersionSnapshots, resolveVersionItemStorage, type FrozenArtifact } from "./version-core";
 import { draftLinkSchema, draftSubmissionSchema, supportedFileMimeTypes, uploadPresignSchema } from "./schemas";
 import { checkUploadRateLimit, uploadRateLimitSubject, type UploadRateLimitKind } from "./upload-rate-limit";

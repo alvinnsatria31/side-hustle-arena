@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { footerColumns } from '@/components/layout/nav-links';
 import { ExternalMark, NavAnchor, NewBadge, PROMO_PILL } from '@/components/layout/NavPromo';
